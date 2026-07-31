@@ -1,35 +1,125 @@
+<div align="center">
+
 # Blender Battle
 
-Live 1v1 modelling duels for Blender artists. Draw a random challenge, build against
-the clock, get judged by the room.
+**A timed 3D‑modelling contest platform for Blender artists.**
 
-**Phases 1–4 complete; Phase 5 in progress.** Auth, RBAC, profiles, audit
-logging, the dev environment, the challenge catalogue with its server-side random
-draw, live 1v1 battles with matchmaking and spectator voting, and the dashboards.
+Draw a brief, model against a server‑authoritative clock, get judged by a blind ballot.
 
-Phase 5 so far: notifications, achievements, and Discord/Google OAuth. Teams and
-tournaments are not built yet — see "Phase 5 status" below.
+[Deployment guide](DEPLOYMENT.md) · [Report a bug](../../issues)
 
-## Stack
+</div>
 
-| Layer     | Choice |
-|-----------|--------|
-| Frontend  | Next.js 15 (App Router), React 19, TailwindCSS 4, TanStack Query, Zustand, React Hook Form + Zod |
-| Backend   | NestJS 11, TypeORM, class-validator, Passport JWT |
-| Data      | PostgreSQL 16, Redis 7 |
-| Storage   | Cloudinary |
-| Runtime   | Node 22, pnpm workspaces, Docker Compose |
+---
+
+## What this is
+
+Blender Battle runs 3D‑modelling contests in two shapes:
+
+- **Public challenges** — anyone enters before a deadline, then the whole
+  community votes for a winner. The ballot is **blind**: no author names and no
+  vote counts are shown while voting is open, so nobody can pile onto the
+  visible leader. Everything reveals — names, tallies, the winner — the moment
+  voting closes.
+- **Rooms** — small, invite‑only contests among a handful of players. A brief
+  is drawn *at kickoff*, not at creation, so not even the host can see it
+  early and prepare in advance. A tie at the top escalates to a single runoff
+  round instead of a coin flip.
+
+Winning entries populate an artist's **portfolio**: a profile page that pulls
+the artist's own uploaded `.glb`/`.gltf`/`.fbx`/`.obj` models into a live
+three.js scene behind their stats, each one auto‑scaled and recentred from
+whatever raw units the file was exported in.
+
+Every clock in the system is a timestamp fixed server‑side, never a duration a
+client counts down — a background scheduler advances rooms and challenges
+through their phases on its own, with a Redis lock so multiple API instances
+can't double‑process the same transition.
+
+## Features
+
+- Challenge catalogue with categories, difficulty, and a manager‑authored brief
+  (objectives, allowed/forbidden assets, reference images)
+- Server‑side random draw for rooms — the host declares filters, never a
+  specific challenge, so nobody can arrive already having modelled the brief
+- Blind public‑challenge voting with a configurable submission window and a
+  separate voting window (hours or days), auto‑resolved by a scheduler
+- Room lifecycle: lobby → drawn brief → timed build → ballot → optional runoff
+  → completed, with automatic host handover if the host abandons the lobby
+- Placement, win/loss/draw record, streaks, and XP rolled up to the profile
+  after every room — one atomic update per player, so the numbers can never
+  drift out of sync with the database's own consistency check
+- 3D portfolio: real uploaded models rendered and lit in the site's own visual
+  language, not stand‑in shapes
+- JWT auth with rotation‑and‑reuse detection, plus optional Discord/Google OAuth
+- Role‑based access (player / manager / admin), audit‑logged moderation actions
+- Cursor‑paginated lists throughout; no offset pagination anywhere
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js 15 (App Router), React 19, Tailwind CSS 4, TanStack Query, React Hook Form + Zod, three.js |
+| Backend | NestJS 11, TypeORM, class-validator, Passport JWT |
+| Data | PostgreSQL 16, Redis 7 |
+| Storage | Cloudinary (images, 3D model files) |
+| Tooling | pnpm workspaces, Docker Compose, ESLint, Vitest |
+
+## Architecture
+
+A pnpm monorepo, three packages:
+
+```
+apps/
+  web/       Next.js — routes, components, feature hooks
+  api/       NestJS — modules, controllers, services, entities, migrations
+packages/
+  shared/    Enums, DTO contracts, and field limits both sides agree on
+```
+
+`packages/shared` is the vocabulary, not the validation. The web app uses Zod
+for form feedback; the API uses class-validator at the request boundary and is
+the only authority on what's actually accepted — the two are meant to agree,
+but only one of them is trusted.
+
+Every API response shares one envelope:
+
+```json
+{ "success": true, "message": "", "data": {} }
+```
+
+Failures add `error: { code, details?, requestId }`; clients branch on `code`,
+never on message text.
+
+<details>
+<summary><b>Endpoint map</b></summary>
+
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /auth/register`, `/login`, `/refresh`, `/logout` · `GET /auth/me` · OAuth: `/auth/oauth/providers`, `/:provider`, `/:provider/callback`, `/exchange`, `/linked` |
+| Users | `GET /users/by-username/:username` (+ `/portfolio`) · `GET/PATCH /users/me` · `POST /users/me/avatar` · admin: `GET /users`, `PATCH /:id/role`, `/:id/status` |
+| Challenges | `GET /challenges`, `/categories`, `/tags`, `/:slug` · `POST /challenges/draw` · manager: create/update/publish/archive/assets |
+| Public challenge events | `GET /challenge-events`, `/:id` · `POST /:id/entries`, `/:id/vote` · manager: `/schedule`, `/unschedule`, `/close` |
+| Rooms | `GET /rooms/active`, `/:id` · `POST /rooms`, `/join` · `DELETE /:id/leave` · `POST /:id/submit`, `/:id/start` · `GET /:id/ballot` · `POST/DELETE /:id/ballot/:submissionId/like` |
+| Analytics | `GET /admin/metrics`, `/manager/metrics`, `/admin/activity` |
+| Notifications | `GET /notifications`, `/unread-count` · `POST /:id/read`, `/read-all` |
+| Ops | `GET /health`, `/health/ready` (unversioned) |
+
+</details>
 
 ## Getting started
 
-Prerequisites: Node 22+, pnpm 11+ (`corepack enable --install-directory ~/.local/bin pnpm`),
-Docker Desktop, and a Cloudinary account.
+**Prerequisites:** Node 22+, pnpm 11+ (`corepack enable`), Docker Desktop, a
+[Cloudinary](https://cloudinary.com) account.
 
 ```bash
+git clone https://github.com/NKW2000/blender-battle.git
+cd blender-battle
 cp .env.example .env
 ```
 
-Fill in `.env` — the two JWT secrets must differ and be 32+ characters each:
+Fill in `.env`. The two JWT secrets must differ from each other and be at
+least 32 characters:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
@@ -45,159 +135,57 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Web on `http://localhost:3000`, API on `http://localhost:4000`.
+Web at `http://localhost:3000`, API at `http://localhost:4000`.
 
-## Layout
+### Common commands
 
-```
-apps/
-  api/          NestJS — modules, controllers, services, entities, DTOs, guards
-  web/          Next.js — app routes, features, components, lib
-packages/
-  shared/       Enums, response envelope, contracts, limits. Imported by both.
-```
-
-`packages/shared` holds the vocabulary both sides agree on — roles, error codes,
-field limits. Validation itself is *not* shared: the frontend uses Zod for form
-feedback, the backend uses class-validator at the API boundary and is the only
-authority on what is acceptable.
-
-## API
-
-Everything under `/api/v1`, with one envelope for every response:
-
-```json
-{ "success": true, "message": "", "data": {} }
+```bash
+pnpm dev              # web + api, in parallel
+pnpm build            # shared, then both apps
+pnpm typecheck        # every workspace
+pnpm lint             # every workspace
+pnpm test             # every workspace
+pnpm db:migrate       # apply pending migrations
+pnpm db:revert        # roll back the last migration
+pnpm infra:up         # postgres + redis only, no app processes
 ```
 
-Failures add `error: { code, details?, requestId }`. Clients branch on `code`,
-never on message text.
+## Deployment
 
-| Method | Path | Access |
-|--------|------|--------|
-| POST | `/auth/register` | public |
-| POST | `/auth/login` | public |
-| POST | `/auth/refresh` | public |
-| POST | `/auth/logout` | authenticated |
-| GET | `/auth/me` | authenticated |
-| GET | `/users/by-username/:username` | public |
-| GET | `/users/me` · PATCH `/users/me` | authenticated |
-| POST | `/users/me/avatar` | authenticated |
-| GET | `/users` | admin |
-| PATCH | `/users/:id/role` · `/users/:id/status` | admin |
-| GET | `/challenges` | public, scoped by caller |
-| GET | `/challenges/categories` · `/challenges/tags` | public |
-| GET | `/challenges/:slug` | public, scoped by caller |
-| POST | `/challenges/draw` | authenticated |
-| POST | `/challenges` · PATCH `/challenges/:id` | manager |
-| POST | `/challenges/:id/publish` · `/archive` | manager |
-| DELETE | `/challenges/:id` | manager (soft delete) |
-| POST | `/challenges/:id/assets` · DELETE `/:assetId` | manager |
-| POST | `/battles/queue` · DELETE · GET | authenticated |
-| GET | `/battles/active` | authenticated |
-| GET | `/battles/live` · `/battles/history` | public |
-| GET | `/battles/:id` | public, viewer-aware |
-| POST | `/battles/:id/forfeit` | competitor only |
-| GET | `/leaderboard` | public |
-| GET | `/leaderboard/me` | authenticated |
-| GET | `/admin/metrics` · `/admin/activity` | admin |
-| GET | `/manager/metrics` | manager |
-| GET | `/notifications` · `/notifications/unread-count` | authenticated |
-| POST | `/notifications/:id/read` · `/notifications/read-all` | authenticated |
-| GET | `/achievements` | authenticated |
-| GET | `/achievements/user/:username` | public |
-| GET | `/auth/oauth/providers` | public |
-| GET | `/auth/oauth/:provider` · `/auth/oauth/:provider/callback` | public |
-| POST | `/auth/oauth/exchange` | public |
-| GET | `/auth/oauth/linked` | authenticated |
-| DELETE | `/auth/oauth/:provider` | authenticated |
-| GET | `/health` · `/health/ready` | public, unversioned |
-
-Live battle traffic runs over Socket.IO at `/battles`, not REST. Client events:
-`client:join_battle`, `client:leave_battle`, `client:cast_vote`,
-`client:send_reaction`. Server events: `battle:state`, `battle:phase_changed`,
-`battle:tally`, `battle:reaction`, `battle:completed`, `battle:spectators`,
-`queue:matched`, `queue:timeout`, `notification:new`.
-
-All list endpoints are cursor-paginated. Cursors are opaque — round-trip them
-unmodified.
+Web on Vercel, API on a container host (schedulers need a real long‑running
+process — see why in [DEPLOYMENT.md](DEPLOYMENT.md)), Postgres on Supabase,
+Redis alongside the API. Full walkthrough, including exactly which environment
+variables go where: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Security notes
 
-- **Bearer tokens, not cookies.** CSRF middleware is deliberately absent: a
-  cross-site request cannot attach an `Authorization` header. Do not add it.
-- **Refresh rotation with reuse detection.** Presenting an already-rotated token
-  revokes the entire token family and forces re-authentication.
-- **Refresh state lives in Postgres**, not Redis. Redis holds only disposable
-  caches (access-token denylist, throttle counters).
-- **Roles are assigned server-side.** Registration always creates a player.
-- **Migrations only.** `synchronize` is never enabled, in any environment.
-- **The random draw takes filters, never an id.** `POST /challenges/draw` resolves
-  the challenge server-side; an id field is rejected by the DTO. Accepting one
-  would let a client hand its opponent a brief it had already prepared for.
-- **Challenge visibility is enforced per caller.** The same URL returns the public
-  catalogue to a visitor and additionally the caller's own drafts to a manager.
-  A draft requested directly by slug returns 404, not 403 — the existence of an
-  unpublished brief is itself information.
-- **Sockets authenticate on the handshake.** HTTP guards do not run on a WebSocket
-  upgrade; an unauthenticated or expired token is disconnected before it can join
-  a room. The token travels in `auth.token`, never the query string, which would
-  put a credential in proxy access logs.
-- **One vote per person is a database constraint**, `UNIQUE (battle_id, user_id)`,
-  not an application check. Application checks lose races against two browser
-  tabs and two API instances.
-- **Timers are server-authoritative.** Deadlines are absolute timestamps fixed at
-  battle creation; clients receive them plus `serverNow` and compute the
-  remaining time themselves. A client cannot extend its own battle.
-- **Phase transitions run in a locked sweeper**, not per-battle in-process timers,
-  which would die with the process and strand battles mid-flight. Every
-  transition is also a conditional UPDATE, so a duplicate tick cannot award XP
-  twice.
-- **The leaderboard is a derived read model**, a Redis sorted set rebuilt from the
-  users table, never a second table that could drift from the profile page.
-  Banned accounts are removed from it immediately.
-- **Admin metrics are served from a snapshot** refreshed every five minutes under
-  a lock, never aggregated per dashboard load. The response carries `generatedAt`
-  so the reader knows how old the numbers are.
+A few decisions worth knowing about before extending this:
 
-Known tradeoff: the refresh token is persisted in `localStorage` so a page reload
-does not sign the user out. See `apps/web/src/lib/api/token-store.ts` for the
-alternatives — an httpOnly cookie scoped to the refresh endpoint is the
-recommended upgrade and does not reintroduce CSRF exposure elsewhere.
+- **Bearer tokens, not cookies.** No CSRF middleware — a cross-site request
+  cannot attach an `Authorization` header, and adding cookie auth without also
+  adding CSRF protection would reopen that hole.
+- **Refresh rotation with reuse detection.** Presenting an already-rotated
+  refresh token revokes its entire token family, not just that one token.
+- **The random draw takes filters, never an id.** `POST /challenges/draw`
+  resolves the challenge server-side; a client-supplied id is rejected by the
+  DTO, because accepting one would let a host hand themselves a brief they'd
+  already prepared for.
+- **Voting is blind at the server, not hidden in the UI.** The API strips
+  author identity and vote counts from every response while a ballot is open —
+  a client can't be tricked into revealing what it was never sent.
+- **One vote per person is a database constraint**, not an application check.
+  An application check loses a race between two browser tabs; a `UNIQUE`
+  constraint cannot.
+- **Deadlines are absolute timestamps, computed server-side.** Clients receive
+  the timestamp plus the server's own clock and compute remaining time
+  themselves — a client cannot extend its own deadline.
+- **Phase transitions run in a locked scheduler**, never as a per-instance
+  in-process timer that would die with the process or double-fire across
+  multiple instances. Every transition is also a conditional `UPDATE`, so a
+  duplicate tick can't apply twice.
+- **Migrations only.** `synchronize` is never enabled, in any environment —
+  every schema change is a reviewed, reversible file.
 
-## Commands
+## License
 
-```bash
-pnpm dev              # api + web in parallel
-pnpm build            # shared, then both apps
-pnpm typecheck        # all workspaces
-pnpm test             # all workspaces
-pnpm db:migrate       # run pending migrations
-pnpm db:revert        # roll back the last migration
-pnpm infra:up         # postgres + redis only
-```
-
-## Phase 5 status
-
-Built and verified: **notifications** (persisted, pushed over the existing
-socket), **achievements** (14 seeded badges, unlocked on battle completion, XP
-paid once — guaranteed by a unique constraint), and **OAuth** for Discord and
-Google.
-
-OAuth notes:
-- Providers are optional. Each appears only when both of its credentials are
-  set, so the platform runs without registering third-party applications.
-- Tokens never travel in a redirect URL. The callback issues a single-use code
-  that the browser trades over HTTPS, keeping credentials out of browser history
-  and the  header.
-- An existing account is matched by email only when the provider reports it
-  **verified**. An unverified address is an unproven claim, and trusting it would
-  allow account takeover.
-- Unlinking the last provider on a password-less account is refused.
-
-Not built: **teams** and **tournaments** ( and the battle/side
-split are already shaped for them), plus the commercial and media items from the
-Future Features list — payments, subscriptions, donations, AI-generated
-challenges, video uploads, and streaming integrations. Each needs a provider and
-policy decision rather than a default, and the money-handling ones should not be
-scaffolded speculatively.
+All rights reserved. No license is currently granted for reuse or redistribution.
