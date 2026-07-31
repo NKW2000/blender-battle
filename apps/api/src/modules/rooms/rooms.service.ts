@@ -1,0 +1,692 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import {
+  BattleResult,
+  Difficulty,
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+  ROOM_DRAW_SECONDS,
+  ROOM_MAX_PLAYERS,
+  ROOM_MIN_PLAYERS,
+  RoomParticipantStatus,
+  RoomStatus,
+  RoomVisibility,
+  VOTE_WINDOW_SECONDS,
+} from '@bb/shared';
+import { randomInt } from 'node:crypto';
+import { DataSource, In, Repository } from 'typeorm';
+
+import { AppException } from '@/common/exceptions/app.exception';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user';
+import { ChallengesService } from '@/modules/challenges/challenges.service';
+
+import { Room } from './entities/room.entity';
+import { RoomParticipant } from './entities/room-participant.entity';
+import { Submission } from './entities/submission.entity';
+
+const ROOM_RELATIONS = ['host', 'category', 'challenge', 'challenge.category', 'challenge.assets', 'participants', 'participants.user'];
+
+/**
+ * Room lifecycle: create, join, draw, close, tally.
+ *
+ * Two rules run through the whole of this file and are worth stating once:
+ *
+ *  - The server owns every deadline and every transition. Clients are told
+ *    absolute timestamps and never decide when a phase ends.
+ *  - The challenge is drawn here, at kickoff, from the host's filters. The host
+ *    never names it. A host who could pick the brief would know it before anyone
+ *    joined and could arrive with the model already built, which is the one
+ *    thing a timed modelling contest cannot survive.
+ */
+@Injectable()
+export class RoomsService {
+  private readonly logger = new Logger(RoomsService.name);
+
+  constructor(
+    @InjectRepository(Room) private readonly rooms: Repository<Room>,
+    @InjectRepository(RoomParticipant)
+    private readonly participants: Repository<RoomParticipant>,
+    @InjectRepository(Submission) private readonly submissions: Repository<Submission>,
+    private readonly challenges: ChallengesService,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  // --- Creation and joining ---------------------------------------------------
+
+  async create(
+    host: AuthenticatedUser,
+    dto: {
+      name: string;
+      categoryId?: string;
+      difficulty?: Difficulty;
+      maxPlayers?: number;
+      durationSeconds?: number;
+    },
+  ): Promise<Room> {
+    const maxPlayers = Math.min(
+      ROOM_MAX_PLAYERS,
+      Math.max(ROOM_MIN_PLAYERS, dto.maxPlayers ?? 8),
+    );
+
+    const room = await this.rooms.save(
+      this.rooms.create({
+        name: dto.name.trim(),
+        // Every room is invite-only, so every room gets a code.
+        joinCode: this.generateCode(),
+        hostId: host.id,
+        categoryId: dto.categoryId ?? null,
+        difficulty: dto.difficulty ?? null,
+        maxPlayers,
+        durationSeconds: dto.durationSeconds ?? 1800,
+        status: RoomStatus.LOBBY,
+      }),
+    );
+
+    // The host is a competitor, not a spectator.
+    await this.participants.save(
+      this.participants.create({ roomId: room.id, userId: host.id }),
+    );
+
+    return this.findOrFail(room.id);
+  }
+
+  /**
+   * Join by id (public) or by code (private).
+   *
+   * Capacity is checked inside a transaction with a row lock, because two people
+   * taking the last seat at the same moment would both read "one seat free"
+   * without it.
+   */
+  async join(user: AuthenticatedUser, opts: { roomId?: string; code?: string }): Promise<Room> {
+    const roomId = await this.dataSource.transaction(async (manager) => {
+      const query = manager
+        .createQueryBuilder(Room, 'room')
+        .setLock('pessimistic_write')
+        .where(opts.code ? 'room.join_code = :code' : 'room.id = :id', {
+          code: opts.code?.toUpperCase(),
+          id: opts.roomId,
+        });
+
+      const room = await query.getOne();
+      if (!room) throw AppException.notFound('Room');
+
+      if (room.status !== RoomStatus.LOBBY) {
+        throw AppException.conflict('This room has already started');
+      }
+
+      const existing = await manager.findOne(RoomParticipant, {
+        where: { roomId: room.id, userId: user.id },
+      });
+
+      // Rejoining after leaving is fine while the room is still a lobby.
+      if (existing) {
+        if (existing.status === RoomParticipantStatus.LEFT) {
+          await manager.update(
+            RoomParticipant,
+            { id: existing.id },
+            { status: RoomParticipantStatus.ENTERED },
+          );
+        }
+        return room.id;
+      }
+
+      const seated = await manager.count(RoomParticipant, {
+        where: {
+          roomId: room.id,
+          status: In([RoomParticipantStatus.ENTERED, RoomParticipantStatus.SUBMITTED]),
+        },
+      });
+
+      if (seated >= room.maxPlayers) throw AppException.conflict('This room is full');
+
+      await manager.insert(RoomParticipant, { roomId: room.id, userId: user.id });
+      return room.id;
+    });
+
+    return this.findOrFail(roomId);
+  }
+
+  /**
+   * Leave a lobby.
+   *
+   * The host leaving needs its own handling, because only the host can call
+   * `start` and there is no sweep over `LOBBY` rooms. Without a handover, a host
+   * who walked away left everyone else in a room that could never begin and
+   * never expired — and since rooms are unlisted, the only escape was for each
+   * player to leave individually. So the room is handed to the longest-standing
+   * remaining player, or cancelled outright when the host was the last one in it.
+   */
+  async leave(roomId: string, userId: string): Promise<void> {
+    const room = await this.findOrFail(roomId);
+
+    if (room.status !== RoomStatus.LOBBY) {
+      // Once the clock is running, leaving is just not submitting — handled by
+      // the deadline sweep, and never silently erased from the room.
+      throw AppException.conflict('The room has started; you can only stop competing');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        RoomParticipant,
+        { roomId, userId },
+        { status: RoomParticipantStatus.LEFT },
+      );
+
+      if (room.hostId !== userId) return;
+
+      const remaining = await manager.find(RoomParticipant, {
+        where: {
+          roomId,
+          status: In([RoomParticipantStatus.ENTERED, RoomParticipantStatus.SUBMITTED]),
+        },
+        order: { createdAt: 'ASC' },
+      });
+
+      // The row for the departing host is updated above inside this same
+      // transaction, so it is already excluded — the userId guard is belt and
+      // braces against a stale read.
+      const heir = remaining.find((participant) => participant.userId !== userId);
+
+      if (heir) {
+        await manager.update(Room, { id: roomId }, { hostId: heir.userId });
+        return;
+      }
+
+      await manager.update(
+        Room,
+        { id: roomId },
+        { status: RoomStatus.CANCELLED, completedAt: new Date() },
+      );
+    });
+  }
+
+  // --- Kickoff ----------------------------------------------------------------
+
+  /**
+   * Host starts the room: the server draws the brief and the clocks are fixed.
+   *
+   * `DRAWING` exists so the reveal has somewhere to live — every client sees the
+   * same brief appear at the same moment, and the modelling window opens only
+   * once that has played out.
+   */
+  async start(roomId: string, requesterId: string): Promise<Room> {
+    const room = await this.findOrFail(roomId);
+
+    if (room.hostId !== requesterId) {
+      throw AppException.forbidden('Only the host can start this room');
+    }
+    if (room.status !== RoomStatus.LOBBY) {
+      throw AppException.conflict('This room has already started');
+    }
+
+    const active = room.participants.filter(
+      (participant) => participant.status === RoomParticipantStatus.ENTERED,
+    );
+    if (active.length < ROOM_MIN_PLAYERS) {
+      throw AppException.conflict(`A room needs at least ${ROOM_MIN_PLAYERS} players to start`);
+    }
+
+    const challenge = await this.challenges.draw(
+      { categoryId: room.categoryId ?? undefined, difficulty: room.difficulty ?? undefined },
+      { id: requesterId } as AuthenticatedUser,
+    );
+
+    const startsAt = new Date(Date.now() + ROOM_DRAW_SECONDS * 1000);
+    const endsAt = new Date(startsAt.getTime() + room.durationSeconds * 1000);
+
+    // Conditional on LOBBY so a double-tap on Start cannot draw twice and move
+    // the deadline out from under everyone.
+    const claimed = await this.rooms
+      .createQueryBuilder()
+      .update(Room)
+      .set({ status: RoomStatus.DRAWING, challengeId: challenge.id, startsAt, endsAt })
+      .where('id = :id AND status = :lobby', { id: roomId, lobby: RoomStatus.LOBBY })
+      .execute();
+
+    if (!claimed.affected) throw AppException.conflict('This room has already started');
+
+    return this.findOrFail(roomId);
+  }
+
+  // --- Submitting -------------------------------------------------------------
+
+  /**
+   * Record an entry. Re-submitting before the deadline replaces the previous one.
+   *
+   * The deadline is checked against the database clock rather than the request
+   * time, and re-checked here even though the sweeper also enforces it: a
+   * request that started before `ends_at` and arrived after it must still be
+   * refused, or a slow upload becomes extra modelling time.
+   */
+  /**
+   * Guard run before any bytes are uploaded.
+   *
+   * Uploading first and validating after would let a closed room, or someone who
+   * is not even competing, burn storage on every rejected request.
+   */
+  async assertOpenForSubmission(roomId: string, userId: string): Promise<Room> {
+    const room = await this.findOrFail(roomId);
+
+    if (room.status !== RoomStatus.ACTIVE) {
+      throw AppException.conflict(
+        room.status === RoomStatus.LOBBY || room.status === RoomStatus.DRAWING
+          ? 'This room has not started yet'
+          : 'The deadline has passed',
+      );
+    }
+
+    if (room.endsAt && room.endsAt.getTime() <= Date.now()) {
+      throw AppException.conflict('The deadline has passed');
+    }
+
+    const competing = room.participants.some(
+      (entry) => entry.userId === userId && entry.status !== RoomParticipantStatus.LEFT,
+    );
+    if (!competing) throw AppException.forbidden('You are not competing in this room');
+
+    return room;
+  }
+
+  async submit(
+    roomId: string,
+    userId: string,
+    assets: { imageUrl: string; modelUrl: string | null; modelFilename: string | null },
+    notes?: string,
+  ): Promise<Submission> {
+    const room = await this.findOrFail(roomId);
+
+    if (room.status !== RoomStatus.ACTIVE) {
+      throw AppException.conflict(
+        room.status === RoomStatus.VOTING || room.status === RoomStatus.COMPLETED
+          ? 'The deadline has passed'
+          : 'This room has not started yet',
+      );
+    }
+
+    if (room.endsAt && room.endsAt.getTime() <= Date.now()) {
+      throw AppException.conflict('The deadline has passed');
+    }
+
+    const participant = room.participants.find(
+      (entry) => entry.userId === userId && entry.status !== RoomParticipantStatus.LEFT,
+    );
+    if (!participant) throw AppException.forbidden('You are not competing in this room');
+
+    const existing = await this.submissions.findOne({
+      where: { participantId: participant.id },
+    });
+
+    if (existing) {
+      await this.submissions.update(
+        { id: existing.id },
+        { ...assets, notes: notes ?? null, submittedAt: () => 'now()' },
+      );
+    } else {
+      await this.submissions.insert({
+        roomId,
+        participantId: participant.id,
+        userId,
+        ...assets,
+        notes: notes ?? null,
+      });
+    }
+
+    await this.participants.update(
+      { id: participant.id },
+      { status: RoomParticipantStatus.SUBMITTED },
+    );
+
+    const saved = await this.submissions.findOne({ where: { participantId: participant.id } });
+    if (!saved) throw AppException.notFound('Submission');
+    return saved;
+  }
+
+  // --- Deadline ---------------------------------------------------------------
+
+  /**
+   * Close the modelling window: eliminate non-submitters and open the ballot.
+   *
+   * Elimination carries no XP penalty and no loss on record. Someone who ran out
+   * of time simply is not on the ballot — punishing the attempt would only teach
+   * people not to enter rooms they might not finish.
+   */
+  async closeSubmissions(roomId: string): Promise<Room | null> {
+    const claimed = await this.rooms
+      .createQueryBuilder()
+      .update(Room)
+      .set({
+        status: RoomStatus.VOTING,
+        votingEndsAt: () => `now() + interval '${VOTE_WINDOW_SECONDS} seconds'`,
+      })
+      .where('id = :id AND status = :active', { id: roomId, active: RoomStatus.ACTIVE })
+      .execute();
+
+    if (!claimed.affected) return null;
+
+    await this.participants
+      .createQueryBuilder()
+      .update(RoomParticipant)
+      .set({ status: RoomParticipantStatus.ELIMINATED })
+      .where('room_id = :roomId AND status = :entered', {
+        roomId,
+        entered: RoomParticipantStatus.ENTERED,
+      })
+      .execute();
+
+    const submitted = await this.submissions.count({ where: { roomId } });
+
+    // Nothing to judge. Cancelled rather than completed, so no result is written
+    // to anyone's record.
+    if (submitted === 0) {
+      await this.rooms.update({ id: roomId }, {
+        status: RoomStatus.CANCELLED,
+        completedAt: new Date(),
+      });
+      return this.findOrFail(roomId);
+    }
+
+    /*
+      Whether this room counts is decided here, once, and stored — the entity has
+      always documented that, but nothing wrote it, so every room stayed at the
+      column default of `false` and no result ever earned XP.
+
+      Stored rather than recomputed at read time so a finished room's history
+      cannot change meaning if the threshold is ever retuned, and taken from the
+      count of real submissions rather than the number who joined: a room where
+      one person uploads and the rest time out is not a contest.
+    */
+    const room = await this.findOrFail(roomId);
+    await this.rooms.update(
+      { id: roomId },
+      {
+        isRanked: room.visibility === RoomVisibility.PUBLIC && submitted >= ROOM_MIN_PLAYERS,
+      },
+    );
+
+    return this.findOrFail(roomId);
+  }
+
+  // --- Results ----------------------------------------------------------------
+
+  /**
+   * Close voting: tally, break ties, and write the result.
+   *
+   * Called for both the main ballot and the runoff. The difference is only which
+   * round's likes are counted and what happens on a tie — the main ballot can
+   * escalate to a runoff, the runoff cannot escalate again and falls back to the
+   * earliest submission. A tie-break that can loop is not a tie-break.
+   */
+  async finalise(roomId: string): Promise<Room | null> {
+    const room = await this.findOrFail(roomId);
+    const isRunoff = room.status === RoomStatus.RUNOFF;
+
+    if (room.status !== RoomStatus.VOTING && !isRunoff) return null;
+
+    const round = isRunoff ? 1 : 0;
+
+    // Tally from the likes table rather than trusting a counter: this runs once
+    // per room, so the COUNT is cheap, and it is the number people are scored on.
+    const tallies = await this.dataSource
+      .createQueryBuilder()
+      .select('s.participant_id', 'participantId')
+      .addSelect('COUNT(l.id)', 'likes')
+      .addSelect('s.submitted_at', 'submittedAt')
+      .from(Submission, 's')
+      .leftJoin(
+        'submission_likes',
+        'l',
+        'l.submission_id = s.id AND l.round = :round AND l.active = true',
+        { round },
+      )
+      .where('s.room_id = :roomId AND s.is_hidden = false', { roomId })
+      .groupBy('s.participant_id')
+      .addGroupBy('s.submitted_at')
+      .getRawMany<{ participantId: string; likes: string; submittedAt: Date }>();
+
+    if (tallies.length === 0) {
+      await this.rooms.update({ id: roomId }, {
+        status: RoomStatus.CANCELLED,
+        completedAt: new Date(),
+      });
+      return this.findOrFail(roomId);
+    }
+
+    const base = tallies.map((row) => ({
+      participantId: row.participantId,
+      likes: Number(row.likes),
+      submittedAt: new Date(row.submittedAt).getTime(),
+    }));
+
+    /*
+      In a runoff, only the entries that actually tied for the lead are on the
+      ballot — `BallotService.eligibleEntries` filters to them. The tally above
+      cannot: it reads every submission in the room, because that is the query
+      the main ballot needs.
+
+      Ranking that unfiltered list by runoff picks was the bug. A runoff nobody
+      voted in leaves every entry on zero, and the sort then falls through to
+      "earliest submission in the whole room" — which can hand the win to
+      somebody who was never tied and had already placed below the leaders. The
+      contenders are therefore separated out and ranked among themselves, and
+      everyone else keeps their main-ballot standing underneath them, so the
+      winner can only ever come from the cohort that earned the runoff.
+    */
+    let scored: typeof base;
+    let runoffCohort: Set<string> | null = null;
+
+    if (isRunoff) {
+      const roster = await this.participants.find({ where: { roomId } });
+      const topMain = Math.max(...roster.map((entry) => entry.likeCount));
+      const mainLikes = new Map(roster.map((entry) => [entry.id, entry.likeCount]));
+      runoffCohort = new Set(
+        roster.filter((entry) => entry.likeCount === topMain).map((entry) => entry.id),
+      );
+
+      const contenders = base
+        .filter((entry) => runoffCohort!.has(entry.participantId))
+        .sort((a, b) => b.likes - a.likes || a.submittedAt - b.submittedAt);
+
+      const rest = base
+        .filter((entry) => !runoffCohort!.has(entry.participantId))
+        .sort(
+          (a, b) =>
+            (mainLikes.get(b.participantId) ?? 0) - (mainLikes.get(a.participantId) ?? 0) ||
+            a.submittedAt - b.submittedAt,
+        );
+
+      scored = [...contenders, ...rest];
+    } else {
+      scored = [...base].sort((a, b) => b.likes - a.likes || a.submittedAt - b.submittedAt);
+    }
+
+    const topLikes = scored[0]!.likes;
+    const tiedAtTop = scored.filter((entry) => entry.likes === topLikes);
+
+    /*
+      A tie at the top on the main ballot goes to a runoff: the tied entries are
+      shown together and each voter makes a single pick. Only escalate once — a
+      runoff that could itself escalate would never terminate — and only when
+      there is something to separate, so a single entry never triggers one.
+    */
+    if (!isRunoff && tiedAtTop.length > 1 && scored.length > 1) {
+      const claimed = await this.rooms
+        .createQueryBuilder()
+        .update(Room)
+        .set({
+          status: RoomStatus.RUNOFF,
+          votingEndsAt: () => `now() + interval '${VOTE_WINDOW_SECONDS} seconds'`,
+        })
+        .where('id = :id AND status = :voting', { id: roomId, voting: RoomStatus.VOTING })
+        .execute();
+
+      if (claimed.affected) {
+        await this.persistLikeCounts(scored);
+        return this.findOrFail(roomId);
+      }
+    }
+
+    await this.persistLikeCounts(scored, isRunoff, runoffCohort);
+    await this.writePlacements(room, scored, isRunoff, runoffCohort);
+
+    await this.rooms.update({ id: roomId }, {
+      status: RoomStatus.COMPLETED,
+      completedAt: new Date(),
+    });
+
+    return this.findOrFail(roomId);
+  }
+
+  private async persistLikeCounts(
+    scored: Array<{ participantId: string; likes: number }>,
+    isRunoff = false,
+    runoffCohort: Set<string> | null = null,
+  ): Promise<void> {
+    for (const entry of scored) {
+      // Only the cohort actually on the runoff ballot gets a runoff tally.
+      // Writing zero for everyone else would claim they stood in a round they
+      // were never shown in.
+      if (isRunoff && runoffCohort && !runoffCohort.has(entry.participantId)) continue;
+
+      await this.participants.update(
+        { id: entry.participantId },
+        isRunoff ? { runoffVotes: entry.likes } : { likeCount: entry.likes },
+      );
+    }
+  }
+
+  /**
+   * Assign placement and result, then roll both up to the user record.
+   *
+   * XP is awarded only in ranked rooms. Everyone who submitted places; the
+   * eliminated are left with a null placement and no result, which is the
+   * "neutral no-show" rule — running out of time costs the win, not the record.
+   *
+   * The rollup is the half that was missing. `result` was being written to the
+   * participant and then going nowhere: no profile, leaderboard or achievement
+   * reads that column, so every account sat at zero battles and zero XP however
+   * many rooms it had won. One transaction, so a room cannot half-credit its
+   * players if this fails partway.
+   */
+  private async writePlacements(
+    room: Room,
+    scored: Array<{ participantId: string; likes: number; submittedAt: number }>,
+    isRunoff: boolean,
+    runoffCohort: Set<string> | null = null,
+  ): Promise<void> {
+    const winnerId = scored[0]!.participantId;
+
+    await this.dataSource.transaction(async (manager) => {
+      for (const [index, entry] of scored.entries()) {
+        const isWinner = entry.participantId === winnerId;
+        // A shared top score only survives here when the runoff also tied, in
+        // which case the earliest submission has already won the sort above.
+        const result = isWinner ? BattleResult.WIN : BattleResult.LOSS;
+        const xp = room.isRanked ? this.xpFor(index) : 0;
+
+        const inRunoff = isRunoff && (!runoffCohort || runoffCohort.has(entry.participantId));
+
+        await manager.update(
+          RoomParticipant,
+          { id: entry.participantId },
+          {
+            placement: index + 1,
+            result,
+            xpAwarded: xp,
+            ...(inRunoff ? { runoffVotes: entry.likes } : {}),
+          },
+        );
+
+        const participant = await manager.findOne(RoomParticipant, {
+          where: { id: entry.participantId },
+        });
+        if (!participant) continue;
+
+        /*
+          One statement, not a column at a time.
+
+          `chk_users_battles_consistent` asserts total_battles = wins + losses +
+          draws, and a row CHECK is evaluated after every statement — so
+          incrementing total_battles and then wins leaves the row invalid in
+          between and the first UPDATE is rejected outright. Everything the
+          result touches therefore moves together.
+
+          Computing from the stored columns rather than a value read earlier also
+          means two rooms finishing at once cannot lose each other's increments.
+          Votes received uses the main-ballot tally: in a runoff `entry.likes`
+          counts only the second round.
+        */
+        await manager.query(
+          `UPDATE users
+              SET total_battles        = total_battles + 1,
+                  wins                 = wins + $2,
+                  losses               = losses + $3,
+                  total_votes_received = total_votes_received + $4,
+                  total_xp             = total_xp + $5,
+                  score                = score + $5,
+                  current_streak       = CASE WHEN $2 = 1 THEN current_streak + 1 ELSE 0 END,
+                  highest_streak       = CASE WHEN $2 = 1
+                                              THEN GREATEST(highest_streak, current_streak + 1)
+                                              ELSE highest_streak END
+            WHERE id = $1`,
+          [
+            participant.userId,
+            isWinner ? 1 : 0,
+            isWinner ? 0 : 1,
+            Math.max(0, participant.likeCount),
+            xp,
+          ],
+        );
+      }
+    });
+  }
+
+  /** Flat, placement-based XP. Bounded so one room cannot mint a rank. */
+  private xpFor(index: number): number {
+    if (index === 0) return 100;
+    if (index === 1) return 60;
+    if (index === 2) return 40;
+    return 20;
+  }
+
+  // --- Reads ------------------------------------------------------------------
+
+  async findOrFail(id: string): Promise<Room> {
+    const room = await this.rooms.findOne({ where: { id }, relations: ROOM_RELATIONS });
+    if (!room) throw AppException.notFound('Room');
+    return room;
+  }
+
+  /** The room this player is currently in, so a refresh lands back in it. */
+  async findActiveForUser(userId: string): Promise<Room | null> {
+    return this.rooms
+      .createQueryBuilder('room')
+      .leftJoinAndSelect('room.challenge', 'challenge')
+      .leftJoinAndSelect('room.participants', 'participant')
+      .where('room.status IN (:...live)', {
+        live: [RoomStatus.LOBBY, RoomStatus.DRAWING, RoomStatus.ACTIVE, RoomStatus.VOTING, RoomStatus.RUNOFF],
+      })
+      .andWhere(
+        `EXISTS (
+           SELECT 1 FROM room_participants rp
+           WHERE rp.room_id = room.id AND rp.user_id = :userId AND rp.status <> 'left'
+         )`,
+        { userId },
+      )
+      .orderBy('room.created_at', 'DESC')
+      .getOne();
+  }
+
+  /**
+   * A join code with no ambiguous glyphs.
+   *
+   * Codes get read aloud and retyped, so O/0 and I/1 are left out of the
+   * alphabet entirely rather than relying on the reader to guess.
+   */
+  private generateCode(): string {
+    let code = '';
+    for (let index = 0; index < ROOM_CODE_LENGTH; index += 1) {
+      code += ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)];
+    }
+    return code;
+  }
+}

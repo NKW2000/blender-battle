@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    // TypeORM entities are assigned in the constructor by the driver, not by TS.
+    "strictPropertyInitialization": false,
+    // Incremental is off deliberately. The Nest CLI deletes dist/ on every start,
+    // but a leftover .tsbuildinfo still claims the output is current — so the
+    // compiler emits nothing and the app dies on a missing dist/main.
+    "incremental": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

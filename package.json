@@ -1,0 +1,23 @@
+{
+  "name": "blender-battle",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm --filter @bb/shared build && pnpm --filter \"./apps/*\" build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @bb/api migration:run",
+    "db:revert": "pnpm --filter @bb/api migration:revert",
+    "infra:up": "docker compose up -d postgres redis",
+    "infra:down": "docker compose down"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

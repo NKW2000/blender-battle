@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm blocks post-install scripts by default. These two are required and are
+# both first-party build tooling: esbuild ships a platform binary for vitest,
+# sharp compiles Next.js image optimisation.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  # Native resolver behind eslint-import-resolver-typescript, which
+  # eslint-config-next depends on. Left unanswered it is treated as an error and
+  # every workspace script fails before it starts, lint included.
+  unrs-resolver: true

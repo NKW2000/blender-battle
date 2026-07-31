@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // CommonJS on purpose: NestJS emits CJS and cannot require() an ESM package.
+    // Next.js consumes CJS without trouble, so CJS is the interoperable choice here.
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    // Off deliberately. A leftover .tsbuildinfo claims the output is current even
+    // after dist/ has been deleted, so tsc emits nothing and every consumer fails
+    // with "Cannot find module '@bb/shared'" — a confusing failure a long way
+    // from its cause.
+    "incremental": false
+  },
+  "include": ["src/**/*"]
+}

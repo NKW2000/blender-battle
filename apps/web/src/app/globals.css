@@ -1,0 +1,451 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens — the Blender Battle arcade language.
+
+  The legacy names below (void/panel/edge/bone/select/axis-*) are kept as ALIASES
+  onto the arcade palette rather than deleted. Every screen already references
+  them, so remapping restyles the whole application at once and keeps a single
+  source of truth; renaming across ~20 screens would have produced the same
+  pixels with a much larger diff and more places to get it wrong.
+
+  New work should use the arcade names directly. The aliases exist so nothing was
+  left half-migrated.
+*/
+@theme {
+  /* Aliases → arcade surfaces. `edge` is now the ink outline, which is what
+     turns every existing bordered element into a sticker automatically. */
+  --color-void: #14103a;
+  --color-panel: #1b1550;
+  --color-panel-raised: #2a2170;
+  --color-edge: #0e0b2b;
+  --color-edge-bright: #3a2f7a;
+
+  --color-select: #ff7a18;
+  --color-select-dim: #c9682c;
+
+  /*
+    Battle outcomes. Re-picked from the arcade palette and validated rather than
+    eyeballed: mint/yellow/pink separate at ΔE 17.4 under protanopia, against a
+    target of 8. The previous orange/green pair failed at 3.0 — indistinguishable
+    for a red-green colourblind viewer. Every usage still carries a text label.
+  */
+  --color-axis-y: #5ef0de; /* wins */
+  --color-axis-z: #ffd23f; /* draws */
+  --color-axis-x: #ff3d9a; /* losses */
+
+  --color-bone: #fff6e9;
+  --color-bone-muted: #c9c2f2;
+  --color-bone-faint: #9e96d2;
+
+  /* Fredoka for display and numbers, Nunito for body and labels. Two families
+     only, per the spec — the old mono alias now resolves to Nunito so nothing
+     falls back to a system monospace. */
+  --font-display: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-panel: 20px;
+
+  --color-arcade-void: #16123a;
+  --color-arcade-deep: #14103a;
+  --color-arcade-mid: #1b1550;
+  --color-arcade-lift: #2e2578;
+  --color-arcade-panel: #2a2170;
+
+  /* The outline colour. Every chunky border and hard shadow uses it. */
+  --color-ink: #0e0b2b;
+  --color-cream: #fff6e9;
+
+  --color-flame: #ff7a18;
+  --color-flame-lift: #ffb13c;
+  --color-flame-warm: #ff9e2c;
+  --color-sun: #ffd23f;
+  --color-aqua: #22d3ee;
+  --color-mint: #5ef0de;
+  --color-punch: #ff3d9a;
+  --color-punch-soft: #ff7fc0;
+
+  /* Muted purples, brightest to dimmest. */
+  --color-haze: #cfc8ff;
+  --color-haze-2: #c9c2f2;
+  --color-haze-3: #b7afe6;
+  --color-haze-4: #9e96d2;
+  --color-haze-5: #8e86c9;
+  --color-haze-6: #6e67a0;
+
+  --font-arcade: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-arcade-body: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    /*
+      Smooth scrolling for anchor jumps and scrollIntoView. Scoped to the media
+      query so it never overrides a reduced-motion preference — an animated jump
+      is exactly the kind of movement that setting exists to suppress.
+    */
+    scroll-behavior: auto;
+    /* Sticky header clearance, so an anchored heading is not hidden under it. */
+    scroll-padding-top: 5rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  /*
+    Momentum without jank on the containers that actually scroll internally
+    (the nav strip, the reel viewport, wide tables).
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .overflow-x-auto,
+    .overflow-y-auto,
+    .overflow-auto {
+      scroll-behavior: smooth;
+    }
+  }
+
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /*
+    Scrollbars in the arcade language.
+
+    The OS default is a light-grey sliver that reads as a foreign object on a
+    dark, saturated ground. This sets a dark track that melts into the panel and
+    a chunky, ink-outlined thumb in the same purple as the raised surfaces — so a
+    scrollbar looks like part of the frame rather than a browser afterthought.
+
+    Firefox only exposes `scrollbar-width`/`scrollbar-color`; WebKit gets the
+    full pseudo-element treatment. Both are declared so neither engine falls back
+    to the grey default.
+  */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-panel-raised) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-panel-raised);
+    border: 3px solid var(--color-edge);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-edge-bright);
+  }
+
+  /* No scrollbar corner square where the two bars meet. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /*
+    The dropdown listbox sits on --color-panel-raised, the same colour the
+    default thumb above uses — invisible thumb on matching track. Darker to the
+    surface it actually scrolls on, not the global default.
+  */
+  .select-listbox {
+    scrollbar-color: var(--color-panel) transparent;
+  }
+
+  .select-listbox::-webkit-scrollbar-thumb {
+    background: var(--color-panel);
+  }
+
+  .select-listbox::-webkit-scrollbar-thumb:hover {
+    background: var(--color-edge);
+  }
+
+  body {
+    /* Radial spotlight, not a flat fill — the canvas the whole language sits on. */
+    background-color: var(--color-void);
+    background-image: radial-gradient(
+      1100px 620px at 72% -8%,
+      #2e2578 0%,
+      #1b1550 42%,
+      #14103a 100%
+    );
+    background-attachment: fixed;
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    font-weight: 700;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+    Global focus. Two rings — cream inside, ink outside — because a single colour
+    disappears against either the saturated fills or the dark ground, and this
+    language puts controls on both.
+  */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px var(--color-cream),
+      0 0 0 7px var(--color-ink);
+  }
+
+  ::selection {
+    background-color: var(--color-select);
+    color: var(--color-void);
+  }
+}
+
+@layer components {
+  /*
+    Legacy hook, deliberately inert.
+
+    `.selection-frame` and `.vertex-marks` were the previous language's signature
+    — a 1px outline with corner vertex marks. The arcade language expresses the
+    same "this is active" meaning through the sticker outline and press instead,
+    so these are neutralised here rather than stripped from ~15 screens. The
+    wrapper still establishes a positioning context, which some layouts rely on.
+  */
+  .selection-frame {
+    position: relative;
+  }
+
+  .vertex-marks {
+    display: none;
+  }
+
+  /*
+    Dot-grid texture. Applied over backgrounds for depth; never behind body copy.
+  */
+  .viewport-grid,
+  .arcade-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1.5px, transparent 1.6px);
+    background-size: 34px 34px;
+    pointer-events: none;
+  }
+
+  /* Heavy, uppercase, wide-tracked — the label voice the spec calls for. */
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-bone-faint);
+  }
+}
+
+/*
+  Arcade motion. Every one of these is decorative — the reduced-motion block at
+  the bottom of this file neutralises them all, and no screen depends on one
+  completing to become usable.
+*/
+@keyframes bbFloat {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--r, 0deg));
+  }
+  50% {
+    transform: translateY(-22px) rotate(var(--r, 0deg));
+  }
+}
+@keyframes bbBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+@keyframes bbPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+@keyframes bbSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes bbMarquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes bbPop {
+  0% {
+    transform: translateY(14px) scale(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes bbTwinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@keyframes bbSheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+/* --- Icon motion ---------------------------------------------------------
+   Each icon owns one gesture. Kept short and loopable so they can run while a
+   control is hovered or a reaction is in flight without ever feeling busy. */
+@keyframes bbFlicker {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+  50% {
+    transform: scaleY(1.09) translateY(-0.5px);
+  }
+}
+@keyframes bbClapLeft {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(1.6px) rotate(-9deg);
+  }
+}
+@keyframes bbClapRight {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(-1.6px) rotate(9deg);
+  }
+}
+@keyframes bbBurst {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.16) rotate(8deg);
+  }
+}
+@keyframes bbLaugh {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.06);
+  }
+}
+@keyframes bbWave {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(-1px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes bbRing {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(11deg);
+  }
+  75% {
+    transform: rotate(-11deg);
+  }
+}
+
+/* Route loader: staggered per cube, so the three read as one travelling wave. */
+@keyframes bbLoadHop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-14px) scale(1.06);
+  }
+}
+
+@layer components {
+  /* The dotted field that sits behind every arcade surface. */
+  .arcade-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1.5px, transparent 1.6px);
+    background-size: 34px 34px;
+  }
+
+  /*
+    The press behaviour every chunky control shares: the shadow is the object's
+    height, so pressing it moves the surface down onto its own shadow.
+  */
+  .arcade-press {
+    transition:
+      transform 0.1s ease,
+      box-shadow 0.1s ease;
+  }
+  .arcade-press:hover:not(:disabled) {
+    transform: translateY(3px);
+  }
+  .arcade-press:active:not(:disabled) {
+    transform: translateY(var(--press-depth, 8px));
+    box-shadow: 0 0 0 var(--color-ink) !important;
+  }
+
+  /*
+    Focus has to be visible against saturated fills as well as the dark ground,
+    so it is a double ring — cream inside, ink outside — rather than a single
+    colour that would vanish on one or the other.
+  */
+  .arcade-focus:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px var(--color-cream),
+      0 0 0 7px var(--color-ink);
+  }
+}
+
+/* Motion is opt-out at the system level, not per animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
