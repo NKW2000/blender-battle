@@ -8,6 +8,10 @@ Draw a brief, model against a server‑authoritative clock, get judged by a blin
 
 [Deployment guide](DEPLOYMENT.md) · [Report a bug](../../issues)
 
+<br>
+
+![Blender Battle landing page](.github/assets/landing.png)
+
 </div>
 
 ---
@@ -54,6 +58,47 @@ can't double‑process the same transition.
 - JWT auth with rotation‑and‑reuse detection, plus optional Discord/Google OAuth
 - Role‑based access (player / manager / admin), audit‑logged moderation actions
 - Cursor‑paginated lists throughout; no offset pagination anywhere
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+
+**Catalogue** — filter by category and difficulty, thumbnail and brief on every card
+
+![Challenge catalogue](.github/assets/catalogue.png)
+
+</td>
+<td width="50%">
+
+**Public challenges** — open/finished status, closes‑at countdown, blind until judged
+
+![Public challenges](.github/assets/public-challenges.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Rooms** — invite‑only, code to join, brief drawn at kickoff
+
+![Rooms](.github/assets/rooms.png)
+
+</td>
+<td width="50%">
+
+**Manager brief editor** — write the objectives, category, and difficulty
+
+![New challenge form](.github/assets/new-challenge.png)
+
+</td>
+</tr>
+</table>
+
+**3D portfolio** — the artist's own uploaded models, floating live behind their stats
+
+![Artist portfolio with 3D models](.github/assets/portfolio.png)
 
 ## Tech stack
 
