@@ -33,14 +33,28 @@ export const envSchema = z
     /** Comma-separated list of allowed browser origins. */
     CORS_ORIGINS: z.string().min(1),
 
-    DATABASE_HOST: z.string().min(1),
+    /**
+     * Managed providers hand out one connection string, not five fields.
+     * Supabase, Render and Railway all do it, so a URL is accepted and takes
+     * precedence over the discrete variables. The discrete form is kept for
+     * docker-compose, where the parts are what the compose file knows.
+     *
+     * Neither form carries a default. Exactly one must be supplied in full, and
+     * `superRefine` below enforces that — a default here would let a production
+     * container that is missing its database configuration boot anyway and
+     * quietly dial localhost, which is the failure this schema exists to prevent.
+     */
+    DATABASE_URL: z.string().url().optional(),
+    DATABASE_HOST: z.string().min(1).optional(),
     DATABASE_PORT: z.coerce.number().int().positive().default(5432),
-    DATABASE_USER: z.string().min(1),
-    DATABASE_PASSWORD: z.string().min(1),
-    DATABASE_NAME: z.string().min(1),
+    DATABASE_USER: z.string().min(1).optional(),
+    DATABASE_PASSWORD: z.string().min(1).optional(),
+    DATABASE_NAME: z.string().min(1).optional(),
     DATABASE_SSL: booleanString(false),
 
-    REDIS_HOST: z.string().min(1),
+    /** As DATABASE_URL. `rediss://` selects TLS, which hosted Redis usually needs. */
+    REDIS_URL: z.string().url().optional(),
+    REDIS_HOST: z.string().min(1).optional(),
     REDIS_PORT: z.coerce.number().int().positive().default(6379),
     REDIS_PASSWORD: z.string().optional(),
 
@@ -83,6 +97,27 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['JWT_REFRESH_SECRET'],
         message: 'must differ from JWT_ACCESS_SECRET',
+      });
+    }
+
+    // One complete form of each connection, never a half-populated set.
+    if (!env.DATABASE_URL) {
+      for (const key of ['DATABASE_HOST', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: 'required unless DATABASE_URL is set',
+          });
+        }
+      }
+    }
+
+    if (!env.REDIS_URL && !env.REDIS_HOST) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REDIS_HOST'],
+        message: 'required unless REDIS_URL is set',
       });
     }
   });

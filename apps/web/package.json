@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "//vercel-build": "Vercel prefers this script when present. @bb/shared resolves through its dist entry, so it must be compiled before next build — Vercel's default command would only build this package.",
+    "vercel-build": "pnpm --filter @bb/shared build && next build",
     "start": "next start -p 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",

@@ -1,0 +1,92 @@
+# Render Blueprint — the NestJS API and its Redis.
+#
+# Only the API lives here. The Next.js front end is on Vercel and Postgres is on
+# Supabase, so this file describes the one piece that needs a long-running
+# process: three schedulers drive the whole app (`@Interval(1000)` sweeps rooms,
+# `@Interval(10_000)` resolves challenge events, metrics every five minutes) and
+# none of them survive on a platform that only runs code during a request.
+#
+# Apply with: Render Dashboard -> Blueprints -> New Blueprint Instance.
+# Values marked `sync: false` are deliberately not in git; set them in the
+# dashboard on first apply.
+
+services:
+  - name: blender-battle-api
+    type: web
+    runtime: docker
+    # Context is the repo root because the Dockerfile copies the workspace
+    # manifests and packages/shared, not just apps/api.
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    # Starter, not free: a free instance sleeps after 15 minutes idle and the
+    # schedulers stop with it, so rooms would sit past their deadline until
+    # somebody's request woke the service ~a minute later.
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+
+      # Internal connection string from the Key Value instance below.
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: blender-battle-redis
+          property: connectionString
+
+      # Supabase connection string. Use the **transaction pooler** (port 6543),
+      # not the direct connection: this service runs a pool of its own and a
+      # direct connection would burn Supabase's limited slots.
+      - key: DATABASE_URL
+        sync: false
+
+      # Comma-separated. The Vercel production domain, plus any preview domain
+      # that has to reach this API.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Must equal this service's own public URL, or OAuth round trips break.
+      - key: OAUTH_CALLBACK_BASE
+        sync: false
+
+      # Generated once by Render and never shown in the repo. The two must
+      # differ — a shared secret lets a leaked access token be replayed as a
+      # refresh token — and generated values differ per key, so that holds.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # Optional. Each provider switches on only when both halves are present,
+      # so leaving them unset simply hides that sign-in button.
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      - key: LOG_LEVEL
+        value: info
+
+  - name: blender-battle-redis
+    type: keyvalue
+    plan: free
+    region: frankfurt
+    # Empty allow list = reachable only from inside this Render account's
+    # network. The API talks to it over the internal address, so nothing needs
+    # to be exposed publicly.
+    ipAllowList: []

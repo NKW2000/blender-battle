@@ -19,18 +19,22 @@ export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
 
   constructor(private readonly config: AppConfig) {
-    const { host, port, password } = config.redis;
+    const connection = config.redis;
 
-    this.client = new Redis({
-      host,
-      port,
-      password,
+    const options = {
       // Fail fast rather than queueing commands against a dead server; the health
       // probe then reports unready and the orchestrator stops routing traffic.
       maxRetriesPerRequest: 3,
       enableOfflineQueue: false,
-      retryStrategy: (attempt) => Math.min(attempt * 200, 5_000),
-    });
+      retryStrategy: (attempt: number) => Math.min(attempt * 200, 5_000),
+    };
+
+    // ioredis parses the URL itself, including `rediss://` for TLS — which is
+    // what a hosted Redis reached over the public internet requires.
+    this.client =
+      'url' in connection
+        ? new Redis(connection.url, options)
+        : new Redis({ ...connection, ...options });
 
     this.client.on('error', (error: Error) => {
       this.logger.error(`Redis connection error: ${error.message}`);

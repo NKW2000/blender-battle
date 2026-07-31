@@ -46,19 +46,24 @@ import { UsersModule } from '@/modules/users/users.module';
     // which is the same as having no limit at all.
     ThrottlerModule.forRootAsync({
       inject: [AppConfig],
-      useFactory: (config: AppConfig) => ({
-        throttlers: [
-          {
-            ttl: config.throttle.ttlSeconds * 1000,
-            limit: config.throttle.limit,
-          },
-        ],
-        storage: new ThrottlerStorageRedisService({
-          host: config.redis.host,
-          port: config.redis.port,
-          password: config.redis.password,
-        }),
-      }),
+      useFactory: (config: AppConfig) => {
+        // Bound to a local so the `in` check narrows: TypeScript cannot narrow a
+        // getter across two separate property reads.
+        const redis = config.redis;
+
+        return {
+          throttlers: [
+            {
+              ttl: config.throttle.ttlSeconds * 1000,
+              limit: config.throttle.limit,
+            },
+          ],
+          storage:
+            'url' in redis
+              ? new ThrottlerStorageRedisService(redis.url)
+              : new ThrottlerStorageRedisService({ ...redis }),
+        };
+      },
     }),
     ActivityLogModule,
     AuthModule,
