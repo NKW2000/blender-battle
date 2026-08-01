@@ -34,21 +34,18 @@
   },
 
   /*
-    Public build-time values only.
+    No `vars` here, and specifically not NEXT_PUBLIC_API_URL.
 
-    `NEXT_PUBLIC_*` is inlined into the client bundle by `next build`, so it is
-    readable by anyone who loads the page — which is correct for this one and
-    would be a leak for anything else. There are no secrets here by design: the
-    browser talks to the API directly and the Worker never holds a credential.
+    A Worker variable is bound at runtime, which is too late: `next build`
+    inlines every NEXT_PUBLIC_* value into the client bundle while compiling,
+    and anything absent then falls back to its default. Setting it here produced
+    a deployment that quietly shipped `http://localhost:4000/api/v1` to real
+    browsers.
 
-    Because it is inlined at build time, changing it here alone does nothing —
-    the value has to be present when `pnpm cf:build` runs, and the app must be
-    rebuilt to pick up a new one.
+    The build-time value lives in `.env.production`, which is tracked precisely
+    so the build always has it. One source, read at the only moment that counts.
 
-    Point this at the deployed API and add this Worker's URL to the API's
-    CORS_ORIGINS, or the browser blocks every request the page makes.
+    The Worker itself needs no configuration: the browser talks to the API
+    directly, so nothing here ever holds a credential.
   */
-  "vars": {
-    "NEXT_PUBLIC_API_URL": "https://blender-battle-api.onrender.com/api/v1"
-  }
 }
