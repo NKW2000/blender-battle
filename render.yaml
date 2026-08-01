@@ -18,10 +18,21 @@ services:
     # manifests and packages/shared, not just apps/api.
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
-    # Starter, not free: a free instance sleeps after 15 minutes idle and the
-    # schedulers stop with it, so rooms would sit past their deadline until
-    # somebody's request woke the service ~a minute later.
-    plan: starter
+    # Free, which needs no card on file. The trade is real and worth knowing
+    # before you rely on it: Render spins a free service down after 15 minutes
+    # without inbound traffic, and the three schedulers stop with it, so rooms
+    # sit past their deadline until somebody's request wakes the service — about
+    # a minute later, because a cold start is not instant.
+    #
+    # The fix that costs nothing is to stop it ever going idle: point a free
+    # uptime pinger (cron-job.org, UptimeRobot) at `/health` every 10 minutes.
+    # One always-on service is roughly 730 hours a month, inside the 750 the
+    # free tier allows.
+    #
+    # Change to `starter` when the contests matter more than the bill. That is
+    # the only line that needs to change, and it removes the cold start and the
+    # pinger along with it.
+    plan: free
     region: frankfurt
     healthCheckPath: /health
     envVars:
@@ -37,9 +48,14 @@ services:
           name: blender-battle-redis
           property: connectionString
 
-      # Supabase connection string. Use the **transaction pooler** (port 6543),
-      # not the direct connection: this service runs a pool of its own and a
-      # direct connection would burn Supabase's limited slots.
+      # Postgres connection string, from whichever managed host you picked —
+      # Neon and Supabase are both fine, and neither Render nor Cloudflare is:
+      # Render's own free Postgres expires 30 days after creation, and
+      # Cloudflare does not sell Postgres at all.
+      #
+      # Prefer a **pooled** endpoint where the host offers one (Supabase's
+      # transaction pooler on 6543, Neon's `-pooler` host). This service keeps a
+      # pool of its own, so a direct connection burns the project's slots.
       - key: DATABASE_URL
         sync: false
 
