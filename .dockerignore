@@ -1,0 +1,35 @@
+# Default build context exclusions, used by any image built from the repo root
+# that does not ship its own `<dockerfile>.dockerignore`.
+#
+# Without this the whole of node_modules was uploaded to the daemon on every
+# build — hundreds of megabytes of host-specific, platform-specific files that
+# each image then overwrites with its own install.
+
+node_modules
+**/node_modules
+
+dist
+**/dist
+**/.next
+**/.open-next
+**/.wrangler
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Secrets stay out of the context; images read configuration from the
+# environment at runtime.
+.env
+.env.*
+!.env.example
+
+.git
+.github
+.gitignore
+coverage
+**/coverage
+*.log
+.claude
+.cursor
+.windsurf
+.opencode
+.clinerules

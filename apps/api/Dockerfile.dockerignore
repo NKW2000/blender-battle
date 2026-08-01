@@ -1,0 +1,51 @@
+# Build context for the API image specifically. BuildKit prefers
+# `<dockerfile>.dockerignore` over the context root's `.dockerignore`, and this
+# file replaces it outright rather than adding to it — so everything the root
+# one excludes has to be repeated here.
+#
+# The entry that matters is `apps/web`. The deps stage installs for three
+# workspace projects (root, shared, api), and letting the web app into the
+# context makes pnpm see a fourth. It then reads node_modules as stale, tries to
+# purge it, and aborts because a Docker build has no TTY to confirm with:
+#
+#   [ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY]
+#
+# Nothing in the API depends on the web app, so keeping it out is both the fix
+# and the smaller build context.
+apps/web
+
+# Never ship the host's install: it is large, platform-specific, and the image
+# builds its own.
+node_modules
+**/node_modules
+
+# Build output, regenerated inside the image.
+dist
+**/dist
+**/.next
+**/.open-next
+**/.wrangler
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Secrets must not enter the build context. The image takes configuration from
+# the environment at runtime.
+.env
+.env.*
+
+.git
+.github
+.gitignore
+coverage
+**/coverage
+*.log
+.claude
+.cursor
+.windsurf
+.opencode
+.clinerules
+README.md
+DEPLOYMENT.md
+AGENTS.md
+render.yaml
+docker-compose.yml

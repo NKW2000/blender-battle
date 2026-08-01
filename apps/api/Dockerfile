@@ -3,6 +3,12 @@
 # ---- base -------------------------------------------------------------------
 FROM node:22-alpine AS base
 RUN corepack enable
+# A Docker build has no TTY, so anything pnpm wants to confirm interactively it
+# instead aborts on. CI=true makes it take the non-interactive branch rather
+# than stopping with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY. The build
+# context is already trimmed so the situation should not arise; this is the
+# backstop for builders that do not honour Dockerfile.dockerignore.
+ENV CI=true
 WORKDIR /app
 
 # ---- dependencies -----------------------------------------------------------
@@ -32,7 +38,14 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY . .
 RUN pnpm --filter @bb/shared build && pnpm --filter @bb/api build
 # Drop dev dependencies from the tree that gets copied into the runtime image.
-RUN pnpm --filter @bb/api --prod deploy /app/pruned
+#
+# `--legacy` because pnpm 10 changed what `deploy` means: it now expects the
+# workspace to set `inject-workspace-packages=true` and refuses otherwise with
+# ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE. Injecting would change how every
+# install in the repo resolves workspace packages, to fix one line in one
+# Dockerfile — the flag keeps the old behaviour, which is the behaviour this
+# image was built around.
+RUN pnpm --filter @bb/api --prod deploy --legacy /app/pruned
 
 # ---- production -------------------------------------------------------------
 FROM node:22-alpine AS production
