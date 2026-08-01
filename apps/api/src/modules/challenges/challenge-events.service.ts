@@ -93,7 +93,7 @@ export class ChallengeEventsService {
   async submitEntry(
     challengeId: string,
     userId: string,
-    assets: { imageUrl: string; modelUrl: string | null; modelFilename: string | null },
+    assets: { imageUrl: string; workspacePhotoUrl: string },
     notes?: string,
   ): Promise<ChallengeEntry> {
     await this.assertOpenForEntry(challengeId);

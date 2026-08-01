@@ -11,7 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ApiErrorCode, Role, SUBMISSION_MODEL_MAX_BYTES } from '@bb/shared';
+import { ApiErrorCode, Role, SUBMISSION_IMAGE_MAX_BYTES } from '@bb/shared';
 import { IsDateString, IsInt, IsUUID, Max, Min } from 'class-validator';
 
 import { CurrentUser, Public, Roles } from '@/common/decorators';
@@ -115,16 +115,16 @@ export class ChallengeEventsController {
     FileFieldsInterceptor(
       [
         { name: 'image', maxCount: 1 },
-        { name: 'model', maxCount: 1 },
+        { name: 'workspace', maxCount: 1 },
       ],
-      { limits: { fileSize: SUBMISSION_MODEL_MAX_BYTES } },
+      { limits: { fileSize: SUBMISSION_IMAGE_MAX_BYTES } },
     ),
   )
   @ResponseMessage('Entry submitted')
   async enter(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
-    @UploadedFiles() files: { image?: Express.Multer.File[]; model?: Express.Multer.File[] },
+    @UploadedFiles() files: { image?: Express.Multer.File[]; workspace?: Express.Multer.File[] },
     @Body() body: { notes?: string },
   ) {
     await this.events.assertOpenForEntry(id);
@@ -132,22 +132,28 @@ export class ChallengeEventsController {
     // `files` is undefined entirely on a non-multipart request, which a plain
     // property read would turn into a 500.
     const image = files?.image?.[0];
-    const model = files?.model?.[0];
+    const workspace = files?.workspace?.[0];
 
-    if (!image) {
-      throw new AppException(ApiErrorCode.VALIDATION_FAILED, 'A render image is required', 400);
+    if (!image || !workspace) {
+      throw new AppException(
+        ApiErrorCode.VALIDATION_FAILED,
+        'Both a final render and a workspace photo are required',
+        400,
+      );
     }
 
-    const uploadedImage = await this.uploads.uploadSubmissionImage(image, id);
-    const uploadedModel = model ? await this.uploads.uploadSubmissionModel(model, id) : null;
+    // Render first: if the workspace shot is the wrong size, the render is
+    // already stored, so upload the workspace second and let its own failure
+    // clean up after itself. The render is overwritten on the next valid submit.
+    const uploadedImage = await this.uploads.uploadEntryImage(image, id, 'renders');
+    const uploadedWorkspace = await this.uploads.uploadEntryImage(workspace, id, 'workspace');
 
     const entry = await this.events.submitEntry(
       id,
       user.id,
       {
         imageUrl: uploadedImage.url,
-        modelUrl: uploadedModel?.url ?? null,
-        modelFilename: uploadedModel?.filename ?? null,
+        workspacePhotoUrl: uploadedWorkspace.url,
       },
       body.notes,
     );
@@ -231,8 +237,7 @@ function toEntry(entry: ChallengeEntry) {
     userId: entry.userId,
     username: entry.user?.username ?? null,
     imageUrl: entry.imageUrl,
-    modelUrl: entry.modelUrl,
-    modelFilename: entry.modelFilename,
+    workspacePhotoUrl: entry.workspacePhotoUrl,
     notes: entry.notes,
     voteCount: entry.voteCount,
     submittedAt: entry.submittedAt,
@@ -244,9 +249,10 @@ function toEntry(entry: ChallengeEntry) {
  *
  * Everything that could identify the artist or reveal the standings is dropped
  * on the server — not blanked in the client — so it cannot be recovered from the
- * network response. Only the id (to cast a vote against) and the image (to judge)
- * survive. `voteCount` is zeroed rather than omitted so the field's type is
- * stable across phases.
+ * network response. Only the id (to cast a vote against) and the render (to
+ * judge) survive. The workspace photo is withheld too: a Blender title bar or a
+ * recognisable desktop is exactly the kind of tell blind voting exists to hide.
+ * `voteCount` is zeroed rather than omitted so the field's type is stable.
  */
 function toBlindEntry(entry: ChallengeEntry) {
   return {
@@ -254,8 +260,7 @@ function toBlindEntry(entry: ChallengeEntry) {
     userId: '',
     username: null,
     imageUrl: entry.imageUrl,
-    modelUrl: null,
-    modelFilename: null,
+    workspacePhotoUrl: null,
     notes: null,
     voteCount: 0,
     submittedAt: entry.submittedAt,

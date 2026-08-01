@@ -28,9 +28,10 @@ export interface EventEntry {
   id: string;
   userId: string;
   username: string | null;
+  /** Final render, 1024×1024. */
   imageUrl: string;
-  modelUrl: string | null;
-  modelFilename: string | null;
+  /** Workspace shot, 1024×1024. Null while blind (voting) and on legacy entries. */
+  workspacePhotoUrl: string | null;
   notes: string | null;
   voteCount: number;
   submittedAt: string;
@@ -86,12 +87,12 @@ export function useEnterEvent(challengeId: string) {
   return useMutation<
     EventEntry,
     ApiError,
-    { image: File; model?: File | null; notes?: string }
+    { image: File; workspace: File; notes?: string }
   >({
-    mutationFn: async ({ image, model, notes }) => {
+    mutationFn: async ({ image, workspace, notes }) => {
       const form = new FormData();
       form.append('image', image);
-      if (model) form.append('model', model);
+      form.append('workspace', workspace);
       if (notes) form.append('notes', notes);
 
       const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -109,6 +110,8 @@ export function useEnterEvent(challengeId: string) {
       }
       return payload.data;
     },
+    // The entry form prints this beneath the file fields.
+    meta: { inlineError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.detail(challengeId) });
     },

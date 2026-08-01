@@ -9,6 +9,7 @@ import {
   ChallengeAssetType,
   SUBMISSION_IMAGE_ALLOWED_MIME,
   SUBMISSION_IMAGE_MAX_BYTES,
+  SUBMISSION_IMAGE_SIZE,
   SUBMISSION_MODEL_EXTENSIONS,
   SUBMISSION_MODEL_MAX_BYTES,
 } from '@bb/shared';
@@ -136,6 +137,49 @@ export class CloudinaryService {
         { quality: 'auto', fetch_format: 'auto' },
       ],
     });
+
+    return { url: result.secure_url, publicId: result.public_id };
+  }
+
+  /**
+   * A public-challenge entry image — the final render or the workspace shot.
+   *
+   * Enforced to an exact SUBMISSION_IMAGE_SIZE square. The size is checked on the
+   * *uploaded* file's real dimensions, not the client's word: a wrong-size image
+   * is uploaded, found out, deleted, and rejected, so the check cannot be spoofed
+   * by lying about dimensions. No resize transform — the whole point is that the
+   * artist exports at the required size, not that we silently reshape their work.
+   */
+  async uploadEntryImage(
+    file: Express.Multer.File,
+    challengeId: string,
+    kind: 'renders' | 'workspace',
+  ): Promise<UploadedAsset> {
+    this.assertValid(file, {
+      maxBytes: SUBMISSION_IMAGE_MAX_BYTES,
+      allowedMime: SUBMISSION_IMAGE_ALLOWED_MIME as readonly string[],
+      label: kind === 'workspace' ? 'workspace photo' : 'render',
+    });
+
+    const result = await this.uploadBuffer(file.buffer, {
+      folder: `blender-battle/challenges/${challengeId}/${kind}`,
+      resource_type: 'image',
+      use_filename: false,
+      unique_filename: true,
+      overwrite: false,
+      // Format/quality only — never a resize, so the reported width/height are the
+      // artist's real dimensions.
+      transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+    });
+
+    if (result.width !== SUBMISSION_IMAGE_SIZE || result.height !== SUBMISSION_IMAGE_SIZE) {
+      await this.destroy(result.public_id);
+      throw new AppException(
+        ApiErrorCode.VALIDATION_FAILED,
+        `The ${kind === 'workspace' ? 'workspace photo' : 'render'} must be exactly ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}px (received ${result.width}×${result.height}).`,
+        400,
+      );
+    }
 
     return { url: result.secure_url, publicId: result.public_id };
   }

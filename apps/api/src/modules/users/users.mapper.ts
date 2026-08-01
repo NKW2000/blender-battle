@@ -44,6 +44,7 @@ export const UserMapper = {
       role: user.role,
       status: user.status,
       updatedAt: user.updatedAt.toISOString(),
+      showcaseEntryIds: user.showcaseEntryIds ?? [],
     };
   },
 

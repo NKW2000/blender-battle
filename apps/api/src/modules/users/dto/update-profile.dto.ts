@@ -1,12 +1,15 @@
-import { BIO_MAX_LENGTH, ExperienceLevel } from '@bb/shared';
+import { BIO_MAX_LENGTH, ExperienceLevel, SHOWCASE_MAX_ITEMS } from '@bb/shared';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
   IsISO31661Alpha2,
   IsObject,
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -71,4 +74,17 @@ export class UpdateProfileDto {
   @ValidateNested()
   @Type(() => SocialLinksDto)
   socialLinks?: SocialLinksDto;
+
+  /**
+   * Ordered entry ids to pin to the profile showcase.
+   *
+   * Shape is validated here; ownership and model-presence are not — those depend
+   * on rows this DTO cannot see, so the service checks that every id belongs to
+   * the caller's own finished, model-bearing entries before it stores anything.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(SHOWCASE_MAX_ITEMS)
+  @IsUUID('4', { each: true })
+  showcaseEntryIds?: string[];
 }

@@ -88,6 +88,13 @@ export class UsersController {
     return this.users.getPortfolio(username);
   }
 
+  /** The artist's curated showcase — pinned model-bearing works, ordered. */
+  @Public()
+  @Get('by-username/:username/showcase')
+  async showcase(@Param('username') username: string): Promise<PortfolioItem[]> {
+    return this.users.getShowcase(username);
+  }
+
   // --- Admin ---------------------------------------------------------------
 
   @Roles(Role.ADMIN)

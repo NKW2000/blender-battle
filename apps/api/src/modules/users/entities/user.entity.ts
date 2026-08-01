@@ -65,6 +65,19 @@ export class User extends BaseEntity {
   @Column({ type: 'jsonb', name: 'social_links', default: () => "'{}'::jsonb" })
   socialLinks: SocialLinks;
 
+  /**
+   * Ordered ids of the entries the artist has pinned to their profile showcase.
+   *
+   * A plain ordered id array rather than a join table: order matters, the list
+   * is short (capped at ten), and it is read as a whole every time — the same
+   * reasoning that keeps `social_links` a jsonb blob rather than its own table.
+   * Referential integrity is enforced in the service, not by a foreign key,
+   * because an entry that is later hidden or removed should simply drop out of
+   * the showcase rather than block the write.
+   */
+  @Column({ type: 'uuid', name: 'showcase_entry_ids', array: true, default: () => "'{}'" })
+  showcaseEntryIds: string[];
+
   @Column({
     type: 'enum',
     enum: ExperienceLevel,

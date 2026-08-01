@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   ActivityAction,
+  ApiErrorCode,
   Role,
+  SHOWCASE_MAX_ITEMS,
   UserStatus,
   type AdminUserListItem,
   type CursorPage,
@@ -10,7 +12,7 @@ import {
   type PublicUserProfile,
   type SelfUserProfile,
 } from '@bb/shared';
-import { Repository } from 'typeorm';
+import { Repository, type SelectQueryBuilder } from 'typeorm';
 
 import { AppException } from '@/common/exceptions/app.exception';
 import { buildPage, decodeCursor, encodeCursor } from '@/common/pagination/cursor';
@@ -79,21 +81,64 @@ export class UsersService {
    * a ballot should pull it from the artist's shopfront too.
    */
   async getPortfolio(username: string): Promise<PortfolioItem[]> {
-    const user = await this.users.findOne({ where: { username } });
+    const user = await this.findVisibleByUsername(username);
 
-    if (!user || user.status === UserStatus.BANNED || user.status === UserStatus.DELETED) {
-      throw AppException.notFound('User');
-    }
+    const rows = await this.finishedEntriesQuery(user.id)
+      .orderBy('entry.submittedAt', 'DESC')
+      .take(PORTFOLIO_LIMIT)
+      .getMany();
 
-    // Property names throughout, not raw column names: `take` alongside a joined
-    // select makes TypeORM wrap the query in a DISTINCT subquery, and it can
-    // only rewrite references it recognises as `alias.propertyName`. Raw column
-    // names survive into the subquery pointing at an alias that no longer
-    // exists there, which is a syntax error rather than a wrong answer.
-    const rows = await this.entries
+    return rows.map((entry) => this.toPortfolioItem(entry));
+  }
+
+  /**
+   * The artist's curated showcase — the ordered works pinned to their profile,
+   * at most ten.
+   *
+   * Falls back to their most recent finished works when nothing is pinned, so a
+   * profile is never empty before its owner has visited settings. The same
+   * resolved-challenge guard as `getPortfolio` applies: a live entry is never
+   * exposed, pinned or not.
+   */
+  async getShowcase(username: string): Promise<PortfolioItem[]> {
+    const user = await this.findVisibleByUsername(username);
+
+    // Every finished, non-hidden entry is a candidate — an entry is a pair of
+    // images now, so all of them have something to show.
+    const rows = await this.finishedEntriesQuery(user.id).getMany();
+
+    const byId = new Map(rows.map((entry) => [entry.id, entry]));
+    const pinned = (user.showcaseEntryIds ?? [])
+      .map((id) => byId.get(id))
+      .filter((entry): entry is ChallengeEntry => Boolean(entry));
+
+    // Un-pinned profile: show the newest few rather than nothing.
+    const chosen =
+      pinned.length > 0
+        ? pinned
+        : rows
+            .slice()
+            .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime())
+            .slice(0, SHOWCASE_MAX_ITEMS);
+
+    return chosen.map((entry) => this.toPortfolioItem(entry));
+  }
+
+  /**
+   * Finished, non-hidden entries for one user, with the challenge and its
+   * category joined for the card and panel.
+   *
+   * "Finished" mirrors `ChallengeEventsService.phaseOf`: the submission window
+   * has closed AND either a winner is frozen or the vote deadline has passed.
+   * Property names, never raw columns — `take` with a joined select wraps the
+   * query in a DISTINCT subquery that only rewrites `alias.propertyName`.
+   */
+  private finishedEntriesQuery(userId: string): SelectQueryBuilder<ChallengeEntry> {
+    return this.entries
       .createQueryBuilder('entry')
       .innerJoinAndSelect('entry.challenge', 'challenge')
-      .where('entry.userId = :userId', { userId: user.id })
+      .innerJoinAndSelect('challenge.category', 'category')
+      .where('entry.userId = :userId', { userId })
       .andWhere('entry.isHidden = false')
       .andWhere('challenge.startDate IS NOT NULL')
       .andWhere('challenge.endDate IS NOT NULL')
@@ -101,22 +146,61 @@ export class UsersService {
       .andWhere(
         '(challenge.winnerEntryId IS NOT NULL OR (challenge.votingEndsAt IS NOT NULL AND challenge.votingEndsAt <= :now))',
       )
-      .setParameter('now', new Date())
-      .orderBy('entry.submittedAt', 'DESC')
-      .take(PORTFOLIO_LIMIT)
-      .getMany();
+      .setParameter('now', new Date());
+  }
 
-    return rows.map((entry) => ({
+  private toPortfolioItem(entry: ChallengeEntry): PortfolioItem {
+    return {
       id: entry.id,
       challengeTitle: entry.challenge.title,
       challengeSlug: entry.challenge.slug,
+      challengeDescription: entry.challenge.description,
+      category: entry.challenge.category.name,
+      difficulty: entry.challenge.difficulty,
       imageUrl: entry.imageUrl,
-      modelUrl: entry.modelUrl,
-      modelFilename: entry.modelFilename,
+      workspacePhotoUrl: entry.workspacePhotoUrl,
       voteCount: entry.voteCount,
       isWinner: entry.challenge.winnerEntryId === entry.id,
       submittedAt: entry.submittedAt.toISOString(),
-    }));
+    };
+  }
+
+  private async findVisibleByUsername(username: string): Promise<User> {
+    const user = await this.users.findOne({ where: { username } });
+    if (!user || user.status === UserStatus.BANNED || user.status === UserStatus.DELETED) {
+      throw AppException.notFound('User');
+    }
+    return user;
+  }
+
+  /**
+   * Reduce a requested showcase to the ids the caller may actually pin.
+   *
+   * The requested order is preserved, duplicates collapse, and any id that is
+   * not one of the caller's own finished entries is rejected — not silently
+   * dropped — because a request naming someone else's entry is a bug or an
+   * attempt, and swallowing it would hide both. Clearing the showcase (an empty
+   * array) is allowed and returns empty.
+   */
+  private async resolveShowcaseIds(userId: string, requested: string[]): Promise<string[]> {
+    const ordered = [...new Set(requested)];
+    if (ordered.length === 0) return [];
+
+    const owned = await this.finishedEntriesQuery(userId)
+      .andWhere('entry.id IN (:...ids)', { ids: ordered })
+      .getMany();
+
+    const ownedIds = new Set(owned.map((entry) => entry.id));
+    const invalid = ordered.filter((id) => !ownedIds.has(id));
+    if (invalid.length > 0) {
+      throw new AppException(
+        ApiErrorCode.VALIDATION_FAILED,
+        'A showcase item must be one of your own finished works.',
+        400,
+      );
+    }
+
+    return ordered;
   }
 
   async updateProfile(
@@ -132,6 +216,9 @@ export class UsersService {
     if (dto.country !== undefined) user.country = dto.country;
     if (dto.experienceLevel !== undefined) user.experienceLevel = dto.experienceLevel;
     if (dto.socialLinks !== undefined) user.socialLinks = dto.socialLinks;
+    if (dto.showcaseEntryIds !== undefined) {
+      user.showcaseEntryIds = await this.resolveShowcaseIds(userId, dto.showcaseEntryIds);
+    }
 
     const saved = await this.users.save(user);
 

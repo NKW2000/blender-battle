@@ -35,9 +35,25 @@ export class ChallengeEntry extends BaseEntity {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  /** The final render. A 1024×1024 image the ballot and the profile both show. */
   @Column({ type: 'text', name: 'image_url' })
   imageUrl: string;
 
+  /**
+   * The workspace shot — the artist's Blender viewport, as proof of work. Also a
+   * 1024×1024 image. Nullable only for entries created before this was required;
+   * every new entry supplies it.
+   */
+  @Column({ type: 'text', name: 'workspace_photo_url', nullable: true })
+  workspacePhotoUrl: string | null;
+
+  /**
+   * Legacy 3D-model columns, no longer written.
+   *
+   * Kept so historical entries that predate the two-image format are not lost,
+   * but the entry flow no longer accepts a model — an entry is a final render
+   * plus a workspace shot now.
+   */
   @Column({ type: 'text', name: 'model_url', nullable: true })
   modelUrl: string | null;
 

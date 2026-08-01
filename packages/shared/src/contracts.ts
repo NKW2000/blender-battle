@@ -49,10 +49,14 @@ export interface PortfolioItem {
   id: string;
   challengeTitle: string;
   challengeSlug: string;
+  /** The brief itself, reused as the work's blurb — artists write no separate caption. */
+  challengeDescription: string;
+  category: string;
+  difficulty: Difficulty;
+  /** The final render — a 1024×1024 image. */
   imageUrl: string;
-  /** Absent when the artist uploaded only a render. */
-  modelUrl: string | null;
-  modelFilename: string | null;
+  /** The workspace shot — a 1024×1024 image. Null on legacy entries. */
+  workspacePhotoUrl: string | null;
   voteCount: number;
   isWinner: boolean;
   submittedAt: string;
@@ -64,6 +68,12 @@ export interface SelfUserProfile extends PublicUserProfile {
   role: Role;
   status: UserStatus;
   updatedAt: string;
+  /**
+   * The artist's curated showcase: entry ids, in display order, at most ten.
+   * Only exposed to the owner — a viewer sees the resolved works, not the id
+   * list — because it is the input to the settings picker, not public data.
+   */
+  showcaseEntryIds: string[];
 }
 
 /** Admin list view: identity + moderation state, no battle statistics. */

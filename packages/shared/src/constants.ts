@@ -10,6 +10,10 @@ export const PASSWORD_MAX_LENGTH = 128;
 
 export const BIO_MAX_LENGTH = 500;
 
+/** How many works an artist may pin to their profile showcase. The viewer loads
+ *  each as a real mesh, so the cap bounds how many models one page downloads. */
+export const SHOWCASE_MAX_ITEMS = 10;
+
 export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 export const AVATAR_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
@@ -67,6 +71,13 @@ export const ROOM_DRAW_SECONDS = 7;
  * Without an image there is nothing to put on a ballot.
  */
 export const SUBMISSION_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Exact pixel dimensions every entry image must have — the final render and the
+ * workspace shot both. Square and fixed so the vote wheel and the profile
+ * gallery lay out identically for every entry, with no letterboxing.
+ */
+export const SUBMISSION_IMAGE_SIZE = 1024;
 export const SUBMISSION_IMAGE_ALLOWED_MIME = [
   'image/jpeg',
   'image/png',
