@@ -1,0 +1,54 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "blender-battle-web",
+
+  // The entry OpenNext generates from the Next build. It is not committed —
+  // `pnpm cf:build` produces it, and every deploy path runs that first.
+  "main": ".open-next/worker.js",
+
+  // Must not lead the installed workerd. Bumping this changes runtime
+  // behaviour, so it moves only when wrangler is upgraded deliberately.
+  "compatibility_date": "2025-03-25",
+
+  /*
+    `nodejs_compat` is required, not optional: the Next.js server bundle reaches
+    for node:async_hooks, node:buffer and node:stream, none of which exist in
+    the bare Workers runtime.
+
+    `global_fetch_strictly_public` makes a fetch to this Worker's own hostname
+    go out over the internet and come back, instead of short-circuiting inside
+    the isolate. Without it a same-origin request from a server component
+    resolves against the Worker's own routes and can loop.
+  */
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // Serves .open-next/assets straight from Cloudflare's edge cache; only paths
+  // with no matching asset reach the Worker and burn a request.
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  /*
+    Public build-time values only.
+
+    `NEXT_PUBLIC_*` is inlined into the client bundle by `next build`, so it is
+    readable by anyone who loads the page — which is correct for this one and
+    would be a leak for anything else. There are no secrets here by design: the
+    browser talks to the API directly and the Worker never holds a credential.
+
+    Because it is inlined at build time, changing it here alone does nothing —
+    the value has to be present when `pnpm cf:build` runs, and the app must be
+    rebuilt to pick up a new one.
+
+    Point this at the deployed API and add this Worker's URL to the API's
+    CORS_ORIGINS, or the browser blocks every request the page makes.
+  */
+  "vars": {
+    "NEXT_PUBLIC_API_URL": "https://api.example.com/api/v1"
+  }
+}

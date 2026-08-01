@@ -12,3 +12,7 @@ allowBuilds:
   # eslint-config-next depends on. Left unanswered it is treated as an error and
   # every workspace script fails before it starts, lint included.
   unrs-resolver: true
+  # The Workers runtime itself, behind wrangler. Its postinstall unpacks the
+  # platform binary that `wrangler dev` runs the built app on, so without this
+  # the Cloudflare preview cannot start at all.
+  workerd: true

@@ -4,7 +4,7 @@ Three services, because they have genuinely different runtime needs.
 
 | Piece | Host | Why there |
 |---|---|---|
-| `apps/web` (Next.js) | Vercel | Static + SSR, no background work |
+| `apps/web` (Next.js) | Vercel **or** Cloudflare Workers | Static + SSR, no background work — see [step 4](#4-web-vercel-or-cloudflare-workers) |
 | `apps/api` (NestJS) | Render | Needs a **long-running process** — see below |
 | Postgres | Supabase | Managed, with a pooler |
 | Redis | Render Key Value | Free tier, same region as the API |
@@ -81,7 +81,29 @@ Free web services sleep after 15 minutes idle and take roughly a minute to wake.
 The schedulers sleep with them, so a room's deadline passes with nothing
 advancing it until the next visitor. `render.yaml` therefore specifies `starter`.
 
-## 4. Vercel (web)
+## 4. Web (Vercel **or** Cloudflare Workers)
+
+Pick one. Both serve the same build; only the host differs.
+
+### Why the API cannot join it on Cloudflare
+
+The front end ports to Workers cleanly because it does nothing but render. The
+API does not, and the reasons are structural rather than a matter of
+configuration:
+
+| Blocker | Where |
+|---|---|
+| `@Interval(1000)` sweeps rooms every second; Cron Triggers floor at one minute | `room-scheduler.service.ts` |
+| `@node-rs/bcrypt` is a compiled `.node` binary the Workers runtime cannot load | `auth/services/password.service.ts` |
+| `ioredis` needs a raw TCP socket, which Workers does not provide | `common/adapters/redis-io.adapter.ts` |
+| `socket.io` needs a persistent server; Workers WebSockets require Durable Objects | `main.ts` |
+
+Cloudflare also hosts no Postgres, and the schema uses `uuid[]`, `jsonb`,
+`timestamptz` and `inet`, none of which exist in D1/SQLite. Moving the API there
+means rewriting the schedulers onto Durable Object alarms and replacing the
+password hash — which signs out every existing account. Keep the API on Render.
+
+### 4a. Vercel
 
 **Add New → Project**, import the repo, then:
 
@@ -94,6 +116,39 @@ advancing it until the next visitor. `render.yaml` therefore specifies `starter`
 
 `NEXT_PUBLIC_*` is inlined into the browser bundle at build time. Never put a
 secret in one, and redeploy after changing it — it is baked in, not read at runtime.
+
+### 4b. Cloudflare Workers
+
+Runs through [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare),
+configured in [`apps/web/wrangler.jsonc`](apps/web/wrangler.jsonc) and
+[`apps/web/open-next.config.ts`](apps/web/open-next.config.ts).
+
+1. Set the API URL in `wrangler.jsonc` under `vars.NEXT_PUBLIC_API_URL`.
+2. Add the Worker's URL to the API's `CORS_ORIGINS` **and** `FRONTEND_URL` on
+   Render. Skipping this leaves a site that loads and then fails every request.
+3. Deploy one of two ways.
+
+**From CI (recommended).** [`deploy-web.yml`](.github/workflows/deploy-web.yml)
+builds and deploys on every push to `main` that touches the web app. It needs
+two repository secrets — `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers"
+template) and `CLOUDFLARE_ACCOUNT_ID` — plus a repository *variable*
+`NEXT_PUBLIC_API_URL`.
+
+**From a machine.**
+
+```bash
+pnpm --filter @bb/web exec wrangler login
+pnpm --filter @bb/web cf:deploy
+```
+
+> **Windows needs Developer Mode on.** OpenNext forces Next's `standalone`
+> output, which builds `node_modules` out of symlinks, and Windows refuses to
+> create those otherwise — the build dies on `EPERM: operation not permitted,
+> symlink`. Turn it on under **Settings → Privacy & security → For developers**,
+> or just let CI do the build, which is why the workflow above exists.
+
+`pnpm --filter @bb/web cf:preview` runs the built Worker locally on `workerd`,
+which catches runtime differences the plain `next build` cannot.
 
 ## 5. Verify
 
