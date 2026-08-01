@@ -128,6 +128,19 @@ configured in [`apps/web/wrangler.jsonc`](apps/web/wrangler.jsonc) and
    Render. Skipping this leaves a site that loads and then fails every request.
 3. Deploy one of two ways.
 
+**From the Cloudflare dashboard.** Workers & Pages → Create → Import a
+repository. Leave the root directory at the repository root and use:
+
+| Setting | Value |
+|---|---|
+| Build command | `pnpm cf:build` |
+| Deploy command | `pnpm cf:deploy` |
+
+Both are root scripts that `--filter` into `apps/web`. That indirection is the
+point: Workers Builds runs commands from the repository root, and wrangler
+invoked there fails with *"application detection logic has been run in the root
+of a workspace"* because it cannot tell which project in the workspace is meant.
+
 **From CI (recommended).** [`deploy-web.yml`](.github/workflows/deploy-web.yml)
 builds and deploys on every push to `main` that touches the web app. It needs
 two repository secrets — `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers"
