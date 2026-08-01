@@ -3,7 +3,7 @@
 import { type CursorPage, type NotificationItem } from '@bb/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { notify } from '@/lib/notify';
 
 import { api } from '@/lib/api/client';
 
@@ -95,7 +95,7 @@ export function useNotificationListener(enabled: boolean) {
       .then((page) => {
         const latest = page.items[0];
         if (latest && !latest.readAt) {
-          toast(latest.title, { description: latest.body ?? undefined });
+          notify.info(latest.title, latest.body ?? undefined);
         }
       })
       .catch(() => {

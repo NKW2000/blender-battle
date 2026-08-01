@@ -10,7 +10,7 @@ import type {
   SelfUserProfile,
   UserStatus,
 } from '@bb/shared';
-import { toast } from 'sonner';
+import { notify } from '@/lib/notify';
 
 import { api, type ApiError } from '@/lib/api/client';
 import { sessionKeys } from '@/features/auth/use-session';
@@ -18,6 +18,7 @@ import { sessionKeys } from '@/features/auth/use-session';
 export const userKeys = {
   profile: (username: string) => ['users', 'profile', username] as const,
   portfolio: (username: string) => ['users', 'portfolio', username] as const,
+  showcase: (username: string) => ['users', 'showcase', username] as const,
   adminList: (filters: Record<string, unknown>) => ['users', 'admin', filters] as const,
 };
 
@@ -44,6 +45,20 @@ export function usePortfolio(username: string) {
   });
 }
 
+/**
+ * The artist's curated showcase — the ordered, model-bearing works pinned to
+ * their profile. Same long `staleTime` reasoning as `usePortfolio`: its meshes
+ * are loaded into a WebGL scene, so a silent refetch that reordered the array
+ * would rebuild the scene for nothing.
+ */
+export function useShowcase(username: string) {
+  return useQuery({
+    queryKey: userKeys.showcase(username),
+    queryFn: () => api.get<PortfolioItem[]>(`/users/by-username/${username}/showcase`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
 
@@ -52,10 +67,15 @@ export function useUpdateProfile() {
     onSuccess: (user) => {
       queryClient.setQueryData(sessionKeys.me, user);
       queryClient.invalidateQueries({ queryKey: userKeys.profile(user.username) });
+      // The showcase is derived from the saved id list, so a save can reorder or
+      // repopulate it — drop the cached copy so the profile refetches it.
+      queryClient.invalidateQueries({ queryKey: userKeys.showcase(user.username) });
       // The confirmation uses the same verb as the control that triggered it.
-      toast.success('Profile saved');
+      notify.success('Profile saved');
     },
-    onError: (error) => toast.error(error.message),
+    // The settings panel prints the failure at the foot of the form it belongs
+    // to, so this must not also raise a toast for the same thing.
+    meta: { inlineError: true },
   });
 }
 
@@ -70,9 +90,9 @@ export function useUploadAvatar() {
     },
     onSuccess: (user) => {
       queryClient.setQueryData(sessionKeys.me, user);
-      toast.success('Avatar updated');
+      notify.success('Avatar updated');
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }
 
@@ -105,9 +125,9 @@ export function useChangeUserRole() {
       api.patch<AdminUserListItem>(`/users/${id}/role`, { role, reason }),
     onSuccess: (user) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'admin'] });
-      toast.success(`${user.username} is now ${user.role}`);
+      notify.success(`${user.username} is now ${user.role}`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }
 
@@ -122,8 +142,8 @@ export function useChangeUserStatus() {
     mutationFn: ({ id, ...body }) => api.patch<AdminUserListItem>(`/users/${id}/status`, body),
     onSuccess: (user) => {
       queryClient.invalidateQueries({ queryKey: ['users', 'admin'] });
-      toast.success(`${user.username} is now ${user.status}`);
+      notify.success(`${user.username} is now ${user.status}`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }

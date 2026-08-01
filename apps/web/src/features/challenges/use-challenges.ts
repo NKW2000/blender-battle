@@ -9,7 +9,7 @@ import type {
   CursorPage,
   Difficulty,
 } from '@bb/shared';
-import { toast } from 'sonner';
+import { notify } from '@/lib/notify';
 
 import { api, type ApiError } from '@/lib/api/client';
 
@@ -77,9 +77,9 @@ export function useCreateChallenge() {
     mutationFn: (input) => api.post<ChallengeDetail>('/challenges', input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      toast.success('Challenge created');
+      notify.success('Challenge created');
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }
 
@@ -91,9 +91,9 @@ export function useUpdateChallenge(slug: string) {
     onSuccess: (challenge) => {
       queryClient.setQueryData(challengeKeys.detail(slug), challenge);
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      toast.success('Challenge saved');
+      notify.success('Challenge saved');
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }
 
@@ -105,18 +105,18 @@ export function useChallengeLifecycle() {
     mutationFn: (id) => api.post<ChallengeDetail>(`/challenges/${id}/publish`),
     onSuccess: (challenge) => {
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      toast.success(`${challenge.title} is live`);
+      notify.success(`${challenge.title} is live`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 
   const archive = useMutation<ChallengeDetail, ApiError, string>({
     mutationFn: (id) => api.post<ChallengeDetail>(`/challenges/${id}/archive`),
     onSuccess: (challenge) => {
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      toast.success(`${challenge.title} archived`);
+      notify.success(`${challenge.title} archived`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 
   return { publish, archive };
@@ -138,9 +138,9 @@ export function useUploadChallengeAsset(slug: string) {
     },
     onSuccess: (challenge) => {
       queryClient.setQueryData(challengeKeys.detail(slug), challenge);
-      toast.success('Attachment added');
+      notify.success('Attachment added');
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }
 
@@ -152,8 +152,8 @@ export function useRemoveChallengeAsset(slug: string) {
       api.delete<ChallengeDetail>(`/challenges/${id}/assets/${assetId}`),
     onSuccess: (challenge) => {
       queryClient.setQueryData(challengeKeys.detail(slug), challenge);
-      toast.success('Attachment removed');
+      notify.success('Attachment removed');
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => notify.error(error.message),
   });
 }

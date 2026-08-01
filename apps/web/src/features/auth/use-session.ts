@@ -45,6 +45,8 @@ export function useLogin() {
 
   return useMutation<AuthSession, ApiError, LoginInput>({
     mutationFn: (input) => api.post<AuthSession>('/auth/login', input),
+    // The sign-in form prints this above its submit button.
+    meta: { inlineError: true },
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);
@@ -59,6 +61,8 @@ export function useRegister() {
 
   return useMutation<AuthSession, ApiError, RegisterInput>({
     mutationFn: (input) => api.post<AuthSession>('/auth/register', input),
+    // The sign-up form prints this above its submit button.
+    meta: { inlineError: true },
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);

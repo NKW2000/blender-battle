@@ -16,6 +16,7 @@ import { Field } from '@/components/ui/field';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import { useCategories } from '@/features/challenges/use-challenges';
+import { notify } from '@/lib/notify';
 
 /** Mirrors the backend DTO. The API re-validates all of it regardless. */
 const challengeSchema = z.object({
@@ -67,16 +68,22 @@ export function ChallengeForm({
     },
   });
 
-  const submit = handleSubmit((values) => {
-    onSubmit({
-      title: values.title,
-      description: values.description,
-      difficulty: values.difficulty,
-      categoryId: values.categoryId,
-      blenderVersion: values.blenderVersion || undefined,
-      visibility: values.visibility,
-    });
-  });
+  const submit = handleSubmit(
+    (values) => {
+      onSubmit({
+        title: values.title,
+        description: values.description,
+        difficulty: values.difficulty,
+        categoryId: values.categoryId,
+        blenderVersion: values.blenderVersion || undefined,
+        visibility: values.visibility,
+      });
+    },
+    // The per-field messages below the inputs say what to fix; this only says
+    // that the submit was refused, which is otherwise invisible when the first
+    // bad field has scrolled out of view.
+    (fieldErrors) => notify.invalidForm(Object.keys(fieldErrors).length),
+  );
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-6">

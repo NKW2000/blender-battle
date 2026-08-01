@@ -1,11 +1,12 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Toaster } from 'sonner';
 
 import { RouteProgress } from '@/components/ui/route-progress';
+import { Toaster } from '@/components/ui/toaster';
 import { ApiError } from '@/lib/api/client';
+import { notify } from '@/lib/notify';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Created inside state so each browser session gets its own client and no cache
@@ -13,6 +14,38 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        /*
+          Every failed write reports itself. Before this, a mutation only spoke
+          up if its own hook remembered to add an `onError`, so whole areas —
+          rooms, entries, voting — failed in silence and looked to the user like
+          a button that simply did nothing.
+
+          Two ways to opt out, both because the failure is already being said
+          somewhere better: a hook with its own `onError` has the context to word
+          it properly, and `meta.inlineError` marks a form that prints the
+          message next to the control that failed — which beats a message in the
+          far corner of the screen. Either way, firing here as well would show
+          the same failure twice.
+        */
+        mutationCache: new MutationCache({
+          onError: (error, _variables, _context, mutation) => {
+            if (mutation.options.onError || mutation.meta?.inlineError) return;
+            notify.failure(error);
+          },
+        }),
+        /*
+          Reads are quieter on purpose. A query with no data yet is a screen
+          rendering its own empty or error state, and a toast on top of that says
+          the same thing twice. A query that already had data is the dangerous
+          case: the refresh failed, the page still shows the old numbers, and
+          nothing on screen would otherwise admit they are stale.
+        */
+        queryCache: new QueryCache({
+          onError: (error, query) => {
+            if (query.state.data === undefined) return;
+            notify.failure(error);
+          },
+        }),
         defaultOptions: {
           queries: {
             staleTime: 30_000,
@@ -42,18 +75,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <RouteProgress />
       {children}
-      <Toaster
-        theme="dark"
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: 'var(--color-panel)',
-            border: '1px solid var(--color-edge)',
-            borderRadius: '0',
-            color: 'var(--color-bone)',
-          },
-        }}
-      />
+      <Toaster />
     </QueryClientProvider>
   );
 }
