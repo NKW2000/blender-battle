@@ -6,7 +6,7 @@ Three services, because they have genuinely different runtime needs.
 |---|---|---|
 | `apps/web` (Next.js) | Vercel **or** Cloudflare Workers | Static + SSR, no background work — see [step 4](#4-web-vercel-or-cloudflare-workers) |
 | `apps/api` (NestJS) | Render | Needs a **long-running process** — see below |
-| Postgres | Supabase | Managed, with a pooler |
+| Postgres | Neon (or Supabase) | Managed. Neither Render's free tier nor Cloudflare can hold it — Render's expires after 30 days, and Cloudflare does not sell Postgres |
 | Redis | Render Key Value | Free tier, same region as the API |
 
 **Why the API is not on Vercel.** Three schedulers drive the entire application:

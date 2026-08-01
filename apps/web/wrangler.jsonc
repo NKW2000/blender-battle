@@ -49,6 +49,6 @@
     CORS_ORIGINS, or the browser blocks every request the page makes.
   */
   "vars": {
-    "NEXT_PUBLIC_API_URL": "https://api.example.com/api/v1"
+    "NEXT_PUBLIC_API_URL": "https://blender-battle-api.onrender.com/api/v1"
   }
 }
