@@ -61,16 +61,20 @@ export function TimeSeriesChart({
   data,
   dataKey,
   unit,
-  color = 'var(--color-select)',
+  gradientId = 'bb-bar-flame',
 }: {
   data: Array<Record<string, string | number>>;
   dataKey: string;
   unit: string;
-  color?: string;
+  /** Must be unique per chart on the page — SVG gradient ids are global. */
+  gradientId?: string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+        <defs>
+          <BarGradient id={gradientId} />
+        </defs>
         {/* Horizontal rules only, and recessive — the grid orients, it does not compete. */}
         <CartesianGrid stroke="var(--color-edge)" vertical={false} />
         <XAxis
@@ -93,7 +97,14 @@ export function TimeSeriesChart({
           cursor={{ fill: 'var(--color-panel-raised)' }}
           content={<ChartTooltip unit={unit} />}
         />
-        <Bar dataKey={dataKey} fill={color} radius={[2, 2, 0, 0]} maxBarSize={28} />
+        <Bar
+          dataKey={dataKey}
+          fill={`url(#${gradientId})`}
+          stroke="var(--color-edge)"
+          strokeWidth={2.5}
+          radius={[5, 5, 0, 0]}
+          maxBarSize={26}
+        />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -109,11 +120,14 @@ export function CategoryBarChart({
   dataKey,
   labelKey,
   unit,
+  gradientId = 'bb-bar-flame-h',
 }: {
   data: Array<Record<string, string | number>>;
   dataKey: string;
   labelKey: string;
   unit: string;
+  /** Must be unique per chart on the page — SVG gradient ids are global. */
+  gradientId?: string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(140, data.length * 36)}>
@@ -122,6 +136,9 @@ export function CategoryBarChart({
         layout="vertical"
         margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
       >
+        <defs>
+          <BarGradient id={gradientId} horizontal />
+        </defs>
         <CartesianGrid stroke="var(--color-edge)" horizontal={false} />
         <XAxis
           type="number"
@@ -142,12 +159,33 @@ export function CategoryBarChart({
           cursor={{ fill: 'var(--color-panel-raised)' }}
           content={<ChartTooltip unit={unit} />}
         />
-        <Bar dataKey={dataKey} radius={[0, 2, 2, 0]} maxBarSize={18}>
+        <Bar
+          dataKey={dataKey}
+          stroke="var(--color-edge)"
+          strokeWidth={2.5}
+          radius={[0, 6, 6, 0]}
+          maxBarSize={22}
+        >
           {data.map((row, index) => (
-            <Cell key={index} fill="var(--color-select)" />
+            <Cell key={index} fill={`url(#${gradientId})`} />
           ))}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+/**
+ * The warm flame-to-lift gradient every bar in the dashboard uses, matching the
+ * sticker-highlight look the rest of the arcade language paints with a hard
+ * inset shine. `horizontal` flips the axis for the sideways category chart.
+ */
+function BarGradient({ id, horizontal = false }: { id: string; horizontal?: boolean }) {
+  const [x1, y1, x2, y2] = horizontal ? [0, 0, 1, 0] : [0, 0, 0, 1];
+  return (
+    <linearGradient id={id} x1={x1} y1={y1} x2={x2} y2={y2}>
+      <stop offset="0%" stopColor="var(--color-flame-lift)" />
+      <stop offset="100%" stopColor="var(--color-flame)" />
+    </linearGradient>
   );
 }

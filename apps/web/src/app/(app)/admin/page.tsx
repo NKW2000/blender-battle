@@ -77,13 +77,13 @@ export default function AdminDashboardPage() {
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Players" value={metrics.users.total} />
-        <StatTile label="Online now" value={metrics.users.online} />
-        <StatTile label="Battles completed" value={metrics.battles.completed} />
+        <StatTile label="Online now" value={metrics.users.online} color="text-mint" />
+        <StatTile label="Battles completed" value={metrics.battles.completed} color="text-flame" />
         <StatTile label="Live battles" value={metrics.battles.live} />
-        <StatTile label="Published challenges" value={metrics.challenges.published} />
-        <StatTile label="Drafts" value={metrics.challenges.draft} />
-        <StatTile label="Votes cast" value={metrics.engagement.totalVotes} />
-        <StatTile label="Reactions" value={metrics.engagement.totalReactions} />
+        <StatTile label="Published challenges" value={metrics.challenges.published} color="text-aqua" />
+        <StatTile label="Drafts" value={metrics.challenges.draft} color="text-flame-lift" />
+        <StatTile label="Votes cast" value={metrics.engagement.totalVotes} color="text-punch" />
+        <StatTile label="Reactions" value={metrics.engagement.totalReactions} color="text-sun" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -124,7 +124,12 @@ export default function AdminDashboardPage() {
             <span className="font-mono text-xs text-bone-faint">last 14 days</span>
           </PanelHeader>
           <PanelBody>
-            <TimeSeriesChart data={metrics.battlesPerDay} dataKey="battles" unit="battles" />
+            <TimeSeriesChart
+              data={metrics.battlesPerDay}
+              dataKey="battles"
+              unit="battles"
+              gradientId="bb-bar-battles"
+            />
           </PanelBody>
         </Panel>
       </section>
@@ -139,7 +144,12 @@ export default function AdminDashboardPage() {
             {/* A separate chart from battles, not a second line on the same plot:
                 the two measures have different scales, and forcing them onto one
                 axis would flatten whichever is smaller. */}
-            <TimeSeriesChart data={metrics.signupsPerDay} dataKey="signups" unit="signups" />
+            <TimeSeriesChart
+              data={metrics.signupsPerDay}
+              dataKey="signups"
+              unit="signups"
+              gradientId="bb-bar-signups"
+            />
           </PanelBody>
         </Panel>
 
@@ -173,23 +183,38 @@ export default function AdminDashboardPage() {
           {metrics.topPlayers.length === 0 ? (
             <EmptyState title="No ranked players" description="Ranks appear once battles finish." />
           ) : (
-            <ul className="divide-y divide-edge/60">
-              {metrics.topPlayers.map((player, index) => (
-                <li
-                  key={player.userId}
-                  className="flex items-center justify-between gap-3 px-5 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-bone-faint">{index + 1}</span>
-                    <Link href={`/u/${player.username}`} className="text-sm text-bone hover:text-select">
+            <ul>
+              {metrics.topPlayers.map((player, index) => {
+                const rank = index + 1;
+                // The top three get a colour each, same triad as everywhere else
+                // rank shows up in this app; the rest share one neutral badge.
+                const badgeColor =
+                  rank === 1 ? 'bg-sun' : rank === 2 ? 'bg-aqua' : rank === 3 ? 'bg-punch' : 'bg-bone-faint';
+                return (
+                  <li
+                    key={player.userId}
+                    className={`flex items-center gap-3.5 px-5 py-3.5 ${index > 0 ? 'border-t-2 border-white/[0.06]' : ''}`}
+                  >
+                    <span
+                      className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] border-[2.5px] border-edge font-display text-sm font-bold text-edge ${badgeColor}`}
+                      style={{ boxShadow: '0 3px 0 var(--color-edge)' }}
+                    >
+                      {rank}
+                    </span>
+                    <Link
+                      href={`/u/${player.username}`}
+                      className="min-w-0 flex-1 truncate font-display text-base font-bold text-bone hover:text-select"
+                    >
                       {player.username}
                     </Link>
-                  </div>
-                  <span className="font-mono text-xs text-bone-muted">
-                    {formatNumber(player.score)} pts · {player.wins}W
-                  </span>
-                </li>
-              ))}
+                    <span
+                      className={`shrink-0 font-bold text-xs ${rank === 1 ? 'text-sun' : 'text-bone-faint'}`}
+                    >
+                      {formatNumber(player.score)} pts · {player.wins}W
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Panel>
@@ -200,13 +225,14 @@ export default function AdminDashboardPage() {
           </PanelHeader>
           <PanelBody className="grid grid-cols-2 gap-3">
             <StatTile label="Players" value={metrics.users.byRole.player} />
-            <StatTile label="Managers" value={metrics.users.byRole.manager} />
-            <StatTile label="Admins" value={metrics.users.byRole.admin} />
-            <StatTile label="Banned" value={metrics.users.banned} />
+            <StatTile label="Managers" value={metrics.users.byRole.manager} color="text-aqua" />
+            <StatTile label="Admins" value={metrics.users.byRole.admin} color="text-sun" />
+            <StatTile label="Banned" value={metrics.users.banned} color="text-punch" />
             <StatTile label="Suspended" value={metrics.users.suspended} />
             <StatTile
               label="Most played"
-              value={metrics.mostPlayedChallenge?.timesPlayed ?? 0}
+              value={metrics.mostPlayedChallenge?.title ?? '—'}
+              color="text-flame"
             />
           </PanelBody>
         </Panel>
@@ -229,28 +255,38 @@ export default function AdminDashboardPage() {
         ) : logs.length === 0 ? (
           <EmptyState title="Nothing logged yet" description="Audit events appear here as they happen." />
         ) : (
-          <ul className="divide-y divide-edge/60">
-            {logs.slice(0, 15).map((log) => (
-              <li key={log.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5">
-                <div className="flex items-center gap-3">
+          <ul>
+            {logs.slice(0, 15).map((log, index) => (
+              <li
+                key={log.id}
+                className={`flex flex-wrap items-center justify-between gap-4 px-5 py-3 ${index > 0 ? 'border-t-2 border-white/[0.05]' : ''}`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className={`h-2.5 w-2.5 shrink-0 rounded-[3px] border-2 border-edge ${eventDotColor(log.action)}`}
+                  />
                   <span
                     // Security events are the ones an admin is scanning for;
                     // everything else is routine and stays quiet.
-                    className={`font-mono text-xs ${
-                      log.action.startsWith('security.') ? 'text-axis-x' : 'text-bone-muted'
+                    className={`shrink-0 font-bold text-[13px] tabular-nums ${
+                      log.action.startsWith('security.') ? 'text-axis-x' : 'text-bone'
                     }`}
                   >
                     {log.action}
                   </span>
                   {log.actor ? (
-                    <Link href={`/u/${log.actor.username}`} className="text-xs text-bone hover:text-select">
+                    <Link
+                      href={`/u/${log.actor.username}`}
+                      className="truncate text-[12.5px] font-bold text-bone-muted hover:text-select"
+                    >
                       {log.actor.username}
                     </Link>
                   ) : (
-                    <span className="text-xs text-bone-faint">system</span>
+                    <span className="truncate text-[12.5px] font-bold italic text-bone-faint">system</span>
                   )}
                 </div>
-                <span className="font-mono text-xs text-bone-faint">
+                <span className="shrink-0 font-bold text-xs text-bone-faint">
                   {new Date(log.createdAt).toLocaleString()}
                 </span>
               </li>
@@ -273,4 +309,12 @@ export default function AdminDashboardPage() {
       </Panel>
     </div>
   );
+}
+
+/** One colour per event family, so the eye can scan the feed before reading. */
+function eventDotColor(action: string): string {
+  if (action.startsWith('user.registered')) return 'bg-mint';
+  if (action.startsWith('challenge.')) return 'bg-sun';
+  if (action.startsWith('user.profile')) return 'bg-punch';
+  return 'bg-aqua';
 }
