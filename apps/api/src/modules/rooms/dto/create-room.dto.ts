@@ -5,18 +5,7 @@ import {
   ROOM_NAME_MAX_LENGTH,
   ROOM_NAME_MIN_LENGTH,
 } from '@bb/shared';
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Length,
-  Max,
-  Min,
-} from 'class-validator';
-
-import { CHALLENGE_MAX_MINUTES, CHALLENGE_MIN_MINUTES } from '@bb/shared';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 
 /**
  * What a host may set when opening a room.
@@ -24,6 +13,13 @@ import { CHALLENGE_MAX_MINUTES, CHALLENGE_MIN_MINUTES } from '@bb/shared';
  * Note what is absent: there is no `challengeId`. The host declares the kind of
  * brief they want and the server draws the specific one at kickoff. Accepting an
  * id here would hand the host advance knowledge of their own contest.
+ *
+ * `endsAt` is an absolute instant, not a duration in hours — the host's browser
+ * converts whatever local date/time they picked to a UTC instant before this
+ * ever arrives, so the deadline means the same moment to every player regardless
+ * of timezone. The room's actual modelling window is only fixed once the host
+ * presses Start (`RoomsService.start`), which checks that this deadline still
+ * leaves enough time from that later moment.
  */
 export class CreateRoomDto {
   @IsString()
@@ -44,9 +40,6 @@ export class CreateRoomDto {
   @Max(ROOM_MAX_PLAYERS)
   maxPlayers?: number;
 
-  @IsOptional()
-  @IsInt()
-  @Min(CHALLENGE_MIN_MINUTES * 60)
-  @Max(CHALLENGE_MAX_MINUTES * 60)
-  durationSeconds?: number;
+  @IsDateString()
+  endsAt: string;
 }

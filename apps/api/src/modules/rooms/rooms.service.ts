@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   BattleResult,
+  CHALLENGE_MAX_MINUTES,
+  CHALLENGE_MIN_MINUTES,
   Difficulty,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
@@ -53,6 +55,18 @@ export class RoomsService {
 
   // --- Creation and joining ---------------------------------------------------
 
+  /**
+   * `endsAt` is an absolute deadline, not a duration — chosen by the host as a
+   * date/time and already converted to a UTC instant by the time it reaches
+   * here (`CreateRoomDto`). Storing the instant rather than a length in seconds
+   * is what makes it timezone-safe: every player's client renders the same
+   * instant in their own local time, so nobody has to reason about anyone
+   * else's clock.
+   *
+   * The lobby can sit open for a while before the host presses Start, so this
+   * deadline is only a plan at creation time — `start()` re-checks that it
+   * still leaves a real modelling window once the round actually begins.
+   */
   async create(
     host: AuthenticatedUser,
     dto: {
@@ -60,13 +74,22 @@ export class RoomsService {
       categoryId?: string;
       difficulty?: Difficulty;
       maxPlayers?: number;
-      durationSeconds?: number;
+      endsAt: string;
     },
   ): Promise<Room> {
     const maxPlayers = Math.min(
       ROOM_MAX_PLAYERS,
       Math.max(ROOM_MIN_PLAYERS, dto.maxPlayers ?? 8),
     );
+
+    const endsAt = new Date(dto.endsAt);
+    const minEndsAt = new Date(Date.now() + CHALLENGE_MIN_MINUTES * 60_000);
+    const maxEndsAt = new Date(Date.now() + CHALLENGE_MAX_MINUTES * 60_000);
+    if (endsAt < minEndsAt || endsAt > maxEndsAt) {
+      throw AppException.conflict(
+        `The end time must be between ${CHALLENGE_MIN_MINUTES} minutes and ${Math.round(CHALLENGE_MAX_MINUTES / 60)} hours from now.`,
+      );
+    }
 
     const room = await this.rooms.save(
       this.rooms.create({
@@ -77,7 +100,10 @@ export class RoomsService {
         categoryId: dto.categoryId ?? null,
         difficulty: dto.difficulty ?? null,
         maxPlayers,
-        durationSeconds: dto.durationSeconds ?? 1800,
+        endsAt,
+        // Informational until Start recomputes it against the real kickoff
+        // time — shown in the lobby as "about this long", not a promise.
+        durationSeconds: Math.round((endsAt.getTime() - Date.now()) / 1000),
         status: RoomStatus.LOBBY,
       }),
     );
@@ -226,20 +252,35 @@ export class RoomsService {
       throw AppException.conflict(`A room needs at least ${ROOM_MIN_PLAYERS} players to start`);
     }
 
+    const startsAt = new Date(Date.now() + ROOM_DRAW_SECONDS * 1000);
+
+    // `endsAt` is the absolute deadline the host picked at creation — it does
+    // not move. What can and does move is *now*: a lobby can sit open for a
+    // while waiting for players, so the window between kickoff and that fixed
+    // deadline can have shrunk since it was set. Re-check it here rather than
+    // trusting the value creation-time validation already approved.
+    const endsAt = room.endsAt;
+    if (!endsAt || endsAt.getTime() - startsAt.getTime() < CHALLENGE_MIN_MINUTES * 60_000) {
+      // Addressed to the host: the host guard above is the only way in, so this
+      // is the one person who can ever read it, and the one who can act on it.
+      throw AppException.conflict(
+        `Less than ${CHALLENGE_MIN_MINUTES} minutes remain before this room's end time — open a new room with a later deadline.`,
+      );
+    }
+
     const challenge = await this.challenges.draw(
       { categoryId: room.categoryId ?? undefined, difficulty: room.difficulty ?? undefined },
       { id: requesterId } as AuthenticatedUser,
     );
 
-    const startsAt = new Date(Date.now() + ROOM_DRAW_SECONDS * 1000);
-    const endsAt = new Date(startsAt.getTime() + room.durationSeconds * 1000);
+    const durationSeconds = Math.round((endsAt.getTime() - startsAt.getTime()) / 1000);
 
     // Conditional on LOBBY so a double-tap on Start cannot draw twice and move
     // the deadline out from under everyone.
     const claimed = await this.rooms
       .createQueryBuilder()
       .update(Room)
-      .set({ status: RoomStatus.DRAWING, challengeId: challenge.id, startsAt, endsAt })
+      .set({ status: RoomStatus.DRAWING, challengeId: challenge.id, startsAt, durationSeconds })
       .where('id = :id AND status = :lobby', { id: roomId, lobby: RoomStatus.LOBBY })
       .execute();
 

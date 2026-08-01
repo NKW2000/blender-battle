@@ -114,10 +114,13 @@ export function useCreateRoom() {
       categoryId?: string;
       difficulty?: Difficulty;
       maxPlayers?: number;
-      durationSeconds?: number;
+      /** ISO instant — already converted from the host's local date/time pick. */
+      endsAt: string;
     }
   >({
     mutationFn: (dto) => api.post<RoomDetail>('/rooms', dto),
+    // The create dialog prints this above its buttons.
+    meta: { inlineError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.active });
     },
@@ -129,6 +132,8 @@ export function useJoinRoom() {
 
   return useMutation<RoomDetail, ApiError, { roomId?: string; code?: string }>({
     mutationFn: (dto) => api.post<RoomDetail>('/rooms/join', dto),
+    // Printed under the code field, where the bad code still is.
+    meta: { inlineError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.active });
     },
@@ -140,6 +145,8 @@ export function useStartRoom() {
 
   return useMutation<RoomDetail, ApiError, string>({
     mutationFn: (roomId) => api.post<RoomDetail>(`/rooms/${roomId}/start`),
+    // Printed under the Start button in the lobby.
+    meta: { inlineError: true },
     onSuccess: (room) => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.detail(room.id) });
     },
@@ -151,8 +158,13 @@ export function useLeaveRoom() {
 
   return useMutation<void, ApiError, string>({
     mutationFn: (roomId) => api.delete(`/rooms/${roomId}/leave`),
-    onSuccess: () => {
+    // Printed under the Leave button in the lobby.
+    meta: { inlineError: true },
+    onSuccess: (_data, roomId) => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.active });
+      // The roster — and possibly the host, or the room's whole status — changed
+      // for everyone still in it, including this tab until it navigates away.
+      void queryClient.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
     },
   });
 }
@@ -195,6 +207,8 @@ export function useSubmitEntry(roomId: string) {
       }
       return payload.data;
     },
+    // The upload panel prints this beneath the file fields.
+    meta: { inlineError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
     },

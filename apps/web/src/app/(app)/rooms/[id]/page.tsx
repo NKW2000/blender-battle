@@ -1,7 +1,14 @@
 'use client';
 
-import { RoomParticipantStatus, RoomStatus } from '@bb/shared';
+import {
+  CHALLENGE_MIN_MINUTES,
+  ROOM_DRAW_SECONDS,
+  ROOM_MIN_PLAYERS,
+  RoomParticipantStatus,
+  RoomStatus,
+} from '@bb/shared';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { use, useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
@@ -10,6 +17,7 @@ import { CountdownGate } from '@/components/rooms/countdown-gate';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
 import {
+  useLeaveRoom,
   useRoom,
   useStartRoom,
   useSubmitEntry,
@@ -146,7 +154,27 @@ function RoomHeader({ room }: { room: RoomDetail }) {
 function Lobby({ room }: { room: RoomDetail }) {
   const start = useStartRoom();
   const seated = room.participants.length;
-  const canStart = room.isHost && seated >= 2;
+
+  /*
+    The same check the server runs at kickoff, mirrored here.
+
+    The deadline is fixed but a lobby can sit open indefinitely, so a room can
+    quietly age past the point where there is any modelling time left in it.
+    Without this the host only found out by pressing Start and being refused,
+    with nothing on screen having warned them it was coming.
+
+    Measured against `serverNow` rather than the browser clock — the deadline is
+    the server's to enforce, and a skewed local clock would put this and the
+    server's answer on different sides of the line.
+  */
+  const msAtKickoff = room.endsAt
+    ? new Date(room.endsAt).getTime() -
+      new Date(room.serverNow).getTime() -
+      ROOM_DRAW_SECONDS * 1000
+    : null;
+  const outOfTime = msAtKickoff !== null && msAtKickoff < CHALLENGE_MIN_MINUTES * 60_000;
+
+  const canStart = room.isHost && seated >= ROOM_MIN_PLAYERS && !outOfTime;
 
   return (
     <Panel>
@@ -178,6 +206,16 @@ function Lobby({ room }: { room: RoomDetail }) {
           </div>
         ) : null}
 
+        {room.endsAt ? (
+          <p
+            className={`text-sm font-extrabold ${outOfTime ? 'text-punch-soft' : 'text-bone-muted'}`}
+          >
+            <span className={outOfTime ? 'text-punch' : 'text-aqua'}>Ends</span>{' '}
+            {new Date(room.endsAt).toLocaleString()} — each player sees this in their own
+            timezone.
+          </p>
+        ) : null}
+
         {room.isHost ? (
           <div className="flex flex-wrap items-center gap-4">
             <ChunkyButton
@@ -188,9 +226,19 @@ function Lobby({ room }: { room: RoomDetail }) {
             >
               {start.isPending ? 'Starting…' : '⚔ START'}
             </ChunkyButton>
-            {!canStart ? (
+            {/*
+              Says which rule is blocking, rather than always blaming the player
+              count — a room that has run out of time reads as "needs 2 players"
+              even with eight people sitting in it.
+            */}
+            {outOfTime ? (
+              <span className="text-sm font-extrabold text-punch-soft">
+                Out of time — this room&apos;s end time has nearly arrived. Open a new room with a
+                later deadline.
+              </span>
+            ) : !canStart ? (
               <span className="text-sm font-extrabold text-bone-faint">
-                Needs at least 2 players — {seated} so far
+                Needs at least {ROOM_MIN_PLAYERS} players — {seated} so far
               </span>
             ) : null}
           </div>
@@ -205,8 +253,82 @@ function Lobby({ room }: { room: RoomDetail }) {
             {start.error.message}
           </p>
         ) : null}
+
+        <LeaveControl room={room} seated={seated} />
       </PanelBody>
     </Panel>
+  );
+}
+
+/**
+ * Leaving is a lobby-only action: once the clock is running the API refuses it,
+ * because not submitting is already how you drop out and the room still has to
+ * account for you.
+ *
+ * The host gets a confirmation step, since the consequence is not the same one
+ * the button implies — the server either hands the room to the longest-standing
+ * remaining player, or cancels it outright when the host was the last one in.
+ */
+function LeaveControl({ room, seated }: { room: RoomDetail; seated: number }) {
+  const router = useRouter();
+  const leave = useLeaveRoom();
+  const [confirming, setConfirming] = useState(false);
+
+  const heir = room.participants.find((entry) => entry.userId !== room.hostId);
+  const consequence =
+    !room.isHost
+      ? null
+      : heir
+        ? `${heir.username} becomes the host.`
+        : 'You are the only player, so the room is cancelled.';
+
+  const go = () => leave.mutate(room.id, { onSuccess: () => router.replace('/rooms') });
+
+  return (
+    <div className="flex flex-col gap-2 border-t-2 border-edge pt-4">
+      {confirming && consequence ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-extrabold text-bone-muted">{consequence}</span>
+          <button
+            type="button"
+            onClick={go}
+            disabled={leave.isPending}
+            className="text-sm font-extrabold text-punch-soft hover:text-punch"
+          >
+            {leave.isPending ? 'Leaving…' : 'Leave anyway'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={leave.isPending}
+            className="text-sm font-extrabold text-bone-faint hover:text-bone"
+          >
+            Stay
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => (room.isHost ? setConfirming(true) : go())}
+          disabled={leave.isPending}
+          className="self-start text-sm font-extrabold text-bone-faint hover:text-punch-soft"
+        >
+          {leave.isPending ? 'Leaving…' : 'Leave room'}
+        </button>
+      )}
+
+      {leave.error ? (
+        <p role="alert" className="text-sm font-bold text-punch-soft">
+          {leave.error.message}
+        </p>
+      ) : null}
+
+      {seated >= room.maxPlayers ? (
+        <span className="text-xs font-extrabold text-bone-faint">
+          Room is full — leaving frees your seat for someone else.
+        </span>
+      ) : null}
+    </div>
   );
 }
 
