@@ -26,7 +26,9 @@ export const ArcadeField = React.forwardRef<
 >(function ArcadeField({ label, error, hint, ...props }, ref) {
   const generatedId = React.useId();
   const id = props.id ?? generatedId;
-  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  // No `-error` target: the message itself is raised as a toast on submit, so
+  // the only thing left here is the outline marking which field it refers to.
+  const describedBy = hint && !error ? `${id}-hint` : undefined;
 
   return (
     <div className="mb-4">
@@ -43,11 +45,13 @@ export const ArcadeField = React.forwardRef<
         }`}
         {...props}
       />
-      {error ? (
-        <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs font-bold text-punch-soft">
-          {error}
-        </p>
-      ) : hint ? (
+      {/*
+        A failing field is marked by its outline, not by a message underneath.
+        The wording lives in the toast the submit raises, so the same problem is
+        never stated twice, and the form does not reflow as messages appear and
+        disappear under each input.
+      */}
+      {hint && !error ? (
         <p id={`${id}-hint`} className="mt-1.5 text-xs font-bold text-haze-6">
           {hint}
         </p>

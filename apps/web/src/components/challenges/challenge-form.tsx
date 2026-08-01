@@ -16,7 +16,8 @@ import { Field } from '@/components/ui/field';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import { useCategories } from '@/features/challenges/use-challenges';
-import { notify } from '@/lib/notify';
+import { collectFormMessages, notify } from '@/lib/notify';
+import { cn } from '@/lib/utils';
 
 /** Mirrors the backend DTO. The API re-validates all of it regardless. */
 const challengeSchema = z.object({
@@ -82,7 +83,7 @@ export function ChallengeForm({
     // The per-field messages below the inputs say what to fix; this only says
     // that the submit was refused, which is otherwise invisible when the first
     // bad field has scrolled out of view.
-    (fieldErrors) => notify.invalidForm(Object.keys(fieldErrors).length),
+    (fieldErrors) => notify.invalidForm(collectFormMessages(fieldErrors)),
   );
 
   return (
@@ -109,16 +110,14 @@ export function ChallengeForm({
               <textarea
                 id="description"
                 rows={6}
-                className="w-full resize-y border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-select"
+                className={cn(
+                  'w-full resize-y border bg-panel px-3 py-2 text-sm outline-none focus:border-select',
+                  errors.description ? 'border-axis-x' : 'border-edge',
+                )}
                 placeholder="What is being built, and what makes a good result?"
                 {...register('description')}
               />
             </div>
-            {errors.description ? (
-              <p role="alert" className="font-mono text-xs text-axis-x">
-                {errors.description.message}
-              </p>
-            ) : null}
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -140,11 +139,6 @@ export function ChallengeForm({
                   })),
                 ]}
               />
-              {errors.categoryId ? (
-                <p role="alert" className="font-mono text-xs text-axis-x">
-                  {errors.categoryId.message}
-                </p>
-              ) : null}
             </div>
 
             <div className="flex flex-col gap-2">

@@ -28,7 +28,9 @@ export const Field = React.forwardRef<HTMLInputElement, FieldProps>(
   ({ label, error, hint, id, className, accent = 'flame', ...props }, ref) => {
     const generatedId = React.useId();
     const inputId = id ?? generatedId;
-    const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
+    // No `-error` target: the wording is raised as a toast on submit, and only
+    // the outline is left here to mark which field it refers to.
+    const describedBy = hint && !error ? `${inputId}-hint` : undefined;
 
     return (
       <div className="flex flex-col gap-2">
@@ -51,11 +53,13 @@ export const Field = React.forwardRef<HTMLInputElement, FieldProps>(
           {...props}
         />
 
-        {error ? (
-          <p id={`${inputId}-error`} role="alert" className="text-xs font-bold text-axis-x">
-            {error}
-          </p>
-        ) : hint ? (
+        {/*
+          A failing field is marked by its outline, not by a message underneath.
+          The wording lives in the toast the submit raises, so the same problem
+          is never stated twice and the form does not reflow as messages appear
+          and disappear under each input.
+        */}
+        {hint && !error ? (
           <p id={`${inputId}-hint`} className="text-xs font-bold text-bone-faint">
             {hint}
           </p>

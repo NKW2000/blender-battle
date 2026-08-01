@@ -11,7 +11,7 @@ import { ArcadeField, ProviderButtons } from '@/components/arcade/auth-parts';
 import { ChunkyButton } from '@/components/arcade/chunky';
 import { HeroCanvas } from '@/components/arcade/hero-canvas';
 import { useLogin } from '@/features/auth/use-session';
-import { notify } from '@/lib/notify';
+import { collectFormMessages, notify } from '@/lib/notify';
 import { loginSchema, type LoginInput } from '@/lib/validation/auth.schema';
 
 export default function LoginPage() {
@@ -101,7 +101,7 @@ export default function LoginPage() {
           <form
             onSubmit={handleSubmit(
               (values) => login.mutate(values),
-              (fieldErrors) => notify.invalidForm(Object.keys(fieldErrors).length),
+              (fieldErrors) => notify.invalidForm(collectFormMessages(fieldErrors)),
             )}
             noValidate
           >
@@ -121,12 +121,6 @@ export default function LoginPage() {
               error={errors.password?.message}
               {...register('password')}
             />
-
-            <div className="mb-5 text-right">
-              <Link href="/register" className="text-[13px] font-extrabold text-aqua hover:text-mint">
-                New here? Create an account
-              </Link>
-            </div>
 
             {serverError ? (
               <p

@@ -22,13 +22,25 @@ export function Toaster() {
       // Long enough to read a server error, which is usually a full sentence.
       duration={6000}
       gap={12}
+      // Full width on a phone, where a 356px card would hang off the screen.
+      mobileOffset={{ left: 16, right: 16, bottom: 16 }}
       toastOptions={{
         unstyled: true,
         classNames: {
+          /*
+            `w-full` and the `content` wrapper below both matter. Turning
+            sonner's own styles off takes its layout with them, and without a
+            width the card collapsed to its text while the description escaped
+            the border and printed over the page behind it.
+          */
           toast:
-            'group flex w-full items-start gap-3 rounded-2xl border-[3px] border-ink bg-panel-raised px-4 py-3.5 shadow-[0_6px_0_var(--color-ink)]',
-          title: 'font-display text-sm font-bold leading-snug text-cream',
-          description: 'mt-0.5 text-xs font-extrabold leading-relaxed text-bone-muted',
+            'group flex w-full items-start gap-3 overflow-hidden rounded-2xl border-[3px] border-ink bg-panel-raised px-4 py-3.5 shadow-[0_6px_0_var(--color-ink)]',
+          // min-w-0 lets the flex child shrink; without it long words push the
+          // card wider than its container instead of wrapping.
+          content: 'flex min-w-0 flex-1 flex-col',
+          title: 'font-display text-sm font-bold leading-snug text-cream break-words',
+          description:
+            'mt-1 whitespace-pre-line text-xs font-extrabold leading-relaxed text-bone-muted break-words',
           icon: 'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-ink',
           error: 'border-punch bg-punch/15 [&_[data-icon]]:bg-punch [&_[data-icon]]:text-ink',
           success: 'border-mint [&_[data-icon]]:bg-mint [&_[data-icon]]:text-ink',

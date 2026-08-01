@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { ChunkyButton } from '@/components/arcade/chunky';
 import { HeroCanvas } from '@/components/arcade/hero-canvas';
 import { useRegister } from '@/features/auth/use-session';
-import { notify } from '@/lib/notify';
+import { collectFormMessages, notify } from '@/lib/notify';
 import { registerSchema, type RegisterInput } from '@/lib/validation/auth.schema';
 import { ArcadeField, ProviderButtons } from '@/components/arcade/auth-parts';
 
@@ -63,7 +63,7 @@ export default function RegisterPage() {
           <form
             onSubmit={handleSubmit(
               (values) => signUp.mutate(values),
-              (fieldErrors) => notify.invalidForm(Object.keys(fieldErrors).length),
+              (fieldErrors) => notify.invalidForm(collectFormMessages(fieldErrors)),
             )}
             noValidate
           >

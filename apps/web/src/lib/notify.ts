@@ -57,6 +57,24 @@ function describe(error: unknown): { title: string; description?: string } | nul
   return { title: FALLBACK_MESSAGE };
 }
 
+/**
+ * Pulls the readable messages out of a react-hook-form error object, in the
+ * order the fields were declared.
+ *
+ * Typed loosely on purpose: `FieldErrors` is generic over each form's own value
+ * type, and threading that through would make every call site name its schema
+ * for no gain — all this needs is the `message` on each entry.
+ */
+export function collectFormMessages(fieldErrors: Record<string, unknown>): string[] {
+  return Object.values(fieldErrors)
+    .map((entry) =>
+      entry && typeof entry === 'object' && 'message' in entry
+        ? String((entry as { message?: unknown }).message ?? '')
+        : '',
+    )
+    .filter(Boolean);
+}
+
 export const notify = {
   success: (message: string, description?: string) =>
     toast.success(message, { description }),
@@ -72,20 +90,21 @@ export const notify = {
   /**
    * A submit the form refused to send, because its own fields are not valid.
    *
-   * One summary, never one per field: the per-field messages are already
-   * printed beside the inputs, where they can point at what is wrong, and a
-   * toast cannot. This exists because without it a blocked submit was silent —
-   * the button appeared to do nothing at all when the offending field had
-   * scrolled out of view.
+   * This carries the wording, because the fields no longer do: an invalid input
+   * is marked by its outline alone, so if the messages were not here they would
+   * be nowhere. One toast for the whole form rather than one per field — a
+   * stack of them in the corner is harder to read than a list.
    *
-   * The fixed id means hammering submit replaces the toast rather than
-   * stacking a new one each press.
+   * The fixed id means hammering submit replaces the toast rather than stacking
+   * a new one each press.
    */
-  invalidForm: (fieldCount: number) =>
-    toast.error(
-      fieldCount === 1 ? 'One field needs attention' : `${fieldCount} fields need attention`,
-      { description: 'What to fix is marked in the form.', id: 'form-invalid' },
-    ),
+  invalidForm: (messages: string[]) => {
+    const [first, ...rest] = messages;
+    toast.error(first ?? FALLBACK_MESSAGE, {
+      description: rest.length ? rest.join('\n') : undefined,
+      id: 'form-invalid',
+    });
+  },
 
   /**
    * Surfaces a caught error, or stays quiet when it is one the app handles

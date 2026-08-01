@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { ArcadeLogo, ArcadeWordmark } from '@/components/arcade/chunky';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SoundToggle } from '@/components/ui/sound-toggle';
+import { MobileNav } from '@/components/layout/mobile-nav';
 import { Button } from '@/components/ui/button';
 import { RouteLoader } from '@/components/ui/route-loader';
 import { useLogout, useSession } from '@/features/auth/use-session';
@@ -59,31 +60,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           body is never acceptable, and with this many destinations the single
           row overflows well before mobile widths.
         */}
-        <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-2 md:h-14 md:flex-row md:items-center md:justify-between md:gap-4 md:px-6 md:py-0">
-          <div className="flex items-center justify-between">
-            <Link href="/rooms" className="flex shrink-0 items-center gap-2.5">
-              <ArcadeLogo size={32} />
-              <ArcadeWordmark size={18} />
-            </Link>
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
+          <Link href="/rooms" className="flex shrink-0 items-center gap-2.5">
+            <ArcadeLogo size={32} />
+            <ArcadeWordmark size={18} />
+          </Link>
 
-            <div className="flex items-center gap-2 md:hidden">
-              <SoundToggle />
-              <NotificationBell />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => logout.mutate()}
-                disabled={logout.isPending}
-              >
-                Sign out
-              </Button>
-            </div>
+          {/* Below md the destinations live in the drawer, so the bar keeps only
+              what has to stay reachable in one tap. */}
+          <div className="flex items-center gap-2 md:hidden">
+            <SoundToggle />
+            <NotificationBell />
+            <MobileNav
+              links={navLinks}
+              pathname={pathname}
+              onSignOut={() => logout.mutate()}
+              signingOut={logout.isPending}
+            />
           </div>
 
-          <nav
-            className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0"
-            aria-label="Main"
-          >
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {navLinks.map((link) => {
               const isCurrent = pathname === link.href;
               return (
@@ -109,16 +105,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               );
             })}
 
-            <div className="ml-2 hidden shrink-0 md:block">
+            <div className="ml-2 shrink-0">
               <SoundToggle />
             </div>
-            <div className="hidden shrink-0 md:block">
+            <div className="shrink-0">
               <NotificationBell />
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="ml-1 hidden shrink-0 md:inline-flex"
+              className="ml-1 shrink-0"
               onClick={() => logout.mutate()}
               disabled={logout.isPending}
             >
@@ -128,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">{children}</main>
     </div>
   );
 }

@@ -19,7 +19,7 @@ import { Select } from '@/components/ui/select';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
 import { usePortfolio, useUpdateProfile, useUploadAvatar } from '@/features/users/use-users';
-import { notify } from '@/lib/notify';
+import { collectFormMessages, notify } from '@/lib/notify';
 
 const profileSchema = z.object({
   bio: z.string().max(BIO_MAX_LENGTH, `At most ${BIO_MAX_LENGTH} characters`).optional(),
@@ -152,7 +152,7 @@ export default function ProfileSettingsPage() {
 
       <form
         onSubmit={handleSubmit(onSubmit, (fieldErrors) =>
-          notify.invalidForm(Object.keys(fieldErrors).length),
+          notify.invalidForm(collectFormMessages(fieldErrors)),
         )}
         noValidate
       >
