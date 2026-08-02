@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+
+import { InstallPrompt, ServiceWorkerRegistrar } from '@/components/pwa/install-prompt';
 import { Fredoka, Nunito } from 'next/font/google';
 
 import { Providers } from './providers';
@@ -42,6 +44,31 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   title: 'Blender Battle',
   description: 'Live modelling duels for Blender artists. Draw a challenge, build, get judged.',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    // iOS ignores the manifest's icons entirely and reads this instead.
+    apple: '/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Blender Battle',
+    // The app paints its own dark ground to the edges, so the status bar should
+    // sit over it rather than reserving an opaque strip of its own.
+    statusBarStyle: 'black-translucent',
+  },
+};
+
+export const viewport: Viewport = {
+  // Matches --color-arcade-deep, so the browser chrome and the page are one
+  // surface instead of two.
+  themeColor: '#14103A',
+  // The app is a full-bleed dark canvas; letting it run under the notch and the
+  // home indicator is what makes an installed copy look installed.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -53,6 +80,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           <div className="relative z-10">{children}</div>
+          <ServiceWorkerRegistrar />
+          <InstallPrompt />
         </Providers>
       </body>
     </html>

@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CHALLENGE_DESCRIPTION_MAX_LENGTH,
+  CHALLENGE_MAX_OBJECTIVES,
   CHALLENGE_TITLE_MAX_LENGTH,
   ChallengeVisibility,
   Difficulty,
@@ -28,6 +29,17 @@ const challengeSchema = z.object({
     .max(CHALLENGE_DESCRIPTION_MAX_LENGTH),
   difficulty: z.nativeEnum(Difficulty),
   categoryId: z.string().uuid('Pick a category'),
+  /*
+    Required here, though the API only insists on it at publish time. The form
+    used not to send objectives at all, so every challenge was created with an
+    empty list and then refused to publish — the author hit the wall only after
+    the work of writing the brief, with no field on the page to fix it. Asking
+    for one sentence up front removes the dead end entirely.
+  */
+  objectives: z
+    .array(z.string().trim().min(1, 'Write the objective or remove the empty line').max(200))
+    .min(1, 'Add at least one objective — it is what players are judged on')
+    .max(CHALLENGE_MAX_OBJECTIVES),
   blenderVersion: z
     .string()
     .regex(/^\d+\.\d+$/, 'Use a version like 4.2')
@@ -64,6 +76,7 @@ export function ChallengeForm({
       description: challenge?.description ?? '',
       difficulty: challenge?.difficulty ?? Difficulty.MEDIUM,
       categoryId: challenge?.category.id ?? '',
+      objectives: challenge?.objectives?.length ? challenge.objectives : [''],
       blenderVersion: challenge?.blenderVersion ?? '',
       visibility: challenge?.visibility ?? ChallengeVisibility.PUBLIC,
     },
@@ -76,6 +89,7 @@ export function ChallengeForm({
         description: values.description,
         difficulty: values.difficulty,
         categoryId: values.categoryId,
+        objectives: values.objectives.map((o) => o.trim()).filter(Boolean),
         blenderVersion: values.blenderVersion || undefined,
         visibility: values.visibility,
       });
@@ -158,6 +172,12 @@ export function ChallengeForm({
             </div>
           </div>
 
+          <ObjectiveList
+            values={watch('objectives') ?? ['']}
+            invalid={Boolean(errors.objectives)}
+            onChange={(next) => setValue('objectives', next, { shouldDirty: true, shouldValidate: true })}
+          />
+
           <Field
             label="Blender version"
             placeholder="4.2"
@@ -204,5 +224,84 @@ export function ChallengeForm({
         </div>
       </Panel>
     </form>
+  );
+}
+
+
+/**
+ * The judging criteria, one line each.
+ *
+ * A plain repeating text field rather than anything cleverer: the value is an
+ * array of short strings, and the only operations that matter are add, edit and
+ * remove. The last row cannot be deleted — a challenge with no objectives is
+ * exactly the state that could not be published, so the form does not offer a
+ * way back into it.
+ */
+function ObjectiveList({
+  values,
+  invalid,
+  onChange,
+}: {
+  values: string[];
+  invalid: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  const rows = values.length ? values : [''];
+
+  const setAt = (index: number, value: string) =>
+    onChange(rows.map((row, i) => (i === index ? value : row)));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="eyebrow">Objectives</span>
+        <span className="text-[11px] font-extrabold text-bone-faint">
+          {rows.length} / {CHALLENGE_MAX_OBJECTIVES}
+        </span>
+      </div>
+
+      <p className="text-xs font-extrabold text-bone-faint">
+        What players are judged on. At least one is required to publish.
+      </p>
+
+      <ul className="flex flex-col gap-2">
+        {rows.map((row, index) => (
+          // Index as key: the rows have no identity of their own, and reordering
+          // is not offered, so position is a stable enough handle.
+          <li key={index} className="flex items-center gap-2">
+            <input
+              value={row}
+              onChange={(event) => setAt(index, event.target.value)}
+              maxLength={200}
+              aria-label={`Objective ${index + 1}`}
+              placeholder="Silhouette reads clearly from three metres"
+              className={cn(
+                'arcade-focus h-11 min-w-0 flex-1 rounded-xl border-[3px] bg-white/6 px-3 font-bold text-bone transition-colors placeholder:text-bone-faint/70 focus:border-select focus:bg-select/10',
+                invalid ? 'border-axis-x' : 'border-white/16',
+              )}
+            />
+            <button
+              type="button"
+              aria-label={`Remove objective ${index + 1}`}
+              disabled={rows.length === 1}
+              onClick={() => onChange(rows.filter((_, i) => i !== index))}
+              className="arcade-focus flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/20 bg-white/6 text-bone-muted transition-colors hover:bg-white/16 hover:text-bone disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {rows.length < CHALLENGE_MAX_OBJECTIVES ? (
+        <div>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...rows, ''])}>
+            + Add objective
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
