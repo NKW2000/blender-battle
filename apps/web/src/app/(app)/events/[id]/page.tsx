@@ -5,32 +5,15 @@ import Link from 'next/link';
 import { use, useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
+import {
+  EntryImageFields,
+  type EntryImages,
+} from '@/components/submissions/entry-image-fields';
 import { UI_LOCALE } from '@/lib/utils';
 import { FireIcon } from '@/components/ui/icons';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { VoteScreen } from '@/components/challenges/vote-screen';
 import { useEnterEvent, useEvent, type EventDetail } from '@/features/challenges/use-events';
-
-/**
- * Read an image file's real pixel size in the browser, so a wrong-size upload is
- * caught before it leaves the machine. The server re-checks — this is only to
- * spare the round trip and give an instant, specific error.
- */
-function readImageSize(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not read that image'));
-    };
-    img.src = url;
-  });
-}
 
 /** Counts down to an absolute server deadline, corrected for clock skew. */
 function useDeadline(deadline: string | null, serverNow: string | undefined) {
@@ -195,42 +178,9 @@ function Upcoming({ event }: { event: EventDetail }) {
 /** Open window: the brief plus the upload form. */
 function OpenPhase({ event }: { event: EventDetail }) {
   const enter = useEnterEvent(event.id);
-  const [image, setImage] = useState<File | null>(null);
-  const [workspace, setWorkspace] = useState<File | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [files, setFiles] = useState<EntryImages>({ image: null, workspace: null });
   const alreadyEntered = Boolean(event.myEntryId);
-
-  // Validate the exact-square requirement the instant a file is picked, and keep
-  // the file only if it passes — the submit button then just checks "both here".
-  const pick =
-    (
-      setFile: (file: File | null) => void,
-      setError: (message: string | null) => void,
-    ) =>
-    async (file: File | null) => {
-      setError(null);
-      if (!file) {
-        setFile(null);
-        return;
-      }
-      try {
-        const { width, height } = await readImageSize(file);
-        if (width !== SUBMISSION_IMAGE_SIZE || height !== SUBMISSION_IMAGE_SIZE) {
-          setFile(null);
-          setError(
-            `Must be exactly ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}px (this is ${width}×${height}).`,
-          );
-          return;
-        }
-        setFile(file);
-      } catch {
-        setFile(null);
-        setError('Could not read that image.');
-      }
-    };
-
-  const canSubmit = Boolean(image && workspace) && !enter.isPending;
+  const canSubmit = Boolean(files.image && files.workspace) && !enter.isPending;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -253,21 +203,7 @@ function OpenPhase({ event }: { event: EventDetail }) {
             </p>
           )}
 
-          <EntryImageField
-            label={`Final render — ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}`}
-            accentClass="file:bg-sun"
-            file={image}
-            error={imageError}
-            onPick={pick(setImage, setImageError)}
-          />
-
-          <EntryImageField
-            label={`Workspace photo — ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}`}
-            accentClass="file:bg-aqua"
-            file={workspace}
-            error={workspaceError}
-            onPick={pick(setWorkspace, setWorkspaceError)}
-          />
+          <EntryImageFields value={files} onChange={setFiles} disabled={enter.isPending} />
 
           {enter.error ? (
             <p role="alert" className="text-sm font-bold text-punch-soft">
@@ -277,7 +213,10 @@ function OpenPhase({ event }: { event: EventDetail }) {
 
           <ChunkyButton
             size="md"
-            onClick={() => image && workspace && enter.mutate({ image, workspace })}
+            onClick={() =>
+              files.image && files.workspace &&
+              enter.mutate({ image: files.image, workspace: files.workspace })
+            }
             disabled={!canSubmit}
           >
             {enter.isPending ? 'Uploading…' : alreadyEntered ? 'Replace entry' : 'Submit entry'}
@@ -285,39 +224,6 @@ function OpenPhase({ event }: { event: EventDetail }) {
         </PanelBody>
       </Panel>
     </div>
-  );
-}
-
-function EntryImageField({
-  label,
-  accentClass,
-  file,
-  error,
-  onPick,
-}: {
-  label: string;
-  accentClass: string;
-  file: File | null;
-  error: string | null;
-  onPick: (file: File | null) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="eyebrow text-aqua">{label}</span>
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        onChange={(event) => onPick(event.target.files?.[0] ?? null)}
-        className={`mt-2 w-full text-sm font-bold text-bone-muted file:mr-3 file:rounded-lg file:border-[3px] file:border-edge ${accentClass} file:px-3 file:py-2 file:font-display file:font-bold file:text-edge`}
-      />
-      {error ? (
-        <p role="alert" className="mt-1.5 text-xs font-bold text-punch-soft">
-          {error}
-        </p>
-      ) : file ? (
-        <p className="mt-1.5 text-xs font-bold text-mint">✓ {file.name}</p>
-      ) : null}
-    </label>
   );
 }
 

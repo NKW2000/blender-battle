@@ -142,7 +142,11 @@ export class CloudinaryService {
   }
 
   /**
-   * A public-challenge entry image — the final render or the workspace shot.
+   * A submitted image — the final render or the workspace shot.
+   *
+   * Shared by public challenges and rooms: both take the same pair of images
+   * under the same rule, so they take the same code path rather than two that
+   * could drift apart on what counts as a valid submission.
    *
    * Enforced to an exact SUBMISSION_IMAGE_SIZE square. The size is checked on the
    * *uploaded* file's real dimensions, not the client's word: a wrong-size image
@@ -152,7 +156,7 @@ export class CloudinaryService {
    */
   async uploadEntryImage(
     file: Express.Multer.File,
-    challengeId: string,
+    owner: { scope: 'challenges' | 'rooms'; id: string },
     kind: 'renders' | 'workspace',
   ): Promise<UploadedAsset> {
     this.assertValid(file, {
@@ -162,7 +166,7 @@ export class CloudinaryService {
     });
 
     const result = await this.uploadBuffer(file.buffer, {
-      folder: `blender-battle/challenges/${challengeId}/${kind}`,
+      folder: `blender-battle/${owner.scope}/${owner.id}/${kind}`,
       resource_type: 'image',
       use_filename: false,
       unique_filename: true,

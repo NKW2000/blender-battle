@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import { ApiErrorCode, SUBMISSION_MODEL_MAX_BYTES } from '@bb/shared';
+import { ApiErrorCode, SUBMISSION_IMAGE_MAX_BYTES } from '@bb/shared';
 import { IsOptional, IsString, IsUUID, Length } from 'class-validator';
 
 import { CurrentUser } from '@/common/decorators';
@@ -89,7 +89,14 @@ export class RoomsController {
   }
 
   /**
-   * Upload an entry: the render that goes on the ballot, plus the model file.
+   * Upload an entry: the render that goes on the ballot, and the workspace shot.
+   *
+   * The workspace photo replaced a 3D model upload. A model proved almost
+   * nothing to a voter — it could not be opened on the ballot — while costing
+   * every artist an export step and the account tens of megabytes per room. A
+   * screenshot of the work in progress is what actually shows the piece was
+   * built rather than sourced, and it is the same kind of file as the render, so
+   * both go through one 1024x1024 check.
    *
    * Both files stream through the API rather than going browser-direct to
    * Cloudinary — an unsigned upload preset is a public write endpoint into the
@@ -100,9 +107,9 @@ export class RoomsController {
     FileFieldsInterceptor(
       [
         { name: 'image', maxCount: 1 },
-        { name: 'model', maxCount: 1 },
+        { name: 'workspace', maxCount: 1 },
       ],
-      { limits: { fileSize: SUBMISSION_MODEL_MAX_BYTES } },
+      { limits: { fileSize: SUBMISSION_IMAGE_MAX_BYTES } },
     ),
   )
   @ResponseMessage('Entry submitted')
@@ -110,7 +117,7 @@ export class RoomsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFiles()
-    files: { image?: Express.Multer.File[]; model?: Express.Multer.File[] },
+    files: { image?: Express.Multer.File[]; workspace?: Express.Multer.File[] },
     @Body() body: { notes?: string },
   ) {
     /*
@@ -125,28 +132,36 @@ export class RoomsController {
     // `files` is undefined entirely when the request was not multipart, which a
     // plain `files.image` would turn into a TypeError and a 500.
     const image = files?.image?.[0];
-    const model = files?.model?.[0];
+    const workspace = files?.workspace?.[0];
 
-    if (!image) {
+    if (!image || !workspace) {
       throw new AppException(
         ApiErrorCode.VALIDATION_FAILED,
-        'A render image is required',
+        'Both a final render and a workspace photo are required',
         400,
       );
     }
 
-    const uploadedImage = await this.uploads.uploadSubmissionImage(image, room.id);
-    const uploadedModel = model
-      ? await this.uploads.uploadSubmissionModel(model, room.id)
-      : null;
+    // Render first: if the workspace shot is the wrong size, the render is
+    // already stored, so upload the workspace second and let its own failure
+    // clean up after itself. The render is overwritten on the next valid submit.
+    const uploadedImage = await this.uploads.uploadEntryImage(
+      image,
+      { scope: 'rooms', id: room.id },
+      'renders',
+    );
+    const uploadedWorkspace = await this.uploads.uploadEntryImage(
+      workspace,
+      { scope: 'rooms', id: room.id },
+      'workspace',
+    );
 
     const submission = await this.rooms.submit(
       id,
       user.id,
       {
         imageUrl: uploadedImage.url,
-        modelUrl: uploadedModel?.url ?? null,
-        modelFilename: uploadedModel?.filename ?? null,
+        workspacePhotoUrl: uploadedWorkspace.url,
       },
       body.notes,
     );
@@ -154,7 +169,7 @@ export class RoomsController {
     return {
       id: submission.id,
       imageUrl: submission.imageUrl,
-      modelFilename: submission.modelFilename,
+      workspacePhotoUrl: submission.workspacePhotoUrl,
       submittedAt: submission.submittedAt,
     };
   }

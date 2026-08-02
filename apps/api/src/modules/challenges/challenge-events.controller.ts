@@ -145,8 +145,8 @@ export class ChallengeEventsController {
     // Render first: if the workspace shot is the wrong size, the render is
     // already stored, so upload the workspace second and let its own failure
     // clean up after itself. The render is overwritten on the next valid submit.
-    const uploadedImage = await this.uploads.uploadEntryImage(image, id, 'renders');
-    const uploadedWorkspace = await this.uploads.uploadEntryImage(workspace, id, 'workspace');
+    const uploadedImage = await this.uploads.uploadEntryImage(image, { scope: 'challenges', id }, 'renders');
+    const uploadedWorkspace = await this.uploads.uploadEntryImage(workspace, { scope: 'challenges', id }, 'workspace');
 
     const entry = await this.events.submitEntry(
       id,

@@ -170,7 +170,7 @@ export function useLeaveRoom() {
 }
 
 /**
- * Upload an entry.
+ * Upload an entry: the final render and the workspace shot.
  *
  * Sent as multipart through the API rather than browser-direct to the CDN: the
  * deadline has to be checked server-side, and an unsigned upload preset would be
@@ -180,14 +180,14 @@ export function useSubmitEntry(roomId: string) {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { id: string; imageUrl: string; modelFilename: string | null },
+    { id: string; imageUrl: string; workspacePhotoUrl: string | null },
     ApiError,
-    { image: File; model?: File | null; notes?: string }
+    { image: File; workspace: File; notes?: string }
   >({
-    mutationFn: async ({ image, model, notes }) => {
+    mutationFn: async ({ image, workspace, notes }) => {
       const form = new FormData();
       form.append('image', image);
-      if (model) form.append('model', model);
+      form.append('workspace', workspace);
       if (notes) form.append('notes', notes);
 
       // Bypasses the JSON client: fetch must set the multipart boundary itself,

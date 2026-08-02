@@ -331,7 +331,7 @@ export class RoomsService {
   async submit(
     roomId: string,
     userId: string,
-    assets: { imageUrl: string; modelUrl: string | null; modelFilename: string | null },
+    assets: { imageUrl: string; workspacePhotoUrl: string },
     notes?: string,
   ): Promise<Submission> {
     const room = await this.findOrFail(roomId);

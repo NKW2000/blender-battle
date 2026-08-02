@@ -12,6 +12,10 @@ import { useRouter } from 'next/navigation';
 import { use, useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
+import {
+  EntryImageFields,
+  type EntryImages,
+} from '@/components/submissions/entry-image-fields';
 import { UI_LOCALE } from '@/lib/utils';
 import { BallotView } from '@/components/rooms/ballot-view';
 import { CountdownGate } from '@/components/rooms/countdown-gate';
@@ -341,8 +345,8 @@ function Drawing({ room }: { room: RoomDetail }) {
 /** Modelling window: the brief, the clock, and the upload. */
 function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean }) {
   const submit = useSubmitEntry(room.id);
-  const [image, setImage] = useState<File | null>(null);
-  const [model, setModel] = useState<File | null>(null);
+  const [files, setFiles] = useState<EntryImages>({ image: null, workspace: null });
+  const ready = Boolean(files.image && files.workspace);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -374,30 +378,16 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
             </p>
           ) : (
             <p className="text-sm font-extrabold text-bone-muted">
-              Both are needed before the deadline. Anyone without an entry when the clock runs out
-              is eliminated.
+              Both images are needed before the deadline. Anyone without an entry when the clock
+              runs out is eliminated.
             </p>
           )}
 
-          <label className="block">
-            <span className="eyebrow text-aqua">Render (JPEG, PNG or WebP)</span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(event) => setImage(event.target.files?.[0] ?? null)}
-              className="mt-2 w-full text-sm font-bold text-bone-muted file:mr-3 file:rounded-lg file:border-[3px] file:border-edge file:bg-sun file:px-3 file:py-2 file:font-display file:font-bold file:text-edge"
-            />
-          </label>
-
-          <label className="block">
-            <span className="eyebrow text-aqua">Model (.fbx, .obj, .glb, .gltf)</span>
-            <input
-              type="file"
-              accept=".fbx,.obj,.glb,.gltf"
-              onChange={(event) => setModel(event.target.files?.[0] ?? null)}
-              className="mt-2 w-full text-sm font-bold text-bone-muted file:mr-3 file:rounded-lg file:border-[3px] file:border-edge file:bg-aqua file:px-3 file:py-2 file:font-display file:font-bold file:text-edge"
-            />
-          </label>
+          <EntryImageFields
+            value={files}
+            onChange={setFiles}
+            disabled={submit.isPending}
+          />
 
           {submit.error ? (
             <p role="alert" className="text-sm font-bold text-punch-soft">
@@ -407,8 +397,12 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
 
           <ChunkyButton
             size="md"
-            onClick={() => image && submit.mutate({ image, model })}
-            disabled={!image || submit.isPending}
+            onClick={() =>
+              files.image &&
+              files.workspace &&
+              submit.mutate({ image: files.image, workspace: files.workspace })
+            }
+            disabled={!ready || submit.isPending}
           >
             {submit.isPending ? 'Uploading…' : submitted ? 'Replace entry' : 'Submit entry'}
           </ChunkyButton>
