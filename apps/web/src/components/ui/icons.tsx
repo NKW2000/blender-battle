@@ -226,3 +226,52 @@ export function BellIcon({ animate, ...rest }: IconProps) {
     </Svg>
   );
 }
+
+/**
+ * Directional chevrons, drawn rather than typed.
+ *
+ * The glyph characters they replace could not be centred reliably. Flexbox
+ * centres the line box, which is laid out from the font's ascent and descent,
+ * while the mark itself sits on the baseline — and in Fredoka the ink of `‹`
+ * centres 4px above the baseline where a full-height `M` centres 6px above. The
+ * arrow therefore painted about 2px low inside every button that held one, and
+ * at button sizes that reads as sitting on the floor rather than in the middle.
+ *
+ * A path has no baseline and no side bearings: it is centred by its viewBox, so
+ * it lands where the box says it does at any size.
+ *
+ * `currentColor` here, unlike the polychrome marks above, because these are UI
+ * furniture that must take the colour of whatever control they sit in.
+ */
+export function ChevronIcon({
+  direction = 'right',
+  size = 18,
+  className,
+}: {
+  direction?: 'up' | 'down' | 'left' | 'right';
+  size?: number;
+  className?: string;
+}) {
+  const rotation = { right: 0, down: 90, left: 180, up: 270 }[direction];
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+      style={{ display: 'block', transform: `rotate(${rotation}deg)` }}
+    >
+      <path
+        d="M9 5l7 7-7 7"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { ChevronIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /**
@@ -270,7 +271,7 @@ export function DateTimeField({
                   setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))
                 }
               >
-                ‹
+                <ChevronIcon direction="left" size={16} />
               </NudgeButton>
               <span aria-live="polite" className="font-display text-base font-bold text-cream">
                 {viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
@@ -281,7 +282,7 @@ export function DateTimeField({
                   setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))
                 }
               >
-                ›
+                <ChevronIcon direction="right" size={16} />
               </NudgeButton>
             </div>
 

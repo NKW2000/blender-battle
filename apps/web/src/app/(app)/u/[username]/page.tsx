@@ -4,7 +4,7 @@ import type { PortfolioItem } from '@bb/shared';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 
-import { FireIcon } from '@/components/ui/icons';
+import { ChevronIcon, FireIcon } from '@/components/ui/icons';
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
 import { usePortfolio, usePublicProfile, useShowcase } from '@/features/users/use-users';
@@ -325,13 +325,13 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
 
           <div className="mt-2 flex items-center gap-3">
             <GalleryArrow label="Previous work" onClick={() => go(active - 1)}>
-              ‹
+              <ChevronIcon direction="left" />
             </GalleryArrow>
             <span className="font-display text-xs font-bold tabular-nums text-bone-faint">
               {active + 1} / {work.length}
             </span>
             <GalleryArrow label="Next work" onClick={() => go(active + 1)}>
-              ›
+              <ChevronIcon direction="right" />
             </GalleryArrow>
           </div>
         </div>

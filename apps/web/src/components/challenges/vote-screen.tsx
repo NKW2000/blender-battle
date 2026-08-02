@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ChevronIcon } from '@/components/ui/icons';
 import { useSound } from '@/features/sound/use-sound';
 import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/challenges/use-events';
 
@@ -453,7 +454,7 @@ function WheelArrow({ direction, onClick }: { direction: 'up' | 'down'; onClick:
         color: '#0E0B2B',
       }}
     >
-      {direction === 'up' ? '▲' : '▼'}
+      <ChevronIcon direction={direction} size={16} />
     </button>
   );
 }

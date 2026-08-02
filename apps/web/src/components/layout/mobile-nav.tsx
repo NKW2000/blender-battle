@@ -40,6 +40,19 @@ export function MobileNav({
   // until after hydration rather than rendered into nothing on the server.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  /*
+    Drives the slide, and is deliberately React state rather than a CSS
+    animation.
+
+    A keyframe that opens off-screen has to actually run to bring the panel
+    back; if it never advances — a stalled compositor, a backgrounded tab,
+    reduced-motion handling that only neutralises half of it — the drawer is
+    parked outside the viewport with the navigation unreachable. An effect runs
+    regardless of whether a single frame is ever painted, so the resting state
+    is guaranteed by React and the transition is only how it gets there.
+  */
+  const [slidIn, setSlidIn] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -51,7 +64,11 @@ export function MobileNav({
   }, [pathname]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSlidIn(false);
+      return;
+    }
+    setSlidIn(true);
 
     returnFocusRef.current = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
@@ -114,7 +131,11 @@ export function MobileNav({
       {open && mounted
         ? createPortal(
         <div
-          className="fixed inset-0 z-[60] md:hidden"
+          className={cn(
+            'fixed inset-0 z-[60] transition-opacity duration-200 ease-out md:hidden',
+            'motion-reduce:transition-none',
+            slidIn ? 'opacity-100' : 'opacity-0',
+          )}
           style={{ background: 'rgba(14,11,43,.72)', backdropFilter: 'blur(3px)' }}
           onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}
         >
@@ -123,15 +144,11 @@ export function MobileNav({
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            /*
-              Deliberately not animated. A slide-in has to start off-screen, and
-              a keyframe that never advances — a backgrounded tab, a compositor
-              that has stopped, reduced-motion handling that only neutralises
-              part of it — leaves the drawer parked outside the viewport with no
-              way to reach the navigation. The panel is placed by layout alone,
-              so it is correct the instant it mounts and cannot be stranded.
-            */
-            className="ml-auto flex h-full w-[min(20rem,85vw)] flex-col border-l-4 border-edge bg-panel-raised"
+            className={cn(
+              'ml-auto flex h-full w-[min(20rem,85vw)] flex-col border-l-4 border-edge bg-panel-raised',
+              'transition-transform duration-200 ease-out motion-reduce:transition-none',
+              slidIn ? 'translate-x-0' : 'translate-x-full',
+            )}
           >
             <div className="flex items-center justify-between border-b-[3px] border-white/10 px-4 py-3">
               <span className="eyebrow text-aqua">Menu</span>
