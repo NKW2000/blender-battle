@@ -47,9 +47,15 @@ export default function ManageChallengesPage() {
           </h1>
         </div>
 
-        <div className="flex gap-3">
+        {/*
+          Full width on a phone, where a fixed 192px filter beside the button
+          left the button too narrow for "New challenge" and it broke onto two
+          lines. The filter now takes whatever is left and the button keeps its
+          natural width.
+        */}
+        <div className="flex w-full gap-3 sm:w-auto">
           <Select
-            className="w-48"
+            className="min-w-0 flex-1 sm:w-48 sm:flex-none"
             ariaLabel="Filter by status"
             value={status}
             onChange={(value) => setStatus(value as ChallengeStatus | '')}
@@ -63,7 +69,7 @@ export default function ManageChallengesPage() {
             ]}
           />
 
-          <Button asChild>
+          <Button asChild className="shrink-0 whitespace-nowrap">
             <Link href="/manage/challenges/new">New challenge</Link>
           </Button>
         </div>
@@ -92,7 +98,60 @@ export default function ManageChallengesPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/*
+              Cards below md, the table from md up. The table is 44rem at its
+              narrowest, so on a phone it sat in a sideways scroller with the
+              status and actions columns off the edge — the two things this
+              screen exists to show. The same rows are simply laid out
+              vertically instead.
+            */}
+            <ul className="flex flex-col gap-3 p-4 md:hidden">
+              {challenges.map((challenge) => (
+                <li
+                  key={challenge.id}
+                  className="rounded-2xl border-[3px] border-edge bg-white/[0.04] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/manage/challenges/${challenge.slug}`}
+                        className="font-display font-bold text-bone hover:text-select"
+                      >
+                        {challenge.title}
+                      </Link>
+                      <p className="mt-0.5 text-xs font-extrabold text-bone-faint">
+                        {challenge.category.name}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 font-mono text-xs uppercase ${STATUS_COLOR[challenge.status]}`}
+                    >
+                      {challenge.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <DifficultyBadge difficulty={challenge.difficulty} />
+                    <span className="font-mono text-xs text-bone-faint">
+                      {formatDate(challenge.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <LifecycleButton
+                      challenge={challenge}
+                      onPublish={() => publish.mutate(challenge.id)}
+                      onArchive={() => archive.mutate(challenge.id)}
+                      busy={publish.isPending || archive.isPending}
+                      full
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[44rem] text-left text-sm">
               <thead>
                 <tr className="border-b border-edge">
@@ -128,31 +187,19 @@ export default function ManageChallengesPage() {
                       {formatDate(challenge.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {challenge.status === ChallengeStatus.PUBLISHED ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => archive.mutate(challenge.id)}
-                          disabled={archive.isPending}
-                        >
-                          Archive
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => publish.mutate(challenge.id)}
-                          disabled={publish.isPending}
-                        >
-                          Publish
-                        </Button>
-                      )}
+                      <LifecycleButton
+                        challenge={challenge}
+                        onPublish={() => publish.mutate(challenge.id)}
+                        onArchive={() => archive.mutate(challenge.id)}
+                        busy={publish.isPending || archive.isPending}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Panel>
 
@@ -168,5 +215,40 @@ export default function ManageChallengesPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+
+/**
+ * Publish or archive, depending where the brief already is.
+ *
+ * Shared by the card list and the table so the two cannot drift into offering
+ * different actions for the same row.
+ */
+function LifecycleButton({
+  challenge,
+  onPublish,
+  onArchive,
+  busy,
+  full,
+}: {
+  challenge: { status: ChallengeStatus };
+  onPublish: () => void;
+  onArchive: () => void;
+  busy: boolean;
+  full?: boolean;
+}) {
+  const published = challenge.status === ChallengeStatus.PUBLISHED;
+
+  return (
+    <Button
+      variant={published ? 'ghost' : 'outline'}
+      size="sm"
+      onClick={published ? onArchive : onPublish}
+      disabled={busy}
+      className={full ? 'w-full' : undefined}
+    >
+      {published ? 'Archive' : 'Publish'}
+    </Button>
   );
 }
