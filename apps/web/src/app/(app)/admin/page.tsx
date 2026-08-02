@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
 import { useActivityLog, useAdminMetrics } from '@/features/analytics/use-analytics';
-import { formatNumber } from '@/lib/utils';
+import { UI_LOCALE, formatNumber } from '@/lib/utils';
 
 export default function AdminDashboardPage() {
 
@@ -71,7 +71,7 @@ export default function AdminDashboardPage() {
         {/* The numbers come from a snapshot refreshed every five minutes. Saying
             so is more honest than implying they are live. */}
         <p className="font-mono text-xs text-bone-faint">
-          Snapshot taken {new Date(metrics.generatedAt).toLocaleTimeString()}
+          Snapshot taken {new Date(metrics.generatedAt).toLocaleTimeString(UI_LOCALE)}
         </p>
       </header>
 
@@ -287,7 +287,7 @@ export default function AdminDashboardPage() {
                   )}
                 </div>
                 <span className="shrink-0 font-bold text-xs text-bone-faint">
-                  {new Date(log.createdAt).toLocaleString()}
+                  {new Date(log.createdAt).toLocaleString(UI_LOCALE)}
                 </span>
               </li>
             ))}

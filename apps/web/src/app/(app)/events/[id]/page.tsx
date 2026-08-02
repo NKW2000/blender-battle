@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { use, useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
+import { UI_LOCALE } from '@/lib/utils';
 import { FireIcon } from '@/components/ui/icons';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { VoteScreen } from '@/components/challenges/vote-screen';
@@ -182,7 +183,7 @@ function Upcoming({ event }: { event: EventDetail }) {
         <PanelBody>
           <p className="text-sm font-extrabold text-bone-muted">
             Entries open{' '}
-            {event.startDate ? new Date(event.startDate).toLocaleString() : 'soon'}. Come back then
+            {event.startDate ? new Date(event.startDate).toLocaleString(UI_LOCALE) : 'soon'}. Come back then
             to upload your work.
           </p>
         </PanelBody>

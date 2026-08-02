@@ -127,7 +127,13 @@ export default function ProfilePage({
           ) : null}
 
           {/* Stat tiles — only stats the system actually tracks */}
-          <div className="mt-2 flex flex-wrap justify-center gap-3">
+          {/*
+            A grid, not wrapped flex. Flex sized each tile to its own label, so
+            "VOTES EARNED" came out wider than "WINS" and the four sat in a
+            ragged block. Equal columns make them uniform at any width, and two
+            per row is what fits a phone.
+          */}
+          <div className="mt-2 grid w-full max-w-md grid-cols-2 gap-3 sm:max-w-2xl sm:grid-cols-4">
             <StatTile value={String(profile.totalBattles)} label="BATTLES" color="text-sun" />
             <StatTile value={String(profile.wins)} label="WINS" color="text-aqua" />
             <StatTile
@@ -414,7 +420,7 @@ function compact(n: number): string {
 function StatTile({ value, label, color }: { value: string; label: string; color: string }) {
   return (
     <div
-      className="min-w-[120px] rounded-[18px] border-4 border-edge bg-cream px-5 py-3"
+      className="flex min-w-0 flex-col justify-center rounded-[18px] border-4 border-edge bg-cream px-4 py-3 text-center sm:px-5"
       style={{ boxShadow: '0 8px 0 var(--color-edge)' }}
     >
       <div className={`font-display text-3xl font-bold leading-none ${color}`}>{value}</div>

@@ -12,7 +12,7 @@ import {
   useNotifications,
   useUnreadCount,
 } from '@/features/notifications/use-notifications';
-import { cn } from '@/lib/utils';
+import { UI_LOCALE, cn } from '@/lib/utils';
 
 /**
  * The inbox, as a dropdown in the header.
@@ -80,7 +80,24 @@ export function NotificationBell() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2.5 max-h-[28rem] w-80 overflow-y-auto rounded-[16px] border-4 border-edge bg-panel-raised"
+          /*
+            Centred on a phone, anchored to the bell from md up.
+
+            The panel is 320px wide and hangs from a button that sits in the
+            far corner, so on a narrow screen it ran off the left edge. Below md
+            it is therefore positioned against the viewport instead: `fixed`
+            works here because the header it lives in is full width and pinned
+            to the top, so the header's box and the viewport's agree on where
+            the centre is.
+
+            The width is clamped rather than fixed, so it still fits a 320px
+            screen with a margin either side.
+          */
+          className={cn(
+            'z-50 max-h-[28rem] overflow-y-auto rounded-[16px] border-4 border-edge bg-panel-raised',
+            'fixed left-1/2 top-[4.25rem] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2',
+            'md:absolute md:left-auto md:right-0 md:top-full md:mt-2.5 md:w-80 md:max-w-none md:translate-x-0',
+          )}
           style={{ boxShadow: '0 8px 0 var(--color-edge)', animation: 'bbPop .16s ease both' }}
         >
           <div className="flex items-center justify-between border-b-[3px] border-edge px-4 py-2.5">
@@ -154,7 +171,7 @@ function NotificationRow({ item, onOpen }: { item: NotificationItem; onOpen: () 
           <p className="mt-0.5 truncate font-mono text-xs text-bone-faint">{item.body}</p>
         ) : null}
         <p className="mt-1 font-mono text-[0.625rem] text-bone-faint">
-          {new Date(item.createdAt).toLocaleString()}
+          {new Date(item.createdAt).toLocaleString(UI_LOCALE)}
         </p>
       </div>
     </div>

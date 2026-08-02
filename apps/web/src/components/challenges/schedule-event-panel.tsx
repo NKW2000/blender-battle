@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
+import { UI_LOCALE } from '@/lib/utils';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import {
@@ -52,7 +53,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
 
   const phase = event?.phase ?? 'not-an-event';
   const isScheduled = phase !== 'not-an-event';
-  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(UI_LOCALE) : '—');
 
   const submit = () => {
     schedule.mutate({

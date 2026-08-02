@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { use, useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
+import { UI_LOCALE } from '@/lib/utils';
 import { BallotView } from '@/components/rooms/ballot-view';
 import { CountdownGate } from '@/components/rooms/countdown-gate';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
@@ -211,7 +212,7 @@ function Lobby({ room }: { room: RoomDetail }) {
             className={`text-sm font-extrabold ${outOfTime ? 'text-punch-soft' : 'text-bone-muted'}`}
           >
             <span className={outOfTime ? 'text-punch' : 'text-aqua'}>Ends</span>{' '}
-            {new Date(room.endsAt).toLocaleString()} — each player sees this in their own
+            {new Date(room.endsAt).toLocaleString(UI_LOCALE)} — each player sees this in their own
             timezone.
           </p>
         ) : null}

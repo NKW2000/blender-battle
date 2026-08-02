@@ -14,7 +14,13 @@ export function RouteLoader({ label = 'Loading' }: { label?: string }) {
     <div
       role="status"
       aria-live="polite"
-      className="flex min-h-[60vh] flex-col items-center justify-center gap-5"
+      /*
+        Sized to the viewport minus the header and the page's own padding, so
+        the cubes land in the middle of what the reader can see. A plain 60vh
+        box centred the loader inside itself but left it sitting high on the
+        page, because the space below it was never accounted for.
+      */
+      className="flex min-h-[calc(100dvh-9rem)] flex-col items-center justify-center gap-5"
     >
       {/* Three cubes in a row, pulsing in sequence — the same shapes the rest of
           the language uses, rather than a generic spinner. */}

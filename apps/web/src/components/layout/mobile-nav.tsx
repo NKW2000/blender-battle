@@ -53,6 +53,12 @@ export function MobileNav({
     is guaranteed by React and the transition is only how it gets there.
   */
   const [slidIn, setSlidIn] = useState(false);
+  /*
+    Kept mounted for the length of the close transition. Unmounting on the click
+    removed the panel from the DOM immediately, so the only thing that could
+    animate out was nothing at all — the drawer simply vanished.
+  */
+  const [rendered, setRendered] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -66,8 +72,12 @@ export function MobileNav({
   useEffect(() => {
     if (!open) {
       setSlidIn(false);
-      return;
+      // Outlives the 200ms transition below, then drops the panel.
+      const timer = setTimeout(() => setRendered(false), 220);
+      return () => clearTimeout(timer);
     }
+
+    setRendered(true);
     setSlidIn(true);
 
     returnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -128,13 +138,21 @@ export function MobileNav({
         position descendants — so `inset-0` resolved against the 56px header
         instead of the viewport, and the drawer was clipped to a strip.
       */}
-      {open && mounted
+      {/*
+        `open || rendered`, and the order matters. `open` flips during render, so
+        the panel mounts while `slidIn` is still false and therefore starts
+        off-screen with somewhere to travel from. `rendered` then holds it in the
+        tree after `open` goes false, long enough for the closing transition to
+        play. Gating on `rendered` alone would mount it in the same tick the
+        effect opens it, and there would be no enter animation at all.
+      */}
+      {(open || rendered) && mounted
         ? createPortal(
         <div
           className={cn(
             'fixed inset-0 z-[60] transition-opacity duration-200 ease-out md:hidden',
             'motion-reduce:transition-none',
-            slidIn ? 'opacity-100' : 'opacity-0',
+            slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
           style={{ background: 'rgba(14,11,43,.72)', backdropFilter: 'blur(3px)' }}
           onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
+import { UI_LOCALE } from '@/lib/utils';
 import { Select } from '@/components/ui/select';
 import { useCategories } from '@/features/challenges/use-challenges';
 import { useEvents, type EventPhase, type EventSummary } from '@/features/challenges/use-events';
@@ -151,9 +152,9 @@ function EventCard({ event }: { event: EventSummary }) {
           {deadline ? (
             <span>
               {event.phase === 'open'
-                ? `closes ${deadline.toLocaleDateString()}`
+                ? `closes ${deadline.toLocaleDateString(UI_LOCALE)}`
                 : event.phase === 'upcoming'
-                  ? `opens ${event.startDate ? new Date(event.startDate).toLocaleDateString() : ''}`
+                  ? `opens ${event.startDate ? new Date(event.startDate).toLocaleDateString(UI_LOCALE) : ''}`
                   : ''}
             </span>
           ) : null}

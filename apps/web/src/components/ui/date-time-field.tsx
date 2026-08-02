@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { ChevronIcon } from '@/components/ui/icons';
-import { cn } from '@/lib/utils';
+import { UI_LOCALE, cn } from '@/lib/utils';
 
 /**
  * The arcade date-and-time picker.
@@ -247,10 +247,10 @@ export function DateTimeField({
           open={openPart === 'date'}
           invalid={invalid}
           accent="aqua"
-          eyebrow={selected ? selected.toLocaleDateString(undefined, { weekday: 'long' }) : 'Date'}
+          eyebrow={selected ? selected.toLocaleDateString(UI_LOCALE, { weekday: 'long' }) : 'Date'}
           display={
             selected
-              ? selected.toLocaleDateString(undefined, {
+              ? selected.toLocaleDateString(UI_LOCALE, {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
@@ -274,7 +274,7 @@ export function DateTimeField({
                 <ChevronIcon direction="left" size={16} />
               </NudgeButton>
               <span aria-live="polite" className="font-display text-base font-bold text-cream">
-                {viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                {viewMonth.toLocaleDateString(UI_LOCALE, { month: 'long', year: 'numeric' })}
               </span>
               <NudgeButton
                 label="Next month"
@@ -316,7 +316,7 @@ export function DateTimeField({
                     type="button"
                     role="gridcell"
                     aria-selected={isSelected}
-                    aria-label={day.toLocaleDateString(undefined, {
+                    aria-label={day.toLocaleDateString(UI_LOCALE, {
                       weekday: 'long',
                       month: 'long',
                       day: 'numeric',
@@ -348,7 +348,7 @@ export function DateTimeField({
 
             <PopoverFooter onDone={() => setOpenPart(null)}>
               {selected
-                ? selected.toLocaleDateString(undefined, {
+                ? selected.toLocaleDateString(UI_LOCALE, {
                     weekday: 'short',
                     month: 'short',
                     day: 'numeric',
@@ -368,7 +368,7 @@ export function DateTimeField({
           eyebrow="Time"
           display={
             selected
-              ? selected.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+              ? selected.toLocaleTimeString(UI_LOCALE, { hour: 'numeric', minute: '2-digit' })
               : 'Pick a time'
           }
           muted={!selected}
@@ -402,7 +402,7 @@ export function DateTimeField({
 
             <PopoverFooter onDone={() => setOpenPart(null)}>
               {selected
-                ? selected.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                ? selected.toLocaleTimeString(UI_LOCALE, { hour: 'numeric', minute: '2-digit' })
                 : '—'}
             </PopoverFooter>
           </Popover>
