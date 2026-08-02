@@ -62,11 +62,21 @@ export function ArcadeLanding() {
         </div>
       </div>
 
+      {/*
+        Hidden below lg, for the same reason the 3D object above is.
+
+        These are placed in percentages tuned to the wide layout, where they sit
+        in the empty space beside the copy column. Narrow the viewport and the
+        percentages walk them straight onto the text — the sun-yellow one landed
+        over the opening line of the subheading, and muted purple on bright
+        yellow is barely more than 1:1. Decoration that obscures the message is
+        worse than no decoration.
+      */}
       {FLOATERS.map((floater, index) => (
         <div
           key={index}
           aria-hidden="true"
-          className={`absolute border-4 border-ink ${floater.className}`}
+          className={`absolute hidden border-4 border-ink lg:block ${floater.className}`}
           style={{
             ['--r' as string]: floater.rotate,
             animation: `bbFloat ${floater.duration} ease-in-out ${floater.delay} infinite`,
