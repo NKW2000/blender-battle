@@ -60,15 +60,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           body is never acceptable, and with this many destinations the single
           row overflows well before mobile widths.
         */}
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
-          <Link href="/rooms" className="flex shrink-0 items-center gap-2.5">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4 sm:gap-4 md:px-6">
+          {/*
+            `min-w-0` rather than `shrink-0`. The brand was refusing to give up
+            any width, so on a 360px phone the row measured 369px and pushed the
+            menu button past the edge — the whole page then scrolled sideways,
+            which is what made the site look zoomed in and off-centre. The
+            controls are the ones that must never shrink; the brand can.
+          */}
+          <Link href="/rooms" className="flex min-w-0 items-center gap-2.5">
             <ArcadeLogo size={32} />
-            <ArcadeWordmark size={18} />
+            {/*
+              The mark alone below 400px. Truncating a wordmark to
+              "BLENDERBAT…" looks like a bug rather than a design, and the logo
+              already identifies the site.
+            */}
+            <span className="hidden min-[400px]:block">
+              <ArcadeWordmark size={18} />
+            </span>
           </Link>
 
           {/* Below md the destinations live in the drawer, so the bar keeps only
               what has to stay reachable in one tap. */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:hidden">
             <SoundToggle />
             <NotificationBell />
             <MobileNav
