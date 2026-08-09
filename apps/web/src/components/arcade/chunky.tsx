@@ -113,12 +113,20 @@ export function ChunkyCard({
   );
 }
 
-/** The rotated square mark used as the wordmark's logo. */
+/**
+ * The rotated square mark used as the wordmark's logo.
+ *
+ * Sun yellow, not flame. The sign-in and sign-up screens had always drawn this
+ * mark by hand in `bg-sun` while this component used an orange gradient, so the
+ * same logo arrived in two colours depending on which page you were on. Yellow
+ * is the one that was already on the way in, and it reads against both the dark
+ * ground and the orange panels that flame disappeared into.
+ */
 export function ArcadeLogo({ size = 40 }: { size?: number }) {
   return (
     <div
       aria-hidden="true"
-      className="flex shrink-0 rotate-45 items-center justify-center rounded-xl border-[3px] border-ink bg-linear-to-br from-flame-warm to-flame"
+      className="flex shrink-0 rotate-45 items-center justify-center rounded-xl border-[3px] border-ink bg-sun"
       style={{ width: size, height: size, boxShadow: '0 4px 0 var(--color-ink)' }}
     >
       <div className="rounded-[3px] bg-ink" style={{ width: size * 0.32, height: size * 0.32 }} />

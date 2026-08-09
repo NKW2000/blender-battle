@@ -20,36 +20,39 @@ const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 /** Arcade palette, matching globals.css. */
 const INK = [0x0e, 0x0b, 0x2b];
-const FLAME = [0xff, 0x7a, 0x18];
-const FLAME_LIFT = [0xff, 0xb1, 0x3c];
-const CREAM = [0xff, 0xf6, 0xe9];
+const SUN = [0xff, 0xd2, 0x3f];
 
 const lerp = (a, b, t) => a + (b - a) * t;
-const mix = (c1, c2, t) => [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
 
 /**
  * Colour at one point of the mark, or null for transparent.
  *
- * Coordinates are normalised to -1..1 so the same function serves every size.
- * `inset` keeps the artwork inside the safe circle a maskable icon may be
- * cropped to — Android can clip the corners to any shape it likes, and a mark
- * drawn to the edges loses its corners on a round launcher.
+ * This is `ArcadeLogo` drawn in pixels rather than a separate piece of artwork:
+ * a rounded square turned 45 degrees, sun yellow, with a small ink square at its
+ * centre turned with it. Anything else would put a different logo on the home
+ * screen from the one in the header, which is exactly what a home-screen icon
+ * must not do.
+ *
+ * Coordinates are normalised to -1..1 so one function serves every size.
+ * `maskable` shrinks the mark inside the safe circle Android may crop to — a
+ * round launcher clips the corners, and a mark drawn to the edges loses them.
  */
 function sample(nx, ny, { maskable }) {
-  const scale = maskable ? 0.62 : 0.84;
-  const x = nx / scale;
-  const y = ny / scale;
+  const scale = maskable ? 0.58 : 0.78;
 
-  // The inner notch: a small square, rotated with the body, punched in cream.
-  if (Math.abs(x) + Math.abs(y) <= 0.3) return CREAM;
+  // Rotate the sample point by -45°, which draws the shape rotated by +45°.
+  const SQRT1_2 = Math.SQRT1_2;
+  const u = (nx * SQRT1_2 + ny * SQRT1_2) / scale;
+  const v = (-nx * SQRT1_2 + ny * SQRT1_2) / scale;
 
-  // The body: a rotated rounded square reads as a diamond, which is the mark.
-  // A superellipse gives it the soft corners the logo has rather than points.
-  const k = 3.2;
-  const d = Math.pow(Math.abs(x), k) + Math.pow(Math.abs(y), k);
-  if (d <= Math.pow(0.86, k)) {
-    // Vertical gradient, lighter at the top, as the buttons are.
-    return mix(FLAME_LIFT, FLAME, (ny + 1) / 2);
+  // The inner square: 32% of the body, as in the component.
+  if (Math.max(Math.abs(u), Math.abs(v)) <= 0.32) return INK;
+
+  // The body: a superellipse gives the `rounded-xl` corners the component has,
+  // rather than the hard points of a plain square.
+  const k = 4.5;
+  if (Math.pow(Math.abs(u), k) + Math.pow(Math.abs(v), k) <= Math.pow(0.92, k)) {
+    return SUN;
   }
 
   return null;

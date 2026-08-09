@@ -161,6 +161,30 @@ export function InstallPrompt() {
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+
+    /*
+      Production only.
+
+      The worker caches `/_next/static/*` on the premise that those URLs are
+      content-hashed, so a hit can never be stale. That holds for a build — but
+      the dev server serves chunks from stable paths it rewrites in place, so
+      the same URL means different code after every edit. Registered in
+      development it therefore pins whatever was compiled first and serves it
+      back through reloads, restarts and even a deleted `.next`, which looks
+      exactly like an edit that refuses to apply.
+
+      An unregister rather than a plain skip: anyone who ran a build locally
+      already has one installed, and it would keep serving that stale bundle
+      until something removed it.
+    */
+    if (process.env.NODE_ENV !== 'production') {
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+        .catch(() => {});
+      return;
+    }
+
     // Registration failing is not worth surfacing — the app works without it,
     // and the only cost is that the install offer never appears.
     navigator.serviceWorker.register('/sw.js').catch(() => {});

@@ -7,7 +7,7 @@ import { Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { ArcadeField, ProviderButtons } from '@/components/arcade/auth-parts';
-import { ChunkyButton } from '@/components/arcade/chunky';
+import { ArcadeLogo, ChunkyButton } from '@/components/arcade/chunky';
 import { HeroCanvas } from '@/components/arcade/hero-canvas';
 import { useLogin } from '@/features/auth/use-session';
 import { collectFormMessages, notify } from '@/lib/notify';
@@ -45,13 +45,9 @@ export default function LoginPage() {
         />
 
         <Link href="/" className="relative z-[2] flex items-center gap-3">
-          <div
-            aria-hidden="true"
-            className="flex h-10 w-10 rotate-45 items-center justify-center rounded-xl border-[3px] border-ink bg-sun"
-            style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
-          >
-            <div className="h-3 w-3 rounded-[3px] bg-ink" />
-          </div>
+          {/* The shared mark, not a copy of it — the hand-drawn version here is
+              how the logo came to exist in two colours at once. */}
+          <ArcadeLogo size={40} />
           <span className="font-arcade text-[21px] font-bold text-cream">BLENDERBATTLE</span>
         </Link>
 

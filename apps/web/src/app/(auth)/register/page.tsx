@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Suspense, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { ChunkyButton } from '@/components/arcade/chunky';
+import { ArcadeLogo, ChunkyButton } from '@/components/arcade/chunky';
 import { HeroCanvas } from '@/components/arcade/hero-canvas';
 import { useRegister } from '@/features/auth/use-session';
 import { collectFormMessages, notify } from '@/lib/notify';
@@ -136,13 +136,9 @@ export default function RegisterPage() {
 
         <div className="relative z-[2] flex items-center gap-3 self-end">
           <span className="font-arcade text-[21px] font-bold text-cream">BLENDERBATTLE</span>
-          <div
-            aria-hidden="true"
-            className="flex h-10 w-10 rotate-45 items-center justify-center rounded-xl border-[3px] border-ink bg-sun"
-            style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
-          >
-            <div className="h-3 w-3 rounded-[3px] bg-ink" />
-          </div>
+          {/* The shared mark, not a copy of it — the hand-drawn version here is
+              how the logo came to exist in two colours at once. */}
+          <ArcadeLogo size={40} />
         </div>
 
         <HeroCanvas coreColor={0x5ef0de} className="absolute inset-0 z-[1]" />
