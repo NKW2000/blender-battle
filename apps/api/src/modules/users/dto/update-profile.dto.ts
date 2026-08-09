@@ -19,6 +19,17 @@ import {
  * values are rendered as anchors, so an unchecked `javascript:` URL would be a
  * stored XSS vector. `require_protocol` plus an https/http allowlist blocks it.
  */
+/**
+ * Every link is validated as an absolute http(s) URL.
+ *
+ * `require_protocol` matters more than it looks: without it "javascript:alert(1)"
+ * and "artstation.com/me" both pass, and the first is a script that runs when a
+ * visitor clicks a link on someone else's profile. Restricting the protocol list
+ * to http and https is what makes these safe to render as anchors.
+ *
+ * Discord is the exception — a handle, not a URL, because there is no public
+ * profile page to point at.
+ */
 class SocialLinksDto {
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
@@ -26,11 +37,19 @@ class SocialLinksDto {
 
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
-  twitter?: string;
+  artstation?: string;
 
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
-  artstation?: string;
+  sketchfab?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  behance?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  instagram?: string;
 
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
@@ -38,7 +57,15 @@ class SocialLinksDto {
 
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
-  instagram?: string;
+  tiktok?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  facebook?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  twitter?: string;
 
   @IsOptional()
   @IsString()

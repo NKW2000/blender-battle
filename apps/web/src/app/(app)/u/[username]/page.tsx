@@ -1,6 +1,11 @@
 'use client';
 
-import type { PortfolioItem } from '@bb/shared';
+import {
+  SOCIAL_LINK_KEYS,
+  SOCIAL_LINK_LABELS,
+  type PortfolioItem,
+  type SocialLinks,
+} from '@bb/shared';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 
@@ -125,6 +130,8 @@ export default function ProfilePage({
               {profile.bio}
             </p>
           ) : null}
+
+          <SocialLinkRow links={profile.socialLinks} />
 
           {/* Stat tiles — only stats the system actually tracks */}
           {/*
@@ -511,5 +518,78 @@ function ProfileSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Where else to find this artist.
+ *
+ * Named pills rather than brand logos. The icon set in this project already
+ * makes the argument — the marks are drawn here so they carry this palette and
+ * this weight, and dropping in ten other companies' logos would undo exactly
+ * that. A label also survives a platform rebranding its glyph, and reads to a
+ * screen reader without help.
+ *
+ * Renders nothing at all when there are no links, rather than an empty heading.
+ */
+function SocialLinkRow({ links }: { links: SocialLinks }) {
+  const present = SOCIAL_LINK_KEYS.filter((key) => Boolean(links[key]?.trim()));
+  if (present.length === 0) return null;
+
+  return (
+    <ul className="flex flex-wrap justify-center gap-2">
+      {present.map((key) => {
+        const value = links[key]!.trim();
+        const label = SOCIAL_LINK_LABELS[key];
+
+        // Discord is a handle, not a URL — there is nowhere to link to, so it
+        // is shown as text that can be copied rather than a dead anchor.
+        if (key === 'discord') {
+          return (
+            <li key={key}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-white/16 bg-white/[0.07] px-3.5 py-1.5 font-display text-xs font-bold text-bone-muted">
+                <span className="text-bone-faint">{label}</span>
+                {value}
+              </span>
+            </li>
+          );
+        }
+
+        return (
+          <li key={key}>
+            <a
+              href={value}
+              target="_blank"
+              /*
+                `noopener` is the one that matters: without it the opened page
+                gets a handle on this window through `window.opener` and can
+                navigate it somewhere else. `noreferrer` also covers older
+                browsers that ignore `noopener`.
+              */
+              rel="me noopener noreferrer"
+              className="arcade-focus inline-flex items-center gap-1.5 rounded-full border-2 border-white/16 bg-white/[0.07] px-3.5 py-1.5 font-display text-xs font-bold text-bone transition-colors hover:border-aqua/60 hover:text-aqua"
+            >
+              {label}
+              <ExternalGlyph />
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ExternalGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

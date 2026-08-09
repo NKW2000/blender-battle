@@ -88,14 +88,56 @@ export interface AdminUserListItem {
   lastSeenAt: string | null;
 }
 
+/**
+ * Where an artist can be found off the site.
+ *
+ * Every field is a full URL except `discord`, which is a handle — Discord has no
+ * public profile page to link to, so a URL would have nowhere to point.
+ *
+ * The list is deliberately finite rather than free-form key/value pairs. A
+ * fixed set is what lets the profile label each link, order them, and refuse
+ * anything else; an open map would put whatever a client sent straight onto a
+ * public page.
+ */
 export interface SocialLinks {
   website?: string;
-  twitter?: string;
   artstation?: string;
-  youtube?: string;
+  sketchfab?: string;
+  behance?: string;
   instagram?: string;
+  youtube?: string;
+  tiktok?: string;
+  facebook?: string;
+  twitter?: string;
   discord?: string;
 }
+
+/** The order the profile lists them in: portfolio first, then social, then chat. */
+export const SOCIAL_LINK_KEYS = [
+  'website',
+  'artstation',
+  'sketchfab',
+  'behance',
+  'instagram',
+  'youtube',
+  'tiktok',
+  'facebook',
+  'twitter',
+  'discord',
+] as const satisfies readonly (keyof SocialLinks)[];
+
+export const SOCIAL_LINK_LABELS: Record<keyof SocialLinks, string> = {
+  website: 'Website',
+  artstation: 'ArtStation',
+  sketchfab: 'Sketchfab',
+  behance: 'Behance',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+  twitter: 'X',
+  discord: 'Discord',
+};
 
 export interface CategorySummary {
   id: string;

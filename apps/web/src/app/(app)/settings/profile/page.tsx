@@ -7,7 +7,10 @@ import {
   BIO_MAX_LENGTH,
   ExperienceLevel,
   SHOWCASE_MAX_ITEMS,
+  SOCIAL_LINK_KEYS,
+  SOCIAL_LINK_LABELS,
   type PortfolioItem,
+  type SocialLinks,
 } from '@bb/shared';
 import { useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -21,6 +24,13 @@ import { useSession } from '@/features/auth/use-session';
 import { usePortfolio, useUpdateProfile, useUploadAvatar } from '@/features/users/use-users';
 import { collectFormMessages, notify } from '@/lib/notify';
 
+/**
+ * `.url()` requires an absolute URL, which is what keeps "javascript:…" and a
+ * bare "example.com" out — the profile renders these as anchors, and either
+ * would be a link that runs or breaks.
+ */
+const socialUrl = z.string().url('Include https://').optional().or(z.literal(''));
+
 const profileSchema = z.object({
   bio: z.string().max(BIO_MAX_LENGTH, `At most ${BIO_MAX_LENGTH} characters`).optional(),
   country: z
@@ -29,14 +39,47 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal('')),
   experienceLevel: z.nativeEnum(ExperienceLevel),
+  /*
+    Written out rather than generated. A mapped type here loses the per-key
+    shape zod needs to infer the form's value type, and the cast that gets it
+    compiling is the kind that hides a real mismatch later.
+
+    Every URL field takes the same rule, defined once as `socialUrl`. `.url()` requires
+    an absolute URL, which is what keeps "javascript:…" and bare "example.com"
+    out — the profile renders these as anchors, and a relative or script URL
+    there is a link that either breaks or runs.
+
+    Discord is a handle, not a URL: there is no public profile page to link to.
+  */
   socialLinks: z.object({
-    website: z.string().url('Include https://').optional().or(z.literal('')),
-    artstation: z.string().url('Include https://').optional().or(z.literal('')),
-    youtube: z.string().url('Include https://').optional().or(z.literal('')),
+    website: socialUrl,
+    artstation: socialUrl,
+    sketchfab: socialUrl,
+    behance: socialUrl,
+    instagram: socialUrl,
+    youtube: socialUrl,
+    tiktok: socialUrl,
+    facebook: socialUrl,
+    twitter: socialUrl,
+    discord: z.string().max(64, 'Keep it under 64 characters').optional().or(z.literal('')),
   }),
 });
 
 type ProfileInput = z.infer<typeof profileSchema>;
+
+/** Shows the shape each field wants, so nobody has to guess the URL form. */
+const SOCIAL_PLACEHOLDER: Record<keyof SocialLinks, string> = {
+  website: 'https://your-site.com',
+  artstation: 'https://artstation.com/…',
+  sketchfab: 'https://sketchfab.com/…',
+  behance: 'https://behance.net/…',
+  instagram: 'https://instagram.com/…',
+  youtube: 'https://youtube.com/@…',
+  tiktok: 'https://tiktok.com/@…',
+  facebook: 'https://facebook.com/…',
+  twitter: 'https://x.com/…',
+  discord: 'yourhandle',
+};
 
 /** Title-cased labels, so the dropdown reads "Beginner" not "beginner". */
 const EXPERIENCE_LABEL: Record<ExperienceLevel, string> = {
@@ -67,9 +110,9 @@ export default function ProfileSettingsPage() {
           country: user.country ?? '',
           experienceLevel: user.experienceLevel,
           socialLinks: {
-            website: user.socialLinks.website ?? '',
-            artstation: user.socialLinks.artstation ?? '',
-            youtube: user.socialLinks.youtube ?? '',
+            ...Object.fromEntries(
+              SOCIAL_LINK_KEYS.map((key) => [key, user.socialLinks[key] ?? '']),
+            ),
           },
         }
       : undefined,
@@ -212,27 +255,24 @@ export default function ProfileSettingsPage() {
               </div>
             </div>
 
-            <Field
-              label="Website"
-              placeholder="https://"
-              accent="aqua"
-              error={errors.socialLinks?.website?.message}
-              {...register('socialLinks.website')}
-            />
-            <Field
-              label="ArtStation"
-              placeholder="https://artstation.com/…"
-              accent="aqua"
-              error={errors.socialLinks?.artstation?.message}
-              {...register('socialLinks.artstation')}
-            />
-            <Field
-              label="YouTube"
-              placeholder="https://youtube.com/@…"
-              accent="aqua"
-              error={errors.socialLinks?.youtube?.message}
-              {...register('socialLinks.youtube')}
-            />
+            {/*
+              Generated from the shared key list rather than hand-written, so a
+              platform added to the contract appears here without anyone
+              remembering to add a field — which is how the profile came to
+              support six links while this form only offered three.
+            */}
+            <div className="grid gap-5 sm:grid-cols-2">
+              {SOCIAL_LINK_KEYS.map((key) => (
+                <Field
+                  key={key}
+                  label={SOCIAL_LINK_LABELS[key]}
+                  placeholder={SOCIAL_PLACEHOLDER[key]}
+                  accent="aqua"
+                  error={socialFieldError(errors.socialLinks?.[key])}
+                  {...register(`socialLinks.${key}` as const)}
+                />
+              ))}
+            </div>
           </PanelBody>
 
           <div className="flex justify-end border-t border-edge px-5 py-4">
@@ -436,4 +476,17 @@ function ShowcaseTile({
       </div>
     </div>
   );
+}
+
+
+/**
+ * react-hook-form types a nested field's error as a union that includes a whole
+ * error tree, so `.message` alone does not narrow to a string.
+ */
+function socialFieldError(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const { message } = error as { message?: unknown };
+    return typeof message === 'string' ? message : undefined;
+  }
+  return undefined;
 }
