@@ -4,19 +4,13 @@ import { ChallengeStatus, Role } from '@bb/shared';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { DifficultyBadge } from '@/components/challenges/challenge-card';
+import { DifficultyBadge, StatusBadge } from '@/components/challenges/challenge-card';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import { useSession } from '@/features/auth/use-session';
 import { useChallengeLifecycle, useChallenges } from '@/features/challenges/use-challenges';
 import { formatDate } from '@/lib/utils';
-
-const STATUS_COLOR: Record<ChallengeStatus, string> = {
-  [ChallengeStatus.PUBLISHED]: 'text-axis-y',
-  [ChallengeStatus.DRAFT]: 'text-select',
-  [ChallengeStatus.ARCHIVED]: 'text-bone-faint',
-};
 
 export default function ManageChallengesPage() {
   const { user } = useSession();
@@ -124,11 +118,7 @@ export default function ManageChallengesPage() {
                         {challenge.category.name}
                       </p>
                     </div>
-                    <span
-                      className={`shrink-0 font-mono text-xs uppercase ${STATUS_COLOR[challenge.status]}`}
-                    >
-                      {challenge.status}
-                    </span>
+                    <StatusBadge status={challenge.status} className="shrink-0" />
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -180,8 +170,8 @@ export default function ManageChallengesPage() {
                     <td className="px-5 py-3">
                       <DifficultyBadge difficulty={challenge.difficulty} />
                     </td>
-                    <td className={`px-5 py-3 font-mono text-xs ${STATUS_COLOR[challenge.status]}`}>
-                      {challenge.status}
+                    <td className="px-5 py-3">
+                      <StatusBadge status={challenge.status} />
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-bone-faint">
                       {formatDate(challenge.createdAt)}

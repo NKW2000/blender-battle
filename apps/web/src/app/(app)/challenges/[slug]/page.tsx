@@ -4,7 +4,7 @@ import { ChallengeAssetType, ChallengeStatus, Role } from '@bb/shared';
 import Link from 'next/link';
 import { use } from 'react';
 
-import { DifficultyBadge } from '@/components/challenges/challenge-card';
+import { DifficultyBadge, StatusBadge } from '@/components/challenges/challenge-card';
 import { ScheduleEventPanel } from '@/components/challenges/schedule-event-panel';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
@@ -64,9 +64,7 @@ export default function ChallengeDetailPage({
           <span className="eyebrow">{challenge.category.name}</span>
           <DifficultyBadge difficulty={challenge.difficulty} />
           {challenge.status !== ChallengeStatus.PUBLISHED ? (
-            <span className="border border-select/50 px-2 py-0.5 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-select">
-              {challenge.status}
-            </span>
+            <StatusBadge status={challenge.status} />
           ) : null}
         </div>
 

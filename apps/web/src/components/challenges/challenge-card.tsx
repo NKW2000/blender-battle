@@ -34,6 +34,44 @@ export function DifficultyBadge({
   );
 }
 
+/**
+ * Status, in the same pill construction as difficulty.
+ *
+ * It used to be a square 1px box in a mono face, left over from before the
+ * arcade language — sitting directly beside a rounded, two-pixel, display-face
+ * DifficultyBadge, which made the pair read as two different systems. Sharing
+ * the shape means the only thing that distinguishes them is the colour, which
+ * is what the colour is for.
+ *
+ * Published is deliberately absent from the callers that hide it: it is the
+ * ordinary state, and a badge on every ordinary thing stops being a signal.
+ */
+const STATUS_COLOR: Record<ChallengeStatus, string> = {
+  [ChallengeStatus.PUBLISHED]: 'text-axis-y border-axis-y/40',
+  [ChallengeStatus.DRAFT]: 'text-select border-select/40',
+  [ChallengeStatus.ARCHIVED]: 'text-bone-faint border-white/20',
+};
+
+export function StatusBadge({
+  status,
+  className,
+}: {
+  status: ChallengeStatus;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'rounded-full border-2 px-2.5 py-0.5 font-display text-[0.6875rem] font-bold uppercase tracking-[0.14em]',
+        STATUS_COLOR[status],
+        className,
+      )}
+    >
+      {status}
+    </span>
+  );
+}
+
 export function ChallengeCard({ challenge }: { challenge: ChallengeSummary }) {
   const isDraft = challenge.status === ChallengeStatus.DRAFT;
 
