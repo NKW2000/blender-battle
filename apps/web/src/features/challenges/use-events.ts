@@ -110,8 +110,6 @@ export function useEnterEvent(challengeId: string) {
       }
       return payload.data;
     },
-    // The entry form prints this beneath the file fields.
-    meta: { inlineError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.detail(challengeId) });
     },

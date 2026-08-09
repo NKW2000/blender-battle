@@ -412,11 +412,6 @@ function ShowcasePicker({ username, initial }: { username: string; initial: stri
           </div>
         )}
 
-        {update.error ? (
-          <p role="alert" className="text-sm font-bold text-punch-soft">
-            {update.error.message}
-          </p>
-        ) : null}
       </PanelBody>
 
       {eligible.length > 0 ? (

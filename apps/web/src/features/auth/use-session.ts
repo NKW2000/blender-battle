@@ -1,10 +1,12 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiErrorCode } from '@bb/shared';
 import type { AuthSession, SelfUserProfile } from '@bb/shared';
 import { useRouter } from 'next/navigation';
 
 import { api, ApiError } from '@/lib/api/client';
+import { notify } from '@/lib/notify';
 import { tokenStore } from '@/lib/api/token-store';
 import type { LoginInput, RegisterInput } from '@/lib/validation/auth.schema';
 
@@ -45,12 +47,29 @@ export function useLogin() {
 
   return useMutation<AuthSession, ApiError, LoginInput>({
     mutationFn: (input) => api.post<AuthSession>('/auth/login', input),
-    // The sign-in form prints this above its submit button.
-    meta: { inlineError: true },
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);
       router.push('/rooms');
+    },
+    /*
+      Worded here rather than left to the generic handler, because a failed
+      sign-in must not say which half was wrong. "No account with that email"
+      turns the form into a way of testing whether someone is registered, so
+      every credential failure gets the same sentence.
+
+      A suspended or banned account is the exception: the person is who they say
+      they are, and hiding why they cannot get in only sends them to support.
+    */
+    onError: (error) => {
+      const disabled =
+        error.code === ApiErrorCode.ACCOUNT_SUSPENDED ||
+        error.code === ApiErrorCode.ACCOUNT_BANNED;
+
+      notify.error(
+        disabled ? error.message : 'Those details do not match an account',
+        disabled ? undefined : 'Check the email and password and try again.',
+      );
     },
   });
 }
@@ -61,12 +80,19 @@ export function useRegister() {
 
   return useMutation<AuthSession, ApiError, RegisterInput>({
     mutationFn: (input) => api.post<AuthSession>('/auth/register', input),
-    // The sign-up form prints this above its submit button.
-    meta: { inlineError: true },
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);
       router.push('/rooms');
+    },
+    /*
+      A rejection carrying `details` is per-field — "that username is taken" —
+      and the form puts it on the field it belongs to. Raising a toast as well
+      would state the same problem twice, so only a failure with nowhere to land
+      is announced.
+    */
+    onError: (error) => {
+      if (!error.details) notify.failure(error);
     },
   });
 }

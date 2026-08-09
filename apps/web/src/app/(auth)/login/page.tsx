@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ApiErrorCode } from '@bb/shared';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -21,8 +20,6 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
-
-  const serverError = login.error;
 
   return (
     <div
@@ -122,21 +119,14 @@ export default function LoginPage() {
               {...register('password')}
             />
 
-            {serverError ? (
-              <p
-                role="alert"
-                className="mb-4 rounded-xl border-2 border-punch bg-punch/15 px-4 py-3 text-sm font-bold text-punch-soft"
-              >
-                {serverError.code === ApiErrorCode.ACCOUNT_SUSPENDED ||
-                serverError.code === ApiErrorCode.ACCOUNT_BANNED
-                  ? serverError.message
-                  : 'Those details do not match an account. Check the email and password and try again.'}
-              </p>
-            ) : (
-              <Suspense fallback={null}>
-                <OAuthErrorNotice />
-              </Suspense>
-            )}
+            {/*
+              Only the OAuth notice stays inline. It reports a redirect that
+              happened before this page loaded, so there is no mutation to hang
+              a toast off — the failure arrives as a query parameter.
+            */}
+            <Suspense fallback={null}>
+              <OAuthErrorNotice />
+            </Suspense>
 
             <ChunkyButton type="submit" size="lg" disabled={login.isPending} className="w-full">
               {login.isPending ? 'Logging in…' : 'Log in & play →'}

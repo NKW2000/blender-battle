@@ -205,12 +205,6 @@ function OpenPhase({ event }: { event: EventDetail }) {
 
           <EntryImageFields value={files} onChange={setFiles} disabled={enter.isPending} />
 
-          {enter.error ? (
-            <p role="alert" className="text-sm font-bold text-punch-soft">
-              {enter.error.message}
-            </p>
-          ) : null}
-
           <ChunkyButton
             size="md"
             onClick={() =>

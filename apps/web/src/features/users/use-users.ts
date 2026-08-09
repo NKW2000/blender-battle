@@ -74,8 +74,6 @@ export function useUpdateProfile() {
       notify.success('Profile saved');
     },
     // The settings panel prints the failure at the foot of the form it belongs
-    // to, so this must not also raise a toast for the same thing.
-    meta: { inlineError: true },
   });
 }
 

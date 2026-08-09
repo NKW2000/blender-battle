@@ -120,11 +120,6 @@ export default function RoomsPage() {
             <ChunkyButton size="md" tone="aqua" onClick={joinByCode} disabled={join.isPending}>
               {join.isPending ? 'Joining…' : 'JOIN'}
             </ChunkyButton>
-            {join.error ? (
-              <p role="alert" className="text-sm font-bold text-punch-soft">
-                {join.error.message}
-              </p>
-            ) : null}
           </PanelBody>
         </Panel>
       </div>
@@ -412,15 +407,6 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
               {endsAtError ?? 'Every player sees this in their own timezone.'}
             </p>
           </FormSection>
-
-          {create.error ? (
-            <p
-              role="alert"
-              className="rounded-xl border-2 border-punch bg-punch/15 px-4 py-2.5 text-sm font-bold text-punch-soft"
-            >
-              {create.error.message}
-            </p>
-          ) : null}
         </div>
 
         <footer className="flex flex-wrap justify-end gap-3 border-t-[3px] border-white/10 px-6 py-5">

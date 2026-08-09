@@ -253,12 +253,6 @@ function Lobby({ room }: { room: RoomDetail }) {
           </p>
         )}
 
-        {start.error ? (
-          <p role="alert" className="text-sm font-bold text-punch-soft">
-            {start.error.message}
-          </p>
-        ) : null}
-
         <LeaveControl room={room} seated={seated} />
       </PanelBody>
     </Panel>
@@ -322,12 +316,6 @@ function LeaveControl({ room, seated }: { room: RoomDetail; seated: number }) {
         </button>
       )}
 
-      {leave.error ? (
-        <p role="alert" className="text-sm font-bold text-punch-soft">
-          {leave.error.message}
-        </p>
-      ) : null}
-
       {seated >= room.maxPlayers ? (
         <span className="text-xs font-extrabold text-bone-faint">
           Room is full — leaving frees your seat for someone else.
@@ -388,12 +376,6 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
             onChange={setFiles}
             disabled={submit.isPending}
           />
-
-          {submit.error ? (
-            <p role="alert" className="text-sm font-bold text-punch-soft">
-              {submit.error.message}
-            </p>
-          ) : null}
 
           <ChunkyButton
             size="md"
