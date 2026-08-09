@@ -12,11 +12,12 @@ import {
   type PortfolioItem,
   type SocialLinks,
 } from '@bb/shared';
-import { useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useForm, type UseFormRegister } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
@@ -66,6 +67,9 @@ const profileSchema = z.object({
 });
 
 type ProfileInput = z.infer<typeof profileSchema>;
+
+/** One editable link: which platform it is, and where it points. */
+type SocialKey = keyof SocialLinks;
 
 /** Shows the shape each field wants, so nobody has to guess the URL form. */
 const SOCIAL_PLACEHOLDER: Record<keyof SocialLinks, string> = {
@@ -117,6 +121,42 @@ export default function ProfileSettingsPage() {
         }
       : undefined,
   });
+
+  /*
+    Which platforms have a row on screen, in the order they were added.
+
+    Kept beside the form values rather than derived from them, because a row the
+    artist has just added has no value yet — deriving from "keys with a value"
+    would delete the empty row on the very next render, before it could be
+    typed into.
+  */
+  const [rows, setRows] = useState<SocialKey[] | null>(null);
+  useEffect(() => {
+    if (!user || rows) return;
+    setRows(SOCIAL_LINK_KEYS.filter((key) => (user.socialLinks[key] ?? '').trim() !== ''));
+  }, [user, rows]);
+
+  const visibleRows = rows ?? [];
+  const unusedKeys = SOCIAL_LINK_KEYS.filter((key) => !visibleRows.includes(key));
+
+  const addRow = () => {
+    const next = unusedKeys[0];
+    if (next) setRows([...visibleRows, next]);
+  };
+
+  const removeRow = (key: SocialKey) => {
+    // Clear the value too, or a removed row would still be submitted.
+    setValue(`socialLinks.${key}`, '', { shouldDirty: true });
+    setRows(visibleRows.filter((row) => row !== key));
+  };
+
+  /** Re-labelling a row carries its URL across and empties the old key. */
+  const changeRowKey = (from: SocialKey, to: SocialKey) => {
+    const current = watch(`socialLinks.${from}`) ?? '';
+    setValue(`socialLinks.${from}`, '', { shouldDirty: true });
+    setValue(`socialLinks.${to}`, current, { shouldDirty: true, shouldValidate: true });
+    setRows(visibleRows.map((row) => (row === from ? to : row)));
+  };
 
   if (!user) return null;
 
@@ -255,24 +295,14 @@ export default function ProfileSettingsPage() {
               </div>
             </div>
 
-            {/*
-              Generated from the shared key list rather than hand-written, so a
-              platform added to the contract appears here without anyone
-              remembering to add a field — which is how the profile came to
-              support six links while this form only offered three.
-            */}
-            <div className="grid gap-5 sm:grid-cols-2">
-              {SOCIAL_LINK_KEYS.map((key) => (
-                <Field
-                  key={key}
-                  label={SOCIAL_LINK_LABELS[key]}
-                  placeholder={SOCIAL_PLACEHOLDER[key]}
-                  accent="aqua"
-                  error={socialFieldError(errors.socialLinks?.[key])}
-                  {...register(`socialLinks.${key}` as const)}
-                />
-              ))}
-            </div>
+            <SocialLinkRows
+              rows={visibleRows}
+              errors={errors.socialLinks}
+              onAdd={addRow}
+              onRemove={removeRow}
+              onChangeKey={changeRowKey}
+              register={register}
+            />
           </PanelBody>
 
           <div className="flex justify-end border-t border-edge px-5 py-4">
@@ -489,4 +519,115 @@ function socialFieldError(error: unknown): string | undefined {
     return typeof message === 'string' ? message : undefined;
   }
   return undefined;
+}
+
+
+/**
+ * The links, as rows you add rather than a fixed grid of every platform.
+ *
+ * The grid it replaces showed all ten fields at all times, so an artist with two
+ * links scrolled past eight empty boxes to find them. A row is only here because
+ * someone put it here.
+ *
+ * The platform is a dropdown rather than free text: the set is closed on the
+ * contract, which is what lets the profile label each link and the API validate
+ * it. A row's own platform stays in its options — otherwise the select would
+ * render with nothing selected.
+ */
+function SocialLinkRows({
+  rows,
+  errors,
+  onAdd,
+  onRemove,
+  onChangeKey,
+  register,
+}: {
+  rows: SocialKey[];
+  errors: Partial<Record<SocialKey, unknown>> | undefined;
+  onAdd: () => void;
+  onRemove: (key: SocialKey) => void;
+  onChangeKey: (from: SocialKey, to: SocialKey) => void;
+  register: UseFormRegister<ProfileInput>;
+}) {
+  const full = rows.length === SOCIAL_LINK_KEYS.length;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="eyebrow">Links</span>
+
+      {rows.length === 0 ? (
+        <p className="text-xs font-extrabold text-bone-faint">
+          No links yet. Add the places people can find your work.
+        </p>
+      ) : null}
+
+      <ul className="flex flex-col gap-3">
+        {rows.map((key) => (
+          <li key={key} className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
+            <Select
+              className="w-full sm:w-44"
+              tone="field"
+              ariaLabel={`Platform for link ${SOCIAL_LINK_LABELS[key]}`}
+              value={key}
+              onChange={(next) => onChangeKey(key, next as SocialKey)}
+              options={SOCIAL_LINK_KEYS.filter(
+                (option) => option === key || !rows.includes(option),
+              ).map((option) => ({ value: option, label: SOCIAL_LINK_LABELS[option] }))}
+            />
+
+            {/*
+              A bare input rather than `Field`: the row is already named by the
+              select beside it, and Field always renders its label element — an
+              empty one would take a line of space and say nothing. The name
+              assistive tech needs comes from aria-label instead.
+            */}
+            <div className="min-w-0 flex-1">
+              <input
+                aria-label={`${SOCIAL_LINK_LABELS[key]} link`}
+                placeholder={SOCIAL_PLACEHOLDER[key]}
+                className={cn(
+                  'arcade-focus h-12 w-full rounded-2xl border-[3px] bg-white/6 px-4 font-bold text-bone transition-colors placeholder:text-bone-faint/70 focus:border-aqua focus:bg-aqua/10',
+                  socialFieldError(errors?.[key]) ? 'border-axis-x' : 'border-white/16',
+                )}
+                {...register(`socialLinks.${key}` as const)}
+              />
+              {socialFieldError(errors?.[key]) ? (
+                <p role="alert" className="mt-1.5 text-xs font-bold text-axis-x">
+                  {socialFieldError(errors?.[key])}
+                </p>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              aria-label={`Remove ${SOCIAL_LINK_LABELS[key]}`}
+              onClick={() => onRemove(key)}
+              className="arcade-focus flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-white/20 bg-white/6 text-bone-muted transition-colors hover:bg-white/16 hover:text-bone"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {full ? (
+        <p className="text-xs font-extrabold text-bone-faint">
+          Every supported platform is listed.
+        </p>
+      ) : (
+        <div>
+          <Button type="button" variant="ghost" size="sm" onClick={onAdd}>
+            + Add link
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
