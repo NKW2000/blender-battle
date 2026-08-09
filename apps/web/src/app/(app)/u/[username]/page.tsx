@@ -73,7 +73,7 @@ export default function ProfilePage({
           <div className="relative" style={{ animation: 'bbPop .7s ease both' }}>
             <div
               className="pointer-events-none absolute -inset-6 rounded-full"
-              style={{ background: 'radial-gradient(closest-side, rgba(255,122,24,.35), transparent 72%)' }}
+              style={{ background: 'radial-gradient(closest-side, rgba(255,210,63,.35), transparent 72%)' }}
             />
             <div
               className="relative h-40 w-40 overflow-hidden rounded-full border-[5px] border-edge bg-cream sm:h-52 sm:w-52"

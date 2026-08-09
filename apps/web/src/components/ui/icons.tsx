@@ -54,7 +54,7 @@ export function FireIcon({ animate, ...rest }: IconProps) {
       <g style={animate ? { animation: 'bbFlicker .5s ease-in-out infinite' } : undefined}>
         <path
           d="M12 2.5c2.6 3 1.2 4.9 2.6 6.1 1 .9 2-.2 2-1.6 2.2 2 3.4 4 3.4 6.6A8 8 0 1 1 4 13.6c0-3.5 2.3-5.6 4.2-7.7C9.9 4.1 11.4 3.6 12 2.5Z"
-          fill="#FF7A18"
+          fill="#FFD23F"
           stroke={INK}
           strokeWidth="2"
           strokeLinejoin="round"
@@ -92,7 +92,7 @@ export function ClapIcon({ animate, ...rest }: IconProps) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          fill="#FF9E2C"
+          fill="#FFDC5C"
         />
       </g>
     </Svg>

@@ -19,7 +19,7 @@ import { useEffect, useRef } from 'react';
  *    keeps its gradient glow, so the composition still reads.
  */
 export function HeroCanvas({
-  coreColor = 0xff7a18,
+  coreColor = 0xffd23f,
   className,
 }: {
   coreColor?: number;

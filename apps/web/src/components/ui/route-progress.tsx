@@ -94,7 +94,7 @@ export function RouteProgress() {
         className="h-full rounded-r-full"
         style={{
           width: `${progress}%`,
-          background: 'linear-gradient(90deg,#FF7A18,#FFD23F,#5EF0DE)',
+          background: 'linear-gradient(90deg,#FFE580,#FFD23F,#5EF0DE)',
           boxShadow: '0 0 12px rgba(255,210,63,.6)',
           // Animate the width only while the bar is on screen; when it is hidden
           // the reset to 0 is instant, so it is never seen travelling backwards.

@@ -33,7 +33,7 @@ export default function LoginPage() {
           thing that matters and it should own the whole screen. */}
       <aside
         className="relative hidden flex-col justify-between overflow-hidden border-r-4 border-ink p-8 lg:flex lg:p-13"
-        style={{ background: 'linear-gradient(150deg,#FF7A18 0%,#FF5E7A 55%,#C4267C 100%)' }}
+        style={{ background: 'linear-gradient(150deg,#FFD23F 0%,#FF5E7A 55%,#C4267C 100%)' }}
       >
         <div
           aria-hidden="true"

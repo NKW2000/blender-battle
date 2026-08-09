@@ -21,8 +21,8 @@
   --color-edge: #0e0b2b;
   --color-edge-bright: #3a2f7a;
 
-  --color-select: #ff7a18;
-  --color-select-dim: #c9682c;
+  --color-select: #ffd23f;
+  --color-select-dim: #c9a62c;
 
   /*
     Battle outcomes. Re-picked from the arcade palette and validated rather than
@@ -57,9 +57,25 @@
   --color-ink: #0e0b2b;
   --color-cream: #fff6e9;
 
-  --color-flame: #ff7a18;
-  --color-flame-lift: #ffb13c;
-  --color-flame-warm: #ff9e2c;
+  /*
+    The primary accent, taken from the logo.
+
+    It was orange (#ff7a18) with sun yellow used only for the mark and a handful
+    of highlights, which left the brand saying two things at once. The family is
+    now built around the logo's yellow: `flame` is that colour, with `lift` and
+    `warm` as the lighter steps the button gradients need.
+
+    The names are kept rather than renamed to `gold`. Every screen references
+    them, so remapping restyles the application at once and leaves one source of
+    truth — the same reason the aliases above still exist.
+
+    Contrast improves rather than suffers: on the dark ground this palette lives
+    on, #ffd23f reaches about 11:1 where the orange managed 5.6:1, and every
+    control that fills with it prints ink on top, not white.
+  */
+  --color-flame: #ffd23f;
+  --color-flame-lift: #ffe580;
+  --color-flame-warm: #ffdc5c;
   --color-sun: #ffd23f;
   --color-aqua: #22d3ee;
   --color-mint: #5ef0de;

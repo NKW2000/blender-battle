@@ -179,7 +179,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                         ? {
                             background: '#FFF6E9',
                             border: '4px solid #0E0B2B',
-                            boxShadow: `0 12px 0 ${voted ? '#FF7A18' : '#0E0B2B'}`,
+                            boxShadow: `0 12px 0 ${voted ? '#FFD23F' : '#0E0B2B'}`,
                             transition: 'box-shadow .3s ease',
                             animation: burstId === entry.id ? 'bbPulse .55s ease' : undefined,
                           }
@@ -257,7 +257,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                           voted
                             ? {
                                 color: '#0E0B2B',
-                                background: 'linear-gradient(180deg,#FFB13C,#FF7A18)',
+                                background: 'linear-gradient(180deg,#FFE580,#FFD23F)',
                                 border: '3px solid #0E0B2B',
                                 boxShadow: '0 5px 0 #0E0B2B',
                                 padding: '11px 20px',
@@ -341,7 +341,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
             className="rounded-full px-3 py-1"
             style={
               hasVoted
-                ? { background: 'rgba(255,122,24,.16)', color: '#FF9E2C', border: '2px solid #FF7A18' }
+                ? { background: 'rgba(255,210,63,.16)', color: '#FFDC5C', border: '2px solid #FFD23F' }
                 : { color: '#8E86C9' }
             }
           >
@@ -357,7 +357,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
       {/* --- Reference panel --------------------------------------------------- */}
       <div className="flex min-h-0 flex-col">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="font-display text-sm font-semibold uppercase tracking-[2px] text-[#FF9E2C]">
+          <span className="font-display text-sm font-semibold uppercase tracking-[2px] text-[#FFDC5C]">
             Reference
           </span>
           <span className="text-sm font-extrabold text-bone-faint">The brief</span>
@@ -411,7 +411,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                   <span
                     className="h-2.5 w-2.5 flex-none rounded-[3px]"
                     style={{
-                      background: ['#FF7A18', '#22D3EE', '#FFD23F', '#FF3D9A'][index % 4],
+                      background: ['#FFD23F', '#22D3EE', '#5EF0DE', '#FF3D9A'][index % 4],
                       border: '2px solid #0E0B2B',
                     }}
                   />

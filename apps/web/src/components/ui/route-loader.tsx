@@ -30,7 +30,7 @@ export function RouteLoader({ label = 'Loading' }: { label?: string }) {
             key={index}
             className="h-5 w-5 rounded-[5px] border-[3px] border-edge"
             style={{
-              background: ['#FF7A18', '#FFD23F', '#5EF0DE'][index],
+              background: ['#FFD23F', '#FF3D9A', '#5EF0DE'][index],
               boxShadow: '0 4px 0 var(--color-edge)',
               animation: `bbLoadHop .72s ${index * 0.12}s cubic-bezier(.4,0,.2,1) infinite`,
             }}

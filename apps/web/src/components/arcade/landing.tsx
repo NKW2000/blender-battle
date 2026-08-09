@@ -33,7 +33,7 @@ export function ArcadeLanding() {
         <div
           className="pointer-events-none absolute inset-[4%]"
           style={{
-            background: 'radial-gradient(closest-side, rgba(255,122,24,.20), transparent 74%)',
+            background: 'radial-gradient(closest-side, rgba(255,210,63,.20), transparent 74%)',
           }}
           aria-hidden="true"
         />
@@ -151,7 +151,7 @@ export function ArcadeLanding() {
 
           <div className="mt-8 flex items-center gap-6">
             <div className="flex items-center" aria-hidden="true">
-              {['bg-flame', 'bg-aqua', 'bg-sun', 'bg-punch'].map((tone, index) => (
+              {['bg-flame', 'bg-aqua', 'bg-mint', 'bg-punch'].map((tone, index) => (
                 <span
                   key={tone}
                   className={`h-8 w-8 rounded-full border-[3px] ${tone}`}
@@ -277,7 +277,7 @@ export function ArcadeLanding() {
             aria-hidden="true"
             className="pointer-events-none absolute -right-10 -top-10 h-45 w-45"
             style={{
-              background: 'radial-gradient(closest-side,rgba(255,122,24,.4),transparent)',
+              background: 'radial-gradient(closest-side,rgba(255,210,63,.4),transparent)',
             }}
           />
           <div className="relative">

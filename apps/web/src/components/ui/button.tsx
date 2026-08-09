@@ -22,7 +22,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-linear-to-b from-[#FFB13C] to-select text-edge',
+        primary: 'bg-linear-to-b from-[#FFE580] to-select text-edge',
         secondary: 'bg-linear-to-b from-mint to-aqua text-edge',
         outline: 'bg-cream text-edge',
         ghost:

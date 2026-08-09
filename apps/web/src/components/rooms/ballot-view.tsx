@@ -177,7 +177,7 @@ function SequentialBallot({
             className="h-full rounded-full"
             style={{
               width: `${pct}%`,
-              background: 'linear-gradient(90deg,#FF7A18,#FFD23F)',
+              background: 'linear-gradient(90deg,#FFD23F,#FFE580)',
               transition: 'width .2s linear',
             }}
           />
