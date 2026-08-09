@@ -7,7 +7,6 @@ import {
   ArcadeWordmark,
   ChunkyButton,
   ChunkyCard,
-  LivePill,
 } from '@/components/arcade/chunky';
 import { HeroCanvas } from '@/components/arcade/hero-canvas';
 
@@ -19,7 +18,7 @@ const FLOATERS = [
 ];
 
 const MARQUEE_ITEMS =
-  'SPEED SCULPT ✦ 1v1 DUEL ✦ WEEKLY CHALLENGE ✦ RENDER RUSH ✦ RETOPO RUMBLE ✦ TEXTURE THROWDOWN ✦ ';
+  'PUBLIC CHALLENGES ✦ PRIVATE ROOMS ✦ ONE BRIEF ✦ ONE DEADLINE ✦ BLIND VOTING ✦ NO EARLY LOOKS ✦ ';
 
 export function ArcadeLanding() {
   return (
@@ -39,14 +38,12 @@ export function ArcadeLanding() {
         />
         <HeroCanvas className="pointer-events-auto absolute inset-0" />
 
-        <div
-          className="pointer-events-auto absolute left-[4%] top-[24%] rounded-2xl border-[3px] border-ink bg-white px-3.5 py-2.5 text-ink"
-          style={{ boxShadow: '0 6px 0 var(--color-ink)', animation: 'bbBob 4s ease-in-out infinite' }}
-        >
-          <div className="text-[11px] font-black tracking-wide text-haze-5">YOUR RANK</div>
-          <div className="font-arcade text-lg font-bold text-flame">Diamond III</div>
-        </div>
-
+        {/*
+          One chip, and it states a rule rather than a reading. The pair here
+          before showed "YOUR RANK / Diamond III" beside "TIME LEFT / 04:12" —
+          invented live data for a rank system that does not exist and a room
+          that is not running.
+        */}
         <div
           className="pointer-events-auto absolute bottom-[30%] right-[6%] rounded-2xl border-[3px] border-ink bg-aqua px-3.5 py-2.5"
           style={{
@@ -56,9 +53,9 @@ export function ArcadeLanding() {
           }}
         >
           <div className="text-[11px] font-black tracking-wide" style={{ color: '#075E5E' }}>
-            TIME LEFT
+            EVERY ROOM
           </div>
-          <div className="font-arcade text-lg font-bold">04:12</div>
+          <div className="font-arcade text-lg font-bold">One deadline</div>
         </div>
       </div>
 
@@ -117,8 +114,6 @@ export function ArcadeLanding() {
         className="pointer-events-none relative z-[4] mx-auto grid max-w-[1440px] grid-cols-[minmax(0,640px)] items-center px-5 pb-14 pt-8 sm:px-8 lg:min-h-[78vh] lg:px-16 lg:pt-14"
       >
         <div className="pointer-events-auto" style={{ animation: 'bbPop .7s ease both' }}>
-          <LivePill>Season 4 · Live now</LivePill>
-
           <h1
             className="mt-5 font-arcade text-[clamp(46px,7.2vw,104px)] font-bold leading-[.92] tracking-tight"
             style={{ textShadow: '0 6px 0 rgba(14,11,43,.45)' }}
@@ -131,8 +126,8 @@ export function ArcadeLanding() {
           </h1>
 
           <p className="my-6 max-w-[440px] text-[clamp(16px,1.5vw,19px)] font-bold leading-relaxed text-haze-2">
-            Head-to-head Blender challenges with a ticking clock. Sculpt faster, render
-            sharper, and climb the ranks from Clay Novice to Grandmaster.
+            Head-to-head Blender challenges with a ticking clock. Draw a brief, build
+            against the deadline, and let everyone vote on the result.
           </p>
 
           <div className="flex flex-wrap items-center gap-4">
@@ -149,24 +144,13 @@ export function ArcadeLanding() {
             </ChunkyButton>
           </div>
 
-          <div className="mt-8 flex items-center gap-6">
-            <div className="flex items-center" aria-hidden="true">
-              {['bg-flame', 'bg-aqua', 'bg-mint', 'bg-punch'].map((tone, index) => (
-                <span
-                  key={tone}
-                  className={`h-8 w-8 rounded-full border-[3px] ${tone}`}
-                  style={{
-                    borderColor: '#16123A',
-                    marginRight: index === 3 ? 0 : '-11px',
-                  }}
-                />
-              ))}
-            </div>
-            <div>
-              <div className="font-arcade text-xl font-bold text-cream">12,480 artists</div>
-              <div className="text-[13px] font-extrabold text-haze-5">battling right now</div>
-            </div>
-          </div>
+          {/*
+            An avatar stack and "12,480 artists battling right now" sat here.
+            Nothing counted them — the number was written into the markup, and
+            there is no endpoint that could have produced it. A made-up
+            popularity figure is the one claim a visitor cannot check and the
+            one that costs the most when they find out.
+          */}
         </div>
       </section>
 
@@ -285,7 +269,8 @@ export function ArcadeLanding() {
               Ready to enter the arena?
             </h3>
             <p className="mt-2 font-bold text-haze-3">
-              Free to play. Your first challenge starts the moment you log in.
+              Free to play. Open a room with a code, or enter a challenge that is
+              already running.
             </p>
           </div>
           <ChunkyButton asChild tone="aqua" size="lg" className="relative">

@@ -15,12 +15,13 @@ export function RouteLoader({ label = 'Loading' }: { label?: string }) {
       role="status"
       aria-live="polite"
       /*
-        Sized to the viewport minus the header and the page's own padding, so
-        the cubes land in the middle of what the reader can see. A plain 60vh
-        box centred the loader inside itself but left it sitting high on the
-        page, because the space below it was never accounted for.
+        Sized to the viewport minus exactly what sits above and below it: a
+        3.5rem header plus the page's own vertical padding, which is 1.5rem each
+        side below sm and 2.5rem from sm up. Reserving more than that — as a flat
+        9rem did — makes the box shorter than the space it fills, so it centres
+        against the wrong height.
       */
-      className="flex min-h-[calc(100dvh-9rem)] flex-col items-center justify-center gap-5"
+      className="relative flex min-h-[calc(100dvh-6.5rem)] items-center justify-center sm:min-h-[calc(100dvh-8.5rem)]"
     >
       {/* Three cubes in a row, pulsing in sequence — the same shapes the rest of
           the language uses, rather than a generic spinner. */}
@@ -38,7 +39,14 @@ export function RouteLoader({ label = 'Loading' }: { label?: string }) {
         ))}
       </div>
 
-      <p className="font-display text-sm font-bold uppercase tracking-[3px] text-bone-faint">
+      {/*
+        Positioned rather than stacked. In a centred column the caption is part
+        of what gets centred, so the cubes — the thing the eye actually tracks —
+        sat half the caption's height above the middle and read as misaligned.
+        Out of flow, the cubes hold the centre exactly and the caption hangs
+        beneath them.
+      */}
+      <p className="absolute left-1/2 top-1/2 mt-9 -translate-x-1/2 whitespace-nowrap font-display text-sm font-bold uppercase tracking-[3px] text-bone-faint">
         {label}
       </p>
     </div>

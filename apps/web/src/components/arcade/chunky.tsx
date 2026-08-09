@@ -145,7 +145,7 @@ export function ArcadeWordmark({ size = 22 }: { size?: number }) {
   );
 }
 
-/** The pill used for status lines like "Season 4 · Live now". */
+/** The pill used for short live status lines. */
 export function LivePill({
   children,
   tone = 'punch',

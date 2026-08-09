@@ -54,14 +54,7 @@ export default function LoginPage() {
         <HeroCanvas coreColor={0xffd23f} className="absolute inset-0 z-[1]" />
 
         <div className="relative z-[2]">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border-2 border-white/40 bg-ink/25 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-cream">
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 rounded-full bg-mint"
-              style={{ animation: 'bbTwinkle 1.5s infinite' }}
-            />
-            Season 4 live
-          </div>
+          {/* A "Season 4 live" badge sat here. There are no seasons. */}
           <h2
             className="mb-3 font-arcade text-[clamp(30px,3.6vw,46px)] font-bold leading-none text-cream"
             style={{ textShadow: '0 5px 0 rgba(14,11,43,.35)' }}

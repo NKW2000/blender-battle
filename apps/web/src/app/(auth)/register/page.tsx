@@ -148,12 +148,13 @@ export default function RegisterPage() {
             className="mb-3 font-arcade text-[clamp(30px,3.6vw,46px)] font-bold leading-none text-cream"
             style={{ textShadow: '0 5px 0 rgba(14,11,43,.35)' }}
           >
-            Nine tiers.
+            One brief.
             <br />
-            One place to start.
+            One deadline.
           </h2>
           <p className="max-w-[360px] font-extrabold text-[#E3F6FF]">
-            Everyone opens at Clay Novice. Where you finish the season is up to you.
+            Nobody sees the challenge early — not even whoever opened the room. You
+            all start when the clock does.
           </p>
         </div>
       </aside>
