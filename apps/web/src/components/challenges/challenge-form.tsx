@@ -119,19 +119,22 @@ export function ChallengeForm({
             <label htmlFor="description" className="eyebrow">
               Description
             </label>
-            <div className="selection-frame">
-              <span className="vertex-marks" aria-hidden="true" />
-              <textarea
-                id="description"
-                rows={6}
-                className={cn(
-                  'w-full resize-y border bg-panel px-3 py-2 text-sm outline-none focus:border-select',
-                  errors.description ? 'border-axis-x' : 'border-edge',
-                )}
-                placeholder="What is being built, and what makes a good result?"
-                {...register('description')}
-              />
-            </div>
+            {/*
+              Same treatment as every other field: a thick soft-cornered outline
+              on a translucent ground, lighting up on focus. It had kept the
+              previous language's flat 1px box on `bg-panel`, which read as a
+              different control from the inputs directly above and below it.
+            */}
+            <textarea
+              id="description"
+              rows={6}
+              className={cn(
+                'arcade-focus w-full resize-y rounded-2xl border-[3px] bg-white/6 px-4 py-3 font-bold text-bone outline-none transition-colors placeholder:text-bone-faint/70 focus:border-select focus:bg-select/10',
+                errors.description ? 'border-axis-x' : 'border-white/16',
+              )}
+              placeholder="What is being built, and what makes a good result?"
+              {...register('description')}
+            />
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">

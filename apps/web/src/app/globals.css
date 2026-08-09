@@ -210,23 +210,6 @@
 
 @layer components {
   /*
-    Legacy hook, deliberately inert.
-
-    `.selection-frame` and `.vertex-marks` were the previous language's signature
-    — a 1px outline with corner vertex marks. The arcade language expresses the
-    same "this is active" meaning through the sticker outline and press instead,
-    so these are neutralised here rather than stripped from ~15 screens. The
-    wrapper still establishes a positioning context, which some layouts rely on.
-  */
-  .selection-frame {
-    position: relative;
-  }
-
-  .vertex-marks {
-    display: none;
-  }
-
-  /*
     Dot-grid texture. Applied over backgrounds for depth; never behind body copy.
   */
   .viewport-grid,
