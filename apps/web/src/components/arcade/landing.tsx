@@ -200,10 +200,10 @@ export function ArcadeLanding() {
           <FeatureCard
             surface="bg-cream"
             iconBg="bg-sun"
-            title="Weekly Challenges"
+            title="Public Challenges"
             titleClass="text-ink"
             bodyClass="text-[#4A4470]"
-            body="A fresh prompt every Monday. Model it, render it, and submit before the clock hits zero to earn season points."
+            body="Open briefs with a deadline. Upload your final render and a shot of your workspace before entries close — then everyone votes on what they see."
             icon={
               <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -218,18 +218,18 @@ export function ArcadeLanding() {
             }
           />
           <FeatureCard
-            surface="bg-flame"
-            iconBg="bg-arcade-void"
-            title="1v1 Modeling Duels"
-            titleClass="text-cream"
-            bodyClass="text-[#FFE7CF]"
-            body="Get matched with a rival of your rank. Same brief, same timer. The community votes on who nailed it."
+            surface="bg-sun"
+            iconBg="bg-cream"
+            title="Private Rooms"
+            titleClass="text-ink"
+            bodyClass="text-[#4A4470]"
+            body="Share a code with up to sixteen artists. The brief is drawn when the host starts, so nobody sees it early — not even them. One deadline, then everyone who submitted votes."
             icon={
               <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M4 5 L11 12 L4 19"
                   fill="none"
-                  stroke="#FFD23F"
+                  stroke="#0E0B2B"
                   strokeWidth="2.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -237,7 +237,7 @@ export function ArcadeLanding() {
                 <path
                   d="M13 5 L20 12 L13 19"
                   fill="none"
-                  stroke="#22D3EE"
+                  stroke="#0E0B2B"
                   strokeWidth="2.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -248,10 +248,10 @@ export function ArcadeLanding() {
           <FeatureCard
             surface="bg-cream"
             iconBg="bg-aqua"
-            title="Climb the Ranks"
+            title="Build a Portfolio"
             titleClass="text-ink"
             bodyClass="text-[#4A4470]"
-            body="Every win nudges your badge and your score — every loss keeps you hungry. The leaderboard updates the moment a battle ends."
+            body="Every finished entry lands on your profile. Pin up to ten to your showcase, and your record — battles, wins and votes earned — counts itself as you go."
             icon={
               <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
                 <path

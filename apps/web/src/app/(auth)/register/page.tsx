@@ -53,7 +53,7 @@ export default function RegisterPage() {
             Claim your handle
           </h1>
           <p className="mb-7 font-bold text-haze-4">
-            This is how you appear on the leaderboard.
+            This is the name other artists see on your entries.
           </p>
 
           <Suspense fallback={null}>
