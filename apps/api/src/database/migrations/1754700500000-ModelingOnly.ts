@@ -70,29 +70,50 @@ export class ModelingOnly1754700500000 implements MigrationInterface {
    * gives back the list, not the assignments, and everything stays on Modeling
    * until a manager moves it. Worth knowing before running it.
    */
+  /**
+   * Restores the other thirteen.
+   *
+   * Copied verbatim from the Phase 2 seed — slug, name, description and the
+   * original `sort_order` — rather than retyped. An approximation here would
+   * restore categories under different slugs, and the slug is what filter links
+   * and any saved URL are built from, so "roughly the same list" would be a
+   * different list to every reader.
+   *
+   * What cannot be restored is which category each challenge used to be in:
+   * that association was overwritten above and nothing recorded it. Reverting
+   * gives back the list, not the assignments, and everything stays on Modeling
+   * until a manager moves it. Worth knowing before running it.
+   */
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const categories: Array<[string, string, string]> = [
-      ['sculpting', 'Sculpting', 'Shape it by hand. Form, anatomy, detail.'],
-      ['texturing', 'Texturing', 'Surface and material. Wear, grime, story.'],
-      ['lighting', 'Lighting', 'Mood and readability. Key, fill, rim.'],
-      ['rendering', 'Rendering', 'The final image. Composition and finish.'],
-      ['animation', 'Animation', 'Motion and timing. Weight and intent.'],
-      ['rigging', 'Rigging', 'Controls that make a model performable.'],
-      ['vfx', 'VFX', 'Simulation and effects. Smoke, fire, cloth.'],
-      ['geonodes', 'Geometry Nodes', 'Procedural systems and scattering.'],
-      ['hardsurface', 'Hard Surface', 'Machined forms. Panels, bevels, edges.'],
-      ['character', 'Character', 'People and creatures, from block-in to finish.'],
-      ['environment', 'Environment', 'Place and scale. Terrain, architecture, set.'],
-      ['productviz', 'Product Viz', 'Clean, commercial presentation of an object.'],
-      ['materials', 'Materials', 'Shaders and procedural surfacing.'],
+    // [slug, name, description, sort_order] — sort_order is the row's index in
+    // the original seed, so the restored list orders as it first did.
+    const categories: Array<[string, string, string, number]> = [
+      ['sculpting', 'Sculpting', 'Push clay. Organic shapes and high-frequency detail.', 1],
+      ['animation', 'Animation', 'Make it move with weight and timing.', 2],
+      ['rigging', 'Rigging', 'Build the controls someone else can animate with.', 3],
+      ['lighting', 'Lighting', 'Shape the scene with light alone.', 4],
+      ['materials', 'Materials', 'Author surfaces that read as the real thing.', 5],
+      ['texturing', 'Texturing', 'Paint and project detail onto the surface.', 6],
+      ['geometry-nodes', 'Geometry Nodes', 'Solve it procedurally. No manual placement.', 7],
+      ['environment', 'Environment', 'Build a place, not an object.', 8],
+      ['hard-surface', 'Hard Surface', 'Panels, bevels, and mechanical precision.', 9],
+      ['character', 'Character', 'Someone who could hold a scene on their own.', 10],
+      [
+        'product-visualization',
+        'Product Visualization',
+        'Sell the object. Clean, deliberate, commercial.',
+        11,
+      ],
+      ['vfx', 'VFX', 'Simulation, destruction, and effects work.', 12],
+      ['rendering', 'Rendering', 'Camera, composition, and the final frame.', 13],
     ];
 
-    for (const [index, [slug, name, description]] of categories.entries()) {
+    for (const [slug, name, description, sortOrder] of categories) {
       await queryRunner.query(
         `INSERT INTO "categories" ("slug", "name", "description", "sort_order")
          SELECT $1, $2, $3, $4
          WHERE NOT EXISTS (SELECT 1 FROM "categories" WHERE "slug" = $1)`,
-        [slug, name, description, index + 1],
+        [slug, name, description, sortOrder],
       );
     }
   }
