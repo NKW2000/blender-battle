@@ -5,12 +5,15 @@ import { ActivityLogModule } from '@/modules/activity-log/activity-log.module';
 import { User } from '@/modules/users/entities/user.entity';
 
 import { AnalyticsController } from './analytics.controller';
+import { LeaderboardService } from './leaderboard.service';
 import { MetricsService } from './metrics.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User]), ActivityLogModule],
   controllers: [AnalyticsController],
-  providers: [MetricsService],
-  exports: [MetricsService],
+  providers: [MetricsService, LeaderboardService],
+  // Exported because the users module fills in a profile's rank, which is a
+  // property of the standings rather than of the user row.
+  exports: [MetricsService, LeaderboardService],
 })
 export class AnalyticsModule {}

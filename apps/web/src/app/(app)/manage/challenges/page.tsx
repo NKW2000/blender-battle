@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { DifficultyBadge, StatusBadge } from '@/components/challenges/challenge-card';
+import { StatTile } from '@/components/profile/stat-tile';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
+import { useManagerMetrics } from '@/features/analytics/use-analytics';
 import { useSession } from '@/features/auth/use-session';
 import { useChallengeLifecycle, useChallenges } from '@/features/challenges/use-challenges';
 import { formatDate } from '@/lib/utils';
@@ -16,6 +18,7 @@ export default function ManageChallengesPage() {
   const { user } = useSession();
   const [status, setStatus] = useState<ChallengeStatus | ''>('');
   const query = useChallenges({ mine: true, status: status || undefined });
+  const { data: metrics } = useManagerMetrics();
   const { publish, archive } = useChallengeLifecycle();
 
   const challenges = query.data?.pages.flatMap((page) => page.items) ?? [];
@@ -68,6 +71,24 @@ export default function ManageChallengesPage() {
           </Button>
         </div>
       </header>
+
+      {/*
+        The manager's own authoring stats.
+
+        `/manager/metrics` has existed and been served the whole time with no
+        consumer — the hook that called it was written and never rendered, so
+        every manager saw nothing about how their work was actually used. Plays
+        are now counted for real (a room drawing a brief increments them), which
+        is what makes this worth showing rather than a row of zeros.
+      */}
+      {metrics ? (
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile label="Published" value={metrics.challenges.published} color="text-aqua" />
+          <StatTile label="Drafts" value={metrics.challenges.draft} color="text-flame-lift" />
+          <StatTile label="Archived" value={metrics.challenges.archived} />
+          <StatTile label="Times played" value={metrics.totalPlays} color="text-select" />
+        </section>
+      ) : null}
 
       <Panel>
         <PanelHeader>

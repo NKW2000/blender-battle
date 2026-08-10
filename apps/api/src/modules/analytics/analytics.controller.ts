@@ -5,16 +5,34 @@ import {
   type ActivityLogEntry,
   type AdminMetrics,
   type CursorPage,
+  type LeaderboardEntry,
   type ManagerMetrics,
 } from '@bb/shared';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 import { CursorQueryDto } from '@/common/dto/cursor-query.dto';
-import { CurrentUser, Roles } from '@/common/decorators';
+import { CurrentUser, Public, Roles } from '@/common/decorators';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { ActivityLogService } from '@/modules/activity-log/activity-log.service';
 
+import { LeaderboardService } from './leaderboard.service';
 import { MetricsService } from './metrics.service';
+
+class LeaderboardQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
 
 class ActivityQueryDto extends CursorQueryDto {
   @IsOptional()
@@ -31,7 +49,20 @@ export class AnalyticsController {
   constructor(
     private readonly metrics: MetricsService,
     private readonly activity: ActivityLogService,
+    private readonly leaderboard: LeaderboardService,
   ) {}
+
+  /**
+   * The standings.
+   *
+   * Public: a leaderboard nobody can see without signing in cannot do the one
+   * job a leaderboard has, which is to give a result somewhere to be seen.
+   */
+  @Public()
+  @Get('leaderboard')
+  async standings(@Query() query: LeaderboardQueryDto): Promise<LeaderboardEntry[]> {
+    return this.leaderboard.top(query.limit ?? 50, query.offset ?? 0);
+  }
 
 
   @Roles(Role.ADMIN)

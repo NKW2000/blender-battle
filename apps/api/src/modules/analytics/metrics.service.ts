@@ -13,8 +13,8 @@ const SNAPSHOT_TTL_SECONDS = 600;
 /**
  * Admin and manager analytics.
  *
- * The admin overview aggregates across users, battles, votes, and reactions —
- * exactly the queries that get slower as the platform succeeds. Running them per
+ * The admin overview aggregates across users, rooms, entries and votes — exactly
+ * the queries that get slower as the platform succeeds. Running them per
  * dashboard load means every admin refresh scans the largest tables in the
  * system, and several admins with the page open turn that into sustained load.
  *
@@ -106,19 +106,41 @@ export class MetricsService {
       WHERE deleted_at IS NULL
     `);
 
-    const [battleStats] = await this.dataSource.query(`
+    /*
+      Rooms, not battles.
+
+      Everything in this block used to read `battles`, `votes` and `reactions` —
+      tables created for a matchmaking feature that rooms replaced and that
+      nothing has written to since. The dashboard was not reporting a quiet
+      week; it was reporting a number that could never move, with no way for a
+      reader to tell the difference. Dead schema nothing reads is free; dead
+      schema the analytics layer reports on is a lie you eventually believe.
+    */
+    const [contestStats] = await this.dataSource.query(`
       SELECT
-        count(*)::int                                                          AS total,
-        count(*) FILTER (WHERE status = 'completed')::int                      AS completed,
-        count(*) FILTER (WHERE status IN ('countdown','active','voting'))::int AS live,
-        count(*) FILTER (WHERE created_at > now() - interval '1 day')::int     AS last_24h
-      FROM battles
+        count(*)::int                                                      AS total,
+        count(*) FILTER (WHERE status = 'completed')::int                  AS completed,
+        count(*) FILTER (WHERE status IN
+          ('lobby','drawing','active','voting','runoff'))::int             AS live,
+        count(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS last_24h
+      FROM rooms
     `);
 
-    const [voteCount] = await this.dataSource.query(`SELECT count(*)::int AS c FROM votes`);
-    const [reactionCount] = await this.dataSource.query(
-      `SELECT count(*)::int AS c FROM reactions`,
-    );
+    // Both ballots count. A challenge vote and a room like are different
+    // mechanics, but "how much voting happened" is one question.
+    const [voteCount] = await this.dataSource.query(`
+      SELECT (
+        (SELECT count(*) FROM challenge_votes)
+        + (SELECT count(*) FROM submission_likes WHERE active = true)
+      )::int AS c
+    `);
+
+    const [entryCount] = await this.dataSource.query(`
+      SELECT (
+        (SELECT count(*) FROM challenge_entries WHERE is_hidden = false)
+        + (SELECT count(*) FROM submissions WHERE is_hidden = false)
+      )::int AS c
+    `);
 
     const mostPlayed = await this.dataSource.query(`
       SELECT id, title, times_played::int AS times_played
@@ -129,13 +151,13 @@ export class MetricsService {
     `);
 
     const trending = await this.dataSource.query(`
-      SELECT c.id, c.name, count(b.id)::int AS battles
+      SELECT c.id, c.name, count(r.id)::int AS contests
       FROM categories c
       JOIN challenges ch ON ch.category_id = c.id
-      JOIN battles b ON b.challenge_id = ch.id
-      WHERE b.created_at > now() - interval '7 days'
+      JOIN rooms r ON r.challenge_id = ch.id
+      WHERE r.created_at > now() - interval '7 days'
       GROUP BY c.id, c.name
-      ORDER BY battles DESC
+      ORDER BY contests DESC
       LIMIT 5
     `);
 
@@ -149,15 +171,15 @@ export class MetricsService {
 
     // generate_series so days with no activity appear as zero rather than being
     // missing — a chart that silently skips empty days misreports the trend.
-    const battlesPerDay = await this.dataSource.query(`
-      SELECT to_char(d.day, 'YYYY-MM-DD') AS date, count(b.id)::int AS battles
+    const contestsPerDay = await this.dataSource.query(`
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS date, count(r.id)::int AS contests
       FROM generate_series(
         date_trunc('day', now()) - interval '13 days',
         date_trunc('day', now()),
         interval '1 day'
       ) AS d(day)
-      LEFT JOIN battles b
-        ON b.status = 'completed' AND date_trunc('day', b.completed_at) = d.day
+      LEFT JOIN rooms r
+        ON r.status = 'completed' AND date_trunc('day', r.completed_at) = d.day
       GROUP BY d.day
       ORDER BY d.day
     `);
@@ -196,15 +218,15 @@ export class MetricsService {
         draft: challengeStats.draft,
         archived: challengeStats.archived,
       },
-      battles: {
-        total: battleStats.total,
-        completed: battleStats.completed,
-        live: battleStats.live,
-        last24h: battleStats.last_24h,
+      contests: {
+        total: contestStats.total,
+        completed: contestStats.completed,
+        live: contestStats.live,
+        last24h: contestStats.last_24h,
       },
       engagement: {
         totalVotes: voteCount.c,
-        totalReactions: reactionCount.c,
+        totalEntries: entryCount.c,
         dau: userStats.dau,
         wau: userStats.wau,
         mau: userStats.mau,
@@ -216,10 +238,10 @@ export class MetricsService {
             timesPlayed: mostPlayed[0].times_played,
           }
         : null,
-      trendingCategories: trending.map((row: { id: string; name: string; battles: number }) => ({
+      trendingCategories: trending.map((row: { id: string; name: string; contests: number }) => ({
         id: row.id,
         name: row.name,
-        battles: row.battles,
+        contests: row.contests,
       })),
       topPlayers: topPlayers.map(
         (row: { user_id: string; username: string; score: number; wins: number }) => ({
@@ -229,7 +251,7 @@ export class MetricsService {
           wins: row.wins,
         }),
       ),
-      battlesPerDay,
+      contestsPerDay,
       signupsPerDay,
     };
   }

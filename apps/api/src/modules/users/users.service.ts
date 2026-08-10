@@ -17,6 +17,7 @@ import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { AppException } from '@/common/exceptions/app.exception';
 import { buildPage, decodeCursor, encodeCursor } from '@/common/pagination/cursor';
 import { ActivityLogService } from '@/modules/activity-log/activity-log.service';
+import { LeaderboardService } from '@/modules/analytics/leaderboard.service';
 import { TokenFamilyRevokeReason } from '@/modules/auth/entities/refresh-token-family.entity';
 import { TokenService } from '@/modules/auth/services/token.service';
 import { ChallengeEntry } from '@/modules/challenges/entities/challenge-entry.entity';
@@ -44,10 +45,12 @@ export class UsersService {
     private readonly uploads: CloudinaryService,
     private readonly tokens: TokenService,
     private readonly activity: ActivityLogService,
+    private readonly leaderboard: LeaderboardService,
   ) {}
 
   async getSelf(userId: string): Promise<SelfUserProfile> {
-    return UserMapper.toSelf(await this.findOrFail(userId));
+    const user = await this.findOrFail(userId);
+    return UserMapper.toSelf(user, await this.leaderboard.rankOf(user));
   }
 
   /**
@@ -62,7 +65,7 @@ export class UsersService {
       throw AppException.notFound('User');
     }
 
-    return UserMapper.toPublic(user);
+    return UserMapper.toPublic(user, await this.leaderboard.rankOf(user));
   }
 
   /**

@@ -18,7 +18,7 @@ const CategoryBarChart = dynamic(
   () => import('@/components/analytics/charts').then((m) => m.CategoryBarChart),
   { ssr: false, loading: () => <Skeleton className="h-56 w-full" /> },
 );
-import { StatTile } from '@/components/profile/record-bar';
+import { StatTile } from '@/components/profile/stat-tile';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
@@ -78,12 +78,12 @@ export default function AdminDashboardPage() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Players" value={metrics.users.total} />
         <StatTile label="Online now" value={metrics.users.online} color="text-mint" />
-        <StatTile label="Battles completed" value={metrics.battles.completed} color="text-flame" />
-        <StatTile label="Live battles" value={metrics.battles.live} />
+        <StatTile label="Contests completed" value={metrics.contests.completed} color="text-flame" />
+        <StatTile label="Live contests" value={metrics.contests.live} />
         <StatTile label="Published challenges" value={metrics.challenges.published} color="text-aqua" />
         <StatTile label="Drafts" value={metrics.challenges.draft} color="text-flame-lift" />
         <StatTile label="Votes cast" value={metrics.engagement.totalVotes} color="text-punch" />
-        <StatTile label="Reactions" value={metrics.engagement.totalReactions} color="text-sun" />
+        <StatTile label="Entries" value={metrics.engagement.totalEntries} color="text-sun" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -120,15 +120,15 @@ export default function AdminDashboardPage() {
 
         <Panel className="lg:col-span-2">
           <PanelHeader>
-            <PanelTitle>Battles completed per day</PanelTitle>
+            <PanelTitle>Contests completed per day</PanelTitle>
             <span className="font-mono text-xs text-bone-faint">last 14 days</span>
           </PanelHeader>
           <PanelBody>
             <TimeSeriesChart
-              data={metrics.battlesPerDay}
-              dataKey="battles"
-              unit="battles"
-              gradientId="bb-bar-battles"
+              data={metrics.contestsPerDay}
+              dataKey="contests"
+              unit="contests"
+              gradientId="bb-bar-contests"
             />
           </PanelBody>
         </Panel>
@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
             <span className="font-mono text-xs text-bone-faint">last 14 days</span>
           </PanelHeader>
           <PanelBody>
-            {/* A separate chart from battles, not a second line on the same plot:
+            {/* A separate chart from contests, not a second line on the same plot:
                 the two measures have different scales, and forcing them onto one
                 axis would flatten whichever is smaller. */}
             <TimeSeriesChart
@@ -156,19 +156,19 @@ export default function AdminDashboardPage() {
         <Panel>
           <PanelHeader>
             <PanelTitle>Trending categories</PanelTitle>
-            <span className="font-mono text-xs text-bone-faint">battles, last 7 days</span>
+            <span className="font-mono text-xs text-bone-faint">contests, last 7 days</span>
           </PanelHeader>
           <PanelBody>
             {metrics.trendingCategories.length === 0 ? (
               <p className="py-8 text-center text-sm text-bone-muted">
-                No battles fought this week.
+                No contests run this week.
               </p>
             ) : (
               <CategoryBarChart
                 data={metrics.trendingCategories}
-                dataKey="battles"
+                dataKey="contests"
                 labelKey="name"
-                unit="battles"
+                unit="contests"
               />
             )}
           </PanelBody>
@@ -181,7 +181,10 @@ export default function AdminDashboardPage() {
             <PanelTitle>Top players</PanelTitle>
           </PanelHeader>
           {metrics.topPlayers.length === 0 ? (
-            <EmptyState title="No ranked players" description="Ranks appear once battles finish." />
+            <EmptyState
+              title="No ranked players"
+              description="Ranks appear once a room with enough entries finishes."
+            />
           ) : (
             <ul>
               {metrics.topPlayers.map((player, index) => {

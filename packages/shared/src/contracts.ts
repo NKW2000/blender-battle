@@ -1,8 +1,4 @@
 import type {
-  BattleResult,
-  BattleSide,
-  BattleStatus,
-  AchievementTier,
   ChallengeAssetType,
   ChallengeStatus,
   ChallengeVisibility,
@@ -194,61 +190,6 @@ export interface ChallengeDetail extends ChallengeSummary {
   updatedAt: string;
 }
 
-export interface BattleParticipant {
-  userId: string;
-  username: string;
-  avatarUrl: string | null;
-  side: BattleSide;
-  result: BattleResult | null;
-  xpAwarded: number;
-  /** Whether this competitor has accepted the match. */
-  isReady: boolean;
-}
-
-export interface BattleSummary {
-  id: string;
-  status: BattleStatus;
-  challenge: ChallengeSummary;
-  participants: BattleParticipant[];
-  votesA: number;
-  votesB: number;
-  winnerSide: BattleSide | null;
-  durationSeconds: number;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-}
-
-/**
- * The authoritative snapshot a client receives on join or reconnect.
- *
- * Deadlines are absolute ISO instants plus `serverNow`, never a remaining-seconds
- * countdown: a client that reconnects mid-battle must be able to compute the true
- * remaining time itself, and a client whose clock is wrong must still agree with
- * the server about when the phase ends.
- */
-export interface BattleStateSnapshot extends BattleSummary {
-  /** Server time at the moment the snapshot was built. */
-  serverNow: string;
-  /** When the current phase ends. Null once the battle is over. */
-  phaseEndsAt: string | null;
-  votingEndsAt: string | null;
-  spectatorCount: number;
-  /** The side this viewer already voted for, if any. */
-  myVote: BattleSide | null;
-  /** True when the viewer is competing rather than spectating. */
-  isParticipant: boolean;
-}
-
-export interface QueueTicket {
-  /** Position is advisory — matching is first-come, not a strict queue. */
-  position: number;
-  waitingSince: string;
-  expiresAt: string;
-  categoryId: string | null;
-  difficulty: string | null;
-}
-
 export interface LeaderboardEntry {
   rank: number;
   userId: string;
@@ -284,24 +225,34 @@ export interface AdminMetrics {
     draft: number;
     archived: number;
   };
-  battles: {
+  /**
+   * Rooms — the private, timed contests players actually run.
+   *
+   * Named `contests` rather than `battles` because these counts used to come
+   * from a `battles` table that nothing has written to since rooms replaced it.
+   * The dashboard was not showing "no data yet"; it was showing a permanent,
+   * structural zero with no indication the number could never be anything else.
+   */
+  contests: {
     total: number;
     completed: number;
     live: number;
     last24h: number;
   };
   engagement: {
+    /** Challenge-event votes plus room ballot likes — every vote cast anywhere. */
     totalVotes: number;
-    totalReactions: number;
+    /** Entries across both contest kinds. */
+    totalEntries: number;
     dau: number;
     wau: number;
     mau: number;
   };
   mostPlayedChallenge: { id: string; title: string; timesPlayed: number } | null;
-  trendingCategories: Array<{ id: string; name: string; battles: number }>;
+  trendingCategories: Array<{ id: string; name: string; contests: number }>;
   topPlayers: Array<{ userId: string; username: string; score: number; wins: number }>;
-  /** Battles completed per day, oldest first. Drives the growth chart. */
-  battlesPerDay: Array<{ date: string; battles: number }>;
+  /** Contests completed per day, oldest first. Drives the growth chart. */
+  contestsPerDay: Array<{ date: string; contests: number }>;
   signupsPerDay: Array<{ date: string; signups: number }>;
 }
 
@@ -336,19 +287,6 @@ export interface NotificationItem {
   createdAt: string;
 }
 
-export interface AchievementDefinition {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  tier: AchievementTier;
-  xpReward: number;
-  /** Null until this viewer has earned it. */
-  unlockedAt: string | null;
-  /** Current value against the threshold, for a progress bar. */
-  progress: { current: number; target: number } | null;
-}
-
 export interface LinkedAccount {
   provider: OAuthProvider;
   /** Display handle at the provider, for "connected as …". */
@@ -356,9 +294,15 @@ export interface LinkedAccount {
   linkedAt: string;
 }
 
+/**
+ * What a browser receives from an auth call.
+ *
+ * There is deliberately no `refreshToken` here. It is delivered as an httpOnly
+ * cookie and never enters JavaScript, so a type that promised one would be
+ * describing a field the client can neither read nor send.
+ */
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
   /** Access-token lifetime in seconds; drives the client's silent-refresh timer. */
   expiresIn: number;
 }

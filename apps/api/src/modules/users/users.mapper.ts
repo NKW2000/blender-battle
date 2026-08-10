@@ -11,7 +11,17 @@ import type { User } from './entities/user.entity';
  * Adding a field to the API is a deliberate edit here.
  */
 export const UserMapper = {
-  toPublic(user: User): PublicUserProfile {
+  /**
+   * `rank` is passed in rather than read off the user.
+   *
+   * It is a property of the standings, not of the row — you cannot know where
+   * someone places without looking at everyone else — so the mapper stays a
+   * pure projection and the caller that has the leaderboard supplies it. It
+   * defaults to null because most callers legitimately do not have it: an auth
+   * response returning the signed-in user has no business running a standings
+   * query to do it.
+   */
+  toPublic(user: User, rank: number | null = null): PublicUserProfile {
     return {
       id: user.id,
       username: user.username,
@@ -22,9 +32,7 @@ export const UserMapper = {
       experienceLevel: user.experienceLevel,
       totalXp: user.totalXp,
       score: user.score,
-      // Rank is a property of the leaderboard read model, not of the row itself;
-      // it is filled in by the leaderboard service in Phase 4.
-      rank: null,
+      rank,
       wins: user.wins,
       losses: user.losses,
       draws: user.draws,
@@ -37,9 +45,9 @@ export const UserMapper = {
     };
   },
 
-  toSelf(user: User): SelfUserProfile {
+  toSelf(user: User, rank: number | null = null): SelfUserProfile {
     return {
-      ...UserMapper.toPublic(user),
+      ...UserMapper.toPublic(user, rank),
       email: user.email,
       role: user.role,
       status: user.status,

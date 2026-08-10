@@ -148,6 +148,21 @@ export class ChallengesService {
   // --- Random draw ---------------------------------------------------------
 
   /**
+   * Record that this brief was actually used in a contest.
+   *
+   * A bare atomic increment, kept off the read path: the column feeds the admin
+   * "most played" panel and every manager's authoring stats, both of which read
+   * it and neither of which could ever show anything, because nothing in the
+   * codebase incremented it.
+   *
+   * Deliberately not a `save()` of a loaded entity — two rooms starting at once
+   * would each write `read value + 1` and lose one of the plays.
+   */
+  async recordPlay(challengeId: string): Promise<void> {
+    await this.challenges.increment({ id: challengeId }, 'timesPlayed', 1);
+  }
+
+  /**
    * Picks a challenge server-side from the filtered, drawable set.
    *
    * The caller supplies filters only. Accepting an id here — even "just to

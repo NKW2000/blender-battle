@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { UploadsModule } from '@/modules/uploads/uploads.module';
 
 import { ChallengeAssetsService } from './challenge-assets.service';
@@ -20,6 +21,7 @@ import { Tag } from './entities/tag.entity';
   imports: [
     TypeOrmModule.forFeature([Challenge, Category, Tag, ChallengeAsset, ChallengeEntry, ChallengeVote]),
     UploadsModule,
+    NotificationsModule,
   ],
   controllers: [ChallengesController, ChallengeEventsController],
   providers: [
@@ -28,7 +30,7 @@ import { Tag } from './entities/tag.entity';
     ChallengeEventsService,
     ChallengeEventSchedulerService,
   ],
-  // Phase 3 battles resolve the drawn challenge through this service.
+  // Rooms resolve their drawn brief through this service, and count the play.
   exports: [ChallengesService, ChallengeEventsService],
 })
 export class ChallengesModule {}
