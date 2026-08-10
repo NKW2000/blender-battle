@@ -47,19 +47,6 @@ export class ChallengeEntry extends BaseEntity {
   @Column({ type: 'text', name: 'workspace_photo_url', nullable: true })
   workspacePhotoUrl: string | null;
 
-  /**
-   * Legacy 3D-model columns, no longer written.
-   *
-   * Kept so historical entries that predate the two-image format are not lost,
-   * but the entry flow no longer accepts a model — an entry is a final render
-   * plus a workspace shot now.
-   */
-  @Column({ type: 'text', name: 'model_url', nullable: true })
-  modelUrl: string | null;
-
-  @Column({ type: 'varchar', length: 255, name: 'model_filename', nullable: true })
-  modelFilename: string | null;
-
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

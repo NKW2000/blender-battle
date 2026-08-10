@@ -81,8 +81,6 @@ export const notify = {
 
   info: (message: string, description?: string) => toast(message, { description }),
 
-  warning: (message: string, description?: string) =>
-    toast.warning(message, { description }),
 
   /** A message you have already written. Prefer `notify.failure` for a caught error. */
   error: (message: string, description?: string) => toast.error(message, { description }),

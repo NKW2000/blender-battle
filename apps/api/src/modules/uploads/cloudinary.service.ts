@@ -10,8 +10,6 @@ import {
   SUBMISSION_IMAGE_ALLOWED_MIME,
   SUBMISSION_IMAGE_MAX_BYTES,
   SUBMISSION_IMAGE_SIZE,
-  SUBMISSION_MODEL_EXTENSIONS,
-  SUBMISSION_MODEL_MAX_BYTES,
 } from '@bb/shared';
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 
@@ -108,40 +106,6 @@ export class CloudinaryService {
   }
 
   /**
-   * A competitor's render, the image the ballot actually shows.
-   *
-   * Forced through the image pipeline for the same reason avatars are: a file
-   * that is not really an image fails re-encoding here rather than reaching a
-   * voter's browser. Not overwritten and not keyed to the user, because a room's
-   * entry is a historical record — a later room must never replace an earlier
-   * one's evidence.
-   */
-  async uploadSubmissionImage(
-    file: Express.Multer.File,
-    roomId: string,
-  ): Promise<UploadedAsset> {
-    this.assertValid(file, {
-      maxBytes: SUBMISSION_IMAGE_MAX_BYTES,
-      allowedMime: SUBMISSION_IMAGE_ALLOWED_MIME as readonly string[],
-      label: 'render',
-    });
-
-    const result = await this.uploadBuffer(file.buffer, {
-      folder: `blender-battle/rooms/${roomId}/renders`,
-      resource_type: 'image',
-      use_filename: false,
-      unique_filename: true,
-      overwrite: false,
-      transformation: [
-        { width: 2048, height: 2048, crop: 'limit' },
-        { quality: 'auto', fetch_format: 'auto' },
-      ],
-    });
-
-    return { url: result.secure_url, publicId: result.public_id };
-  }
-
-  /**
    * A submitted image — the final render or the workspace shot.
    *
    * Shared by public challenges and rooms: both take the same pair of images
@@ -186,48 +150,6 @@ export class CloudinaryService {
     }
 
     return { url: result.secure_url, publicId: result.public_id };
-  }
-
-  /**
-   * The 3D file behind the render.
-   *
-   * Interchange formats only — `.blend` is deliberately not accepted. A packed
-   * .blend routinely runs to hundreds of megabytes and can be opened by exactly
-   * one program; FBX/OBJ/glTF are an order of magnitude smaller and readable
-   * everywhere, which also leaves room for an in-page viewer later.
-   *
-   * Stored as `raw` and never transformed, so it is served from Cloudinary's
-   * domain rather than one sharing an origin with the app.
-   */
-  async uploadSubmissionModel(
-    file: Express.Multer.File,
-    roomId: string,
-  ): Promise<UploadedAsset & { filename: string }> {
-    const extension = (file.originalname.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-
-    // Extension is the real check here: browsers report these formats
-    // inconsistently, and most arrive as a generic octet-stream.
-    if (!SUBMISSION_MODEL_EXTENSIONS.includes(extension as never)) {
-      throw new AppException(ApiErrorCode.UPLOAD_FAILED, `Model must be one of ${SUBMISSION_MODEL_EXTENSIONS.join(', ')}`, 400);
-    }
-
-    if (file.size > SUBMISSION_MODEL_MAX_BYTES) {
-      throw new AppException(ApiErrorCode.UPLOAD_FAILED, `Model must be under ${Math.round(SUBMISSION_MODEL_MAX_BYTES / 1024 / 1024)}MB`, 400);
-    }
-
-    const result = await this.uploadBuffer(file.buffer, {
-      folder: `blender-battle/rooms/${roomId}/models`,
-      resource_type: 'raw',
-      use_filename: false,
-      unique_filename: true,
-      overwrite: false,
-    });
-
-    return {
-      url: result.secure_url,
-      publicId: result.public_id,
-      filename: file.originalname,
-    };
   }
 
   /** Shared size/MIME guard, so every uploader rejects the same way. */

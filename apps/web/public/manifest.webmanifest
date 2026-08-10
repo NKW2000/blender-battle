@@ -2,7 +2,7 @@
   "name": "Blender Battle",
   "short_name": "BB",
   "description": "Live modelling duels for Blender artists. Draw a challenge, build, get judged.",
-  "start_url": "/rooms",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

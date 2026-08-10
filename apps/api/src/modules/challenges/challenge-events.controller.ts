@@ -14,16 +14,17 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiErrorCode, Role, SUBMISSION_IMAGE_MAX_BYTES } from '@bb/shared';
 import { IsDateString, IsInt, IsUUID, Max, Min } from 'class-validator';
 
-import { CurrentUser, Public, Roles } from '@/common/decorators';
+import { CurrentUser, OptionalAuth, Public, Roles } from '@/common/decorators';
+import { EntryNotesDto } from '@/common/dto/entry-notes.dto';
 import { AppException } from '@/common/exceptions/app.exception';
 import { ResponseMessage } from '@/common/interceptors/response.interceptor';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { CloudinaryService } from '@/modules/uploads/cloudinary.service';
 
+import { entriesForPhase, toEntry } from './challenge-entries.mapper';
 import { ChallengeEventsService } from './challenge-events.service';
 import { ChallengeMapper } from './challenges.mapper';
 import type { Challenge } from './entities/challenge.entity';
-import type { ChallengeEntry } from './entities/challenge-entry.entity';
 
 class VoteDto {
   @IsUUID()
@@ -69,10 +70,25 @@ export class ChallengeEventsController {
     return challenges.map((challenge) => this.toEvent(challenge));
   }
 
+  /**
+   * One event.
+   *
+   * `OptionalAuth` rather than authenticated: an event link is the most
+   * shareable thing this application produces, and it used to 401 for anyone
+   * not signed in — so a link posted anywhere led a stranger to a redirect, and
+   * a crawler to nothing at all. The signed-out view is the same page minus the
+   * two fields that are about *you*.
+   *
+   * Nothing is loosened by this. What each phase is allowed to reveal is
+   * decided by `entriesForPhase`, which does not consider the viewer at all —
+   * during voting the entries are blind for everybody, signed in or not.
+   */
+  @Public()
+  @OptionalAuth()
   @Get(':id')
   async detail(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentUser() user: AuthenticatedUser | undefined,
   ) {
     const challenge = await this.events.findEventOrFail(id);
     const phase = this.events.phaseOf(challenge);
@@ -80,26 +96,11 @@ export class ChallengeEventsController {
 
     return {
       ...this.toEvent(challenge),
-      myEntryId: entries.find((entry) => entry.userId === user.id)?.id ?? null,
-      myVoteEntryId: await this.events.myVote(id, user.id),
-      /*
-        What the viewer may see depends on the phase, and it is enforced here
-        rather than trusted to the UI:
-
-        - open / upcoming: nothing. Showing entries while the window is open would
-          let a late entrant copy an early one.
-        - voting: a blind ballot. The image only — no author, no vote count. A
-          name or a running tally turns a judgement of the work into a popularity
-          contest and lets voters pile onto the leader, so neither is sent at all.
-        - finished: the full reveal. Authors and final counts, now that nothing
-          about them can influence the vote.
-      */
-      entries:
-        phase === 'open' || phase === 'upcoming'
-          ? []
-          : phase === 'voting'
-            ? entries.map(toBlindEntry)
-            : entries.map(toEntry),
+      myEntryId: user ? (entries.find((entry) => entry.userId === user.id)?.id ?? null) : null,
+      myVoteEntryId: user ? await this.events.myVote(id, user.id) : null,
+      // Enforced here rather than trusted to the UI. See the mapper for what
+      // each phase is allowed to reveal and why.
+      entries: entriesForPhase(entries, phase),
     };
   }
 
@@ -125,7 +126,7 @@ export class ChallengeEventsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFiles() files: { image?: Express.Multer.File[]; workspace?: Express.Multer.File[] },
-    @Body() body: { notes?: string },
+    @Body() body: EntryNotesDto,
   ) {
     await this.events.assertOpenForEntry(id);
 
@@ -231,38 +232,3 @@ export class ChallengeEventsController {
   }
 }
 
-function toEntry(entry: ChallengeEntry) {
-  return {
-    id: entry.id,
-    userId: entry.userId,
-    username: entry.user?.username ?? null,
-    imageUrl: entry.imageUrl,
-    workspacePhotoUrl: entry.workspacePhotoUrl,
-    notes: entry.notes,
-    voteCount: entry.voteCount,
-    submittedAt: entry.submittedAt,
-  };
-}
-
-/**
- * The blindfold shape, sent during the voting phase.
- *
- * Everything that could identify the artist or reveal the standings is dropped
- * on the server — not blanked in the client — so it cannot be recovered from the
- * network response. Only the id (to cast a vote against) and the render (to
- * judge) survive. The workspace photo is withheld too: a Blender title bar or a
- * recognisable desktop is exactly the kind of tell blind voting exists to hide.
- * `voteCount` is zeroed rather than omitted so the field's type is stable.
- */
-function toBlindEntry(entry: ChallengeEntry) {
-  return {
-    id: entry.id,
-    userId: '',
-    username: null,
-    imageUrl: entry.imageUrl,
-    workspacePhotoUrl: null,
-    notes: null,
-    voteCount: 0,
-    submittedAt: entry.submittedAt,
-  };
-}

@@ -12,18 +12,16 @@
  * import time would leave every later sound silent.
  */
 
-export type SoundName =
-  | 'press'
-  | 'select'
-  | 'searching'
-  | 'matchFound'
-  | 'tick'
-  | 'reelStep'
-  | 'start'
-  | 'vote'
-  | 'reaction'
-  | 'win'
-  | 'lose';
+/**
+ * Every sound the app can make.
+ *
+ * Trimmed from eleven. The four that went — a matchmaking fanfare, a
+ * queue-search blip, a reel detent and a reaction pop — belonged to features
+ * that were removed or never built, and an unused recipe reads as a sound
+ * somebody forgot to trigger rather than one nobody wanted. `win` and `lose`
+ * were also unplayed and were wired up instead of deleted.
+ */
+export type SoundName = 'press' | 'select' | 'tick' | 'start' | 'vote' | 'win' | 'lose';
 
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -114,33 +112,17 @@ const RECIPES: Record<SoundName, () => void> = {
   // being heard hundreds of times without becoming irritating.
   press: () => tone({ from: 320, to: 200, duration: 0.07, gain: 0.16 }),
   select: () => tone({ from: 520, to: 660, duration: 0.06, type: 'triangle', gain: 0.14 }),
-  searching: () => tone({ from: 440, to: 520, duration: 0.09, type: 'triangle', gain: 0.12 }),
 
-  // Rising three-note arpeggio — the single most important sound in the app.
-  matchFound: () => {
-    tone({ from: 523, duration: 0.1, gain: 0.2 });
-    tone({ from: 659, duration: 0.1, delay: 0.09, gain: 0.2 });
-    tone({ from: 880, to: 1046, duration: 0.22, delay: 0.18, gain: 0.24 });
-  },
-
+  // The pre-round countdown: a tick per second, then a different note on zero.
   tick: () => tone({ from: 880, duration: 0.06, type: 'square', gain: 0.18 }),
-
-  /**
-   * One card passing the pointer on the reel.
-   *
-   * Much quieter and shorter than `tick`: this fires many times a second while
-   * the reel spins, so anything with body to it turns into a drone. It is a
-   * detent click, not a note.
-   */
-  reelStep: () => tone({ from: 1400, to: 1150, duration: 0.022, type: 'square', gain: 0.05 }),
   start: () => {
     tone({ from: 660, duration: 0.1, gain: 0.24 });
     tone({ from: 1320, to: 1600, duration: 0.32, delay: 0.08, gain: 0.26 });
   },
 
   vote: () => tone({ from: 600, to: 900, duration: 0.1, type: 'triangle', gain: 0.18 }),
-  reaction: () => tone({ from: 780, to: 1100, duration: 0.08, type: 'sine', gain: 0.16 }),
 
+  // Played once when a room's result first appears, to whoever placed.
   win: () => {
     tone({ from: 523, duration: 0.12, gain: 0.24 });
     tone({ from: 659, duration: 0.12, delay: 0.11, gain: 0.24 });

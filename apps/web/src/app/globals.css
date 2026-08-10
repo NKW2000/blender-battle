@@ -330,24 +330,6 @@
     transform: scaleY(1.09) translateY(-0.5px);
   }
 }
-@keyframes bbClapLeft {
-  0%,
-  100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  50% {
-    transform: translateX(1.6px) rotate(-9deg);
-  }
-}
-@keyframes bbClapRight {
-  0%,
-  100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  50% {
-    transform: translateX(-1.6px) rotate(9deg);
-  }
-}
 @keyframes bbBurst {
   0%,
   100% {
@@ -355,15 +337,6 @@
   }
   50% {
     transform: scale(1.16) rotate(8deg);
-  }
-}
-@keyframes bbLaugh {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-2px) scale(1.06);
   }
 }
 @keyframes bbWave {

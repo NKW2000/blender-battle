@@ -2,7 +2,8 @@
 
 import { Difficulty, Role } from '@bb/shared';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { ChallengeCard } from '@/components/challenges/challenge-card';
 import { Button } from '@/components/ui/button';
@@ -17,9 +18,29 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   [Difficulty.HARD]: 'Advanced',
 };
 
+/**
+   * Suspense boundary for `useSearchParams`.
+   *
+   * Next requires one around any component reading search params, or the whole
+   * route opts out of static rendering at build time.
+   */
 export default function ChallengesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChallengeCatalogue />
+    </Suspense>
+  );
+}
 
+function ChallengeCatalogue() {
   const { user } = useSession();
+  /*
+    Tag links on a brief point here as `/challenges?tag=<slug>`. Until this
+    read them the parameter was ignored entirely: the link navigated, the URL
+    changed, and the unfiltered catalogue rendered — which looks exactly like a
+    filter that matched everything.
+  */
+  const tag = useSearchParams().get('tag') ?? undefined;
   const { data: categories } = useCategories();
   const [categoryId, setCategoryId] = useState<string>('');
   const [difficulty, setDifficulty] = useState<Difficulty | ''>('');
@@ -29,6 +50,7 @@ export default function ChallengesPage() {
     categoryId: categoryId || undefined,
     difficulty: difficulty || undefined,
     search: search || undefined,
+    tag,
   });
 
   const challenges = query.data?.pages.flatMap((page) => page.items) ?? [];

@@ -63,17 +63,6 @@ export class Submission extends BaseEntity {
   @Column({ type: 'text', name: 'workspace_photo_url', nullable: true })
   workspacePhotoUrl: string | null;
 
-  /*
-    The model upload it replaced. Nothing writes to these any more, and they are
-    kept only so finished rooms still describe what was actually submitted at
-    the time. Read them for history; never for new work.
-  */
-  @Column({ type: 'text', name: 'model_url', nullable: true })
-  modelUrl: string | null;
-
-  @Column({ type: 'varchar', length: 255, name: 'model_filename', nullable: true })
-  modelFilename: string | null;
-
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

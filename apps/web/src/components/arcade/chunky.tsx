@@ -145,29 +145,3 @@ export function ArcadeWordmark({ size = 22 }: { size?: number }) {
   );
 }
 
-/** The pill used for short live status lines. */
-export function LivePill({
-  children,
-  tone = 'punch',
-}: {
-  children: React.ReactNode;
-  tone?: 'punch' | 'aqua';
-}) {
-  const isPunch = tone === 'punch';
-
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-2 rounded-full border-2 px-4 py-1.5 font-arcade-body text-xs font-black uppercase tracking-[1.5px]',
-        isPunch ? 'border-punch bg-punch/15 text-punch-soft' : 'border-aqua bg-aqua/15 text-aqua',
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn('h-2 w-2 rounded-full', isPunch ? 'bg-punch' : 'bg-aqua')}
-        style={{ animation: 'bbTwinkle 1.6s infinite' }}
-      />
-      {children}
-    </div>
-  );
-}

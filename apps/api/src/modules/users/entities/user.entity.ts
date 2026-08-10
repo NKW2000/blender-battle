@@ -38,6 +38,20 @@ export class User extends BaseEntity {
   @Column({ type: 'text', name: 'password_hash', select: false, nullable: true })
   passwordHash: string | null;
 
+  /**
+   * When the address was confirmed, or null.
+   *
+   * Nullable rather than a boolean: "when" answers "is it verified" as well,
+   * and also answers how long ago — which is what you want when deciding
+   * whether an account that has never confirmed is worth chasing or pruning.
+   *
+   * Accounts that predate verification were backfilled to their creation date
+   * by the migration. They never had the chance to complete a step that did not
+   * exist, and locking them out retroactively would be punishing them for it.
+   */
+  @Column({ type: 'timestamptz', name: 'email_verified_at', nullable: true })
+  emailVerifiedAt: Date | null;
+
   @Column({ type: 'enum', enum: Role, default: Role.PLAYER })
   role: Role;
 
@@ -115,19 +129,6 @@ export class User extends BaseEntity {
   @Column({ type: 'integer', name: 'total_votes_received', default: 0 })
   totalVotesReceived: number;
 
-  /**
-   * Phase 2 introduces the categories table; this FK is added by that phase's
-   * migration. Declared nullable now so adding it later is additive, not destructive.
-   */
-  @Column({ type: 'uuid', name: 'favorite_category_id', nullable: true })
-  favoriteCategoryId: string | null;
-
-  /**
-   * Reserved for Phase 5 teams/organisations. Nullable from day one so the
-   * relation can be introduced without rewriting the table under load.
-   */
-  @Column({ type: 'uuid', name: 'org_id', nullable: true })
-  orgId: string | null;
 
   @Column({ type: 'timestamptz', name: 'last_seen_at', nullable: true })
   lastSeenAt: Date | null;

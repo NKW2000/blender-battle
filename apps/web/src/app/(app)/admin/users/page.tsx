@@ -32,6 +32,23 @@ export default function AdminUsersPage() {
 
   const rows = query.data?.pages.flatMap((page) => page.items) ?? [];
 
+  /*
+    Presentation, not security — the API re-checks the role on every one of
+    these endpoints and this page cannot grant anything. It is here because
+    every sibling admin page has it, and the one that did not showed a
+    non-admin a full moderation console whose every control returned 403.
+  */
+  if (user && user.role !== Role.ADMIN) {
+    return (
+      <Panel>
+        <EmptyState
+          title="Admins only"
+          description="Managing accounts is restricted to administrators."
+        />
+      </Panel>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-end justify-between gap-4">

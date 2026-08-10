@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 
 import { RedisService } from './redis.service';
 
-/** Global: auth, throttling, and (from Phase 3) the socket adapter all need it. */
+/** Global: auth token cleanup, throttling, and every scheduler lock need it. */
 @Global()
 @Module({
   providers: [RedisService],
