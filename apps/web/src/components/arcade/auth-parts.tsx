@@ -79,23 +79,50 @@ export function ProviderButtons() {
 
   return (
     <>
+      {/*
+        `basis-0` beside `flex-1`.
+
+        `flex-1` alone still lets each button start from its own content width,
+        so "Google" and "Discord" — different word lengths, different glyph
+        widths — settled at different sizes. Zeroing the basis makes the split
+        purely even, which is what a row of equal-rank choices should look like.
+
+        A fixed height for the same reason: the two marks have different aspect
+        ratios, and without it the taller glyph makes its button taller.
+      */}
       <div className="mb-5 flex gap-3">
-        {providers.map((provider) => (
-          <button
-            key={provider}
-            type="button"
-            onClick={() => {
-              window.location.href = `${API_URL}/auth/oauth/${provider}`;
-            }}
-            className={`arcade-press arcade-focus flex flex-1 cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-[3px] border-ink py-3.5 text-sm font-extrabold [--press-depth:5px] ${
-              provider === OAuthProvider.GOOGLE ? 'bg-cream text-ink' : 'bg-ink text-cream'
-            }`}
-            style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
-          >
-            {provider === OAuthProvider.GOOGLE ? <GoogleMark /> : <DiscordMark />}
-            {provider === OAuthProvider.GOOGLE ? 'Google' : 'Discord'}
-          </button>
-        ))}
+        {providers.map((provider) => {
+          const isGoogle = provider === OAuthProvider.GOOGLE;
+
+          return (
+            <button
+              key={provider}
+              type="button"
+              onClick={() => {
+                window.location.href = `${API_URL}/auth/oauth/${provider}`;
+              }}
+              className={`arcade-press arcade-focus flex h-12 flex-1 basis-0 cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-[3px] border-ink text-sm font-extrabold [--press-depth:5px] ${
+                isGoogle ? 'bg-cream text-ink' : 'text-white'
+              }`}
+              /*
+                Discord's own blurple rather than the near-black it had.
+
+                Two dark buttons side by side read as one control split in half,
+                and the ink surface made the white Discord glyph the only thing
+                distinguishing them. Each provider now wears its own colour,
+                which is both what their brand guidelines ask for and the thing
+                that makes the pair legible at a glance.
+              */
+              style={{
+                boxShadow: '0 5px 0 var(--color-ink)',
+                ...(isGoogle ? {} : { background: '#5865F2' }),
+              }}
+            >
+              {isGoogle ? <GoogleMark /> : <DiscordMark />}
+              {isGoogle ? 'Google' : 'Discord'}
+            </button>
+          );
+        })}
       </div>
 
       <div className="my-5 flex items-center gap-3.5 text-xs font-extrabold tracking-wider text-haze-6">
@@ -107,22 +134,69 @@ export function ProviderButtons() {
   );
 }
 
+/**
+ * The Google "G".
+ *
+ * Four paths, because the mark is four coloured segments and always has been.
+ * What was here before was a single `#EA4335` path — one red blob that read as
+ * a broken icon rather than as Google, and Google's brand terms do not allow a
+ * recoloured or partial mark on a sign-in button anyway.
+ *
+ * Sized in a fixed square slot alongside the Discord mark: the two logos have
+ * very different aspect ratios, so identical `width` attributes produce two
+ * visibly different sizes. The slot equalises them.
+ */
 export function GoogleMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.86c2.26-2.09 3.56-5.17 3.56-8.87Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z"
+      />
       <path
         fill="#EA4335"
-        d="M12 10.2v3.9h5.4c-.24 1.4-1.66 4.1-5.4 4.1-3.25 0-5.9-2.69-5.9-6s2.65-6 5.9-6c1.85 0 3.09.79 3.8 1.47l2.6-2.5C16.7 1.6 14.6.7 12 .7 6.9.7 2.8 4.8 2.8 9.9S6.9 19.1 12 19.1c5.3 0 8.8-3.72 8.8-8.96 0-.6-.06-1.06-.15-1.52H12z"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.7 0 3.99 2.47 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
       />
     </svg>
   );
 }
 
+/**
+ * The Discord mark.
+ *
+ * `currentColor`, not a hard-coded white: the button sets the colour, so the
+ * glyph cannot end up white on a light surface if the button is ever restyled.
+ *
+ * Wider than it is tall — inherent to the logo — which is why it is 20 across
+ * to the Google mark's 18. Matching the numbers would make this one look
+ * smaller, since optical size follows the ink on the page and not the width
+ * attribute.
+ */
 export function DiscordMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="shrink-0"
+    >
       <path
-        fill="#fff"
+        fill="currentColor"
         d="M20.32 4.37A19.8 19.8 0 0 0 15.43 3a13.9 13.9 0 0 0-.63 1.28 18.3 18.3 0 0 0-5.6 0A13.9 13.9 0 0 0 8.57 3 19.7 19.7 0 0 0 3.68 4.37 20.3 20.3 0 0 0 .2 18.06a19.9 19.9 0 0 0 6 3.03c.49-.66.92-1.36 1.29-2.1a13 13 0 0 1-2.03-.98c.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.1 0c.16.14.33.26.5.38-.65.39-1.33.72-2.04.98.37.74.8 1.44 1.29 2.1a19.9 19.9 0 0 0 6-3.03 20.3 20.3 0 0 0-3.48-13.7ZM8.02 15.33c-1.18 0-2.16-1.09-2.16-2.42s.95-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.95 2.42-2.16 2.42Zm7.96 0c-1.18 0-2.16-1.09-2.16-2.42s.95-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.94 2.42-2.16 2.42Z"
       />
     </svg>
