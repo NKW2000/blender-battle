@@ -115,21 +115,104 @@ the cookie is issued `SameSite=Lax` without `Secure` and plain HTTP works.
 ### Email (password reset and verification)
 
 `MAIL_DRIVER` defaults to `log`, which writes every message — reset links
-included — to the application log and sends nothing. The API runs fine that
-way, but a user who forgets their password cannot recover the account, so it is
-not a state to leave production in.
+included — to the application log and sends nothing. The API runs fine that way,
+and it is the right default for development, but a user who forgets their
+password cannot recover their account. It is not a state to leave production in.
 
-To send for real:
+The provider is [Resend](https://resend.com), reached with one HTTPS POST and no
+SDK. Nothing about the code is Resend-specific beyond that one call.
 
-1. Create an account at [resend.com](https://resend.com) and verify a domain.
-2. On Render set `MAIL_DRIVER=resend`, `RESEND_API_KEY=<key>`, and `MAIL_FROM`
-   to an address on that domain (`Blender Battle <no-reply@yourdomain>`).
-3. `FRONTEND_URL` must already point at the deployed web app — the reset and
-   verification links are built from it.
+#### 1. Decide whether you need a domain
 
-The environment schema refuses to boot with `MAIL_DRIVER=resend` and no key, so
-a half-finished configuration fails at startup rather than silently dropping
-recovery emails.
+This is the step people get wrong, so it comes first.
+
+**Without a verified domain**, Resend lets you send from `onboarding@resend.dev`
+— but *only to the email address you signed up with*. That is genuinely useful:
+it proves the whole flow end to end, and you can reset your own password. It
+will silently refuse every other recipient, so it is a test configuration, not a
+launch one.
+
+**With a verified domain**, you can send to anybody. You need a domain you
+control and the ability to add DNS records to it.
+
+#### 2. Create the account and (optionally) verify the domain
+
+1. Sign up at [resend.com](https://resend.com).
+2. **Domains → Add Domain**, enter your domain.
+3. Resend shows a set of DNS records — a DKIM `TXT`, an SPF `TXT`, and usually a
+   `MX` for bounce handling. Add them at your DNS provider exactly as shown.
+4. Press **Verify**. Propagation is usually minutes; it can be longer.
+
+Skip this if you are testing with `onboarding@resend.dev`.
+
+#### 3. Create an API key
+
+**API Keys → Create API Key.** Give it **Sending access** only — this deployment
+never lists, reads or deletes anything, and a key that can only send is a key
+that can only be abused in one way.
+
+Copy it now; Resend shows it once. Treat it as a password: it goes into Render's
+environment, never into this repository, and never into a chat window.
+
+#### 4. Set it on Render
+
+`blender-battle-api` → **Environment**:
+
+| Key | Value |
+|---|---|
+| `MAIL_DRIVER` | `resend` |
+| `RESEND_API_KEY` | the key from step 3 |
+| `MAIL_FROM` | `Blender Battle <no-reply@yourdomain>` — or `Blender Battle <onboarding@resend.dev>` while testing |
+| `FRONTEND_URL` | must already point at the deployed web app |
+
+`FRONTEND_URL` is not optional here: every reset and verification link is built
+from it, so if it is wrong the emails send successfully and lead nowhere.
+
+Save. Render redeploys.
+
+#### 5. Confirm it works
+
+The API refuses to boot with `MAIL_DRIVER=resend` and no `RESEND_API_KEY`, so a
+half-finished configuration fails loudly at startup instead of silently
+swallowing recovery email. A successful deploy already tells you the pair is
+present.
+
+For the round trip, ask for a reset on an address that has an account:
+
+```bash
+curl -i -X POST https://<your-api>/api/v1/auth/password/forgot   -H 'Content-Type: application/json'   -d '{"email":"you@example.com"}'
+```
+
+Expect `204` — and note it returns `204` for an unregistered address too, on
+purpose, so the endpoint cannot be used to discover who has an account. The real
+confirmation is the email arriving, and Resend's **Logs** page showing the
+delivery.
+
+If nothing arrives:
+
+- **Resend Logs empty** — the API never called out. Check `MAIL_DRIVER` is
+  exactly `resend`, and look for `Mail send failed` in the Render logs.
+- **Logs show a 403 about the domain** — you are sending from an address on a
+  domain that is not verified.
+- **Logs show delivery, no email** — check spam. The messages are plain text and
+  deliberately so: a password reset that arrives as a styled HTML button is the
+  exact shape of a phishing message.
+
+#### What gets sent
+
+Four messages, all plain text, all one sentence and a link:
+
+- **Reset your password** — link valid one hour, single use
+- **Confirm your address** — link valid three days
+- **Your password was changed** — sent *after* a successful reset, so somebody
+  whose account was taken finds out
+- **Reset requested for an account with no password** — for accounts that sign
+  in with Discord or Google, explaining there is nothing to reset
+
+`MailService.send` never throws. Its callers are auth flows whose response must
+not depend on delivery: `forgot-password` answers identically for a known and an
+unknown address, and a provider outage must not become a different status code
+for a real one. Failures are logged and swallowed.
 
 ## 4. Web (Vercel **or** Cloudflare Workers)
 
