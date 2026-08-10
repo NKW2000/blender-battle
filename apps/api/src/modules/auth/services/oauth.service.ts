@@ -267,6 +267,34 @@ export class OAuthService {
       );
     }
 
+    /*
+      The address is already somebody's.
+
+      Reached when a provider reports an email it has *not* verified — an
+      unverified claim is not allowed to match an existing account above,
+      because anyone able to set that address on a third-party service could
+      otherwise take over the account here. So the flow arrives at signup with
+      an email the users table already holds, and the insert below dies on
+      `uq_users_email`: a 500, logged as a database error, presented to the
+      reader as "that sign-in did not complete".
+
+      Refused here instead, with the way out. Signing in with the password and
+      linking the provider from settings proves ownership of both sides, which
+      is exactly what the unverified email failed to prove.
+    */
+    const clash = await this.users.findOne({
+      where: { email: profile.email },
+      select: { id: true },
+    });
+
+    if (clash) {
+      throw new AppException(
+        ApiErrorCode.CONFLICT,
+        `An account already uses that email address. Sign in with your password, then connect ${provider} from settings.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
     const user = await this.dataSource.transaction(async (manager) => {
       const created = await manager.save(
         manager.create(User, {

@@ -145,6 +145,26 @@ export default function LoginPage() {
  * only this fragment depends on the search params, which would otherwise opt
  * the whole page out of static prerendering.
  */
+/*
+  What each redirected code actually means.
+
+  The API redirects with `?error=<ApiErrorCode>` and this used to print one
+  sentence for every one of them — "that sign-in did not complete" — which is
+  true of all of them and useful for none. Three of these have a specific way
+  out, and a reader who is told it can take it; the rest genuinely are "try
+  again", and saying so is honest rather than lazy.
+*/
+const OAUTH_ERROR_MESSAGE: Record<string, string> = {
+  oauth_cancelled: 'That sign-in was cancelled. Nothing has changed on your account.',
+  CONFLICT:
+    'An account already uses that email address. Sign in with your password below, then connect the provider from settings.',
+  VALIDATION_FAILED:
+    'That provider did not share an email address, which this app needs. Sign up with an email and password instead.',
+  UNAUTHORIZED: 'That sign-in link expired before it was used. Start again.',
+  ACCOUNT_BANNED: 'That account is banned.',
+  ACCOUNT_SUSPENDED: 'That account is suspended.',
+};
+
 function OAuthErrorNotice() {
   const oauthError = useSearchParams().get('error');
   if (!oauthError) return null;
@@ -154,7 +174,8 @@ function OAuthErrorNotice() {
       role="alert"
       className="mb-4 rounded-xl border-2 border-punch bg-punch/15 px-4 py-3 text-sm font-bold text-punch-soft"
     >
-      That sign-in did not complete. Try again, or use your email and password.
+      {OAUTH_ERROR_MESSAGE[oauthError] ??
+        'That sign-in did not complete. Try again, or use your email and password.'}
     </p>
   );
 }

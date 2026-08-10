@@ -11,6 +11,7 @@ import {
   Query,
   Req,
   Res,
+  Logger,
 } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -64,6 +65,8 @@ import { OAuthService } from './services/oauth.service';
  */
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly auth: AuthService,
     @InjectRepository(User) private readonly users: Repository<User>,
@@ -287,8 +290,20 @@ export class AuthController {
       const exchangeCode = await this.oauth.handleCallback(code, state, this.contextOf(req));
       res.redirect(`${frontend}/auth/callback?code=${encodeURIComponent(exchangeCode)}`);
     } catch (error) {
-      // The provider redirect is a browser navigation, so a failure has to land
-      // the user somewhere useful rather than rendering a JSON error page.
+      /*
+        The provider redirect is a browser navigation, so a failure has to land
+        the user somewhere useful rather than rendering a JSON error page.
+
+        Logged with the provider and the real reason before it is reduced to a
+        code. Everything below this point is a redirect, so an unlogged failure
+        here leaves nothing anywhere to say what went wrong — which is how
+        "that sign-in did not complete" became the only available diagnosis.
+      */
+      this.logger.error(
+        `${provider} OAuth callback failed: ${(error as Error).message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
       const message =
         error instanceof AppException ? error.code : ApiErrorCode.INTERNAL_ERROR;
       res.redirect(`${frontend}/login?error=${encodeURIComponent(message)}`);
