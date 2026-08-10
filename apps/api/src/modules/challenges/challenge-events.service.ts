@@ -89,7 +89,10 @@ export class ChallengeEventsService {
   async findEventOrFail(id: string): Promise<Challenge> {
     const challenge = await this.challenges.findOne({
       where: { id },
-      relations: ['category', 'assets'],
+      // `tags` is loaded here and not in `listEvents` because the event page
+      // now carries the whole brief, tags included, while the cards in the list
+      // do not show them — fifty extra join rows for nothing rendered.
+      relations: ['category', 'assets', 'tags'],
     });
     if (!challenge) throw AppException.notFound('Challenge');
     return challenge;

@@ -96,6 +96,7 @@ export class ChallengeEventsController {
 
     return {
       ...this.toEvent(challenge),
+      ...this.toBrief(challenge),
       myEntryId: user ? (entries.find((entry) => entry.userId === user.id)?.id ?? null) : null,
       myVoteEntryId: user ? await this.events.myVote(id, user.id) : null,
       // Enforced here rather than trusted to the UI. See the mapper for what
@@ -228,6 +229,34 @@ export class ChallengeEventsController {
       // Absolute dates plus server time, so a skewed client clock still computes
       // the same remaining window as everyone else.
       serverNow: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * The written brief, for the detail response only.
+   *
+   * An event page used to carry the title and a link reading "read the full
+   * brief", which sent someone away from the page they had just opened to read
+   * the rules of the thing they were about to enter — and back again to upload.
+   * The competition and the brief are the same subject, so they are one page.
+   *
+   * Kept out of `toEvent` because the list endpoint returns up to fifty of these
+   * and none of them show a description; `shortDescription` on the summary is
+   * what the cards render. Sending fifty full briefs to draw fifty cards would
+   * be the entire payload for none of the content.
+   */
+  private toBrief(challenge: Challenge) {
+    return {
+      description: challenge.description,
+      rules: challenge.rules,
+      allowedAssets: challenge.allowedAssets,
+      forbiddenAssets: challenge.forbiddenAssets,
+      blenderVersion: challenge.blenderVersion,
+      // Every reference, not just the first. `referenceImageUrl` above is the
+      // cover — one image, shown beside the ballot — and is drawn from this list.
+      assets: (challenge.assets ?? [])
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(ChallengeMapper.asset),
     };
   }
 }

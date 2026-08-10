@@ -1,6 +1,6 @@
 'use client';
 
-import type { Difficulty } from '@bb/shared';
+import type { ChallengeAsset, Difficulty, TagSummary } from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type ApiError } from '@/lib/api/client';
@@ -14,6 +14,9 @@ export interface EventSummary {
   slug: string;
   difficulty: Difficulty;
   category: { id: string; name: string } | null;
+  tags: TagSummary[];
+  estimatedMinutes: number;
+  rewardXp: number;
   coverImageUrl: string | null;
   shortDescription: string;
   startDate: string | null;
@@ -40,6 +43,19 @@ export interface EventEntry {
 export interface EventDetail extends EventSummary {
   referenceImageUrl: string | null;
   objectives: string[];
+  /*
+    The written brief, in full.
+
+    The event page used to show the title and link out to `/challenges/[slug]`
+    to read the rules — away from the page you opened, and back again to enter.
+    One subject, one page.
+  */
+  description: string;
+  rules: string | null;
+  allowedAssets: string | null;
+  forbiddenAssets: string | null;
+  blenderVersion: string | null;
+  assets: ChallengeAsset[];
   myEntryId: string | null;
   myVoteEntryId: string | null;
   entries: EventEntry[];

@@ -1,6 +1,6 @@
 'use client';
 
-import { SUBMISSION_IMAGE_SIZE } from '@bb/shared';
+import { ChallengeAssetType, SUBMISSION_IMAGE_SIZE } from '@bb/shared';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -10,6 +10,7 @@ import {
   type EntryImages,
 } from '@/components/submissions/entry-image-fields';
 import { UI_LOCALE } from '@/lib/utils';
+import { DifficultyBadge } from '@/components/challenges/challenge-card';
 import { FireIcon } from '@/components/ui/icons';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { VoteScreen } from '@/components/challenges/vote-screen';
@@ -97,6 +98,16 @@ export function EventDetailView({
       {event.phase === 'open' ? <OpenPhase event={event} /> : null}
       {event.phase === 'voting' ? <VotingPhase event={event} /> : null}
       {event.phase === 'finished' ? <FinishedPhase event={event} /> : null}
+
+      {/*
+        Below the action, and in every phase.
+
+        What you do here changes with the phase — enter, vote, read the result —
+        but what the challenge asks for does not, and it is worth reading in all
+        four. It sits under the action rather than above it because someone
+        arriving mid-window is here to enter, not to re-read the rules.
+      */}
+      <Brief event={event} />
     </div>
   );
 }
@@ -134,6 +145,7 @@ function EventHeader({ event }: { event: EventDetail }) {
             ← Challenges
           </Link>
           <span className="eyebrow">{event.category?.name ?? 'Any discipline'}</span>
+          <DifficultyBadge difficulty={event.difficulty} />
         </div>
         <h1 className="mt-2 font-display text-2xl font-bold uppercase tracking-tight text-bone">
           {event.title}
@@ -150,29 +162,167 @@ function EventHeader({ event }: { event: EventDetail }) {
   );
 }
 
+/**
+ * The whole brief, on the page you are already on.
+ *
+ * This was a title and a link reading "read the full brief", which sent someone
+ * off the page they had just opened to find out what the challenge actually
+ * asked for, then back again to enter it. The competition and its brief are the
+ * same subject; there is no reason for them to be two documents.
+ *
+ * `/challenges/[slug]` still exists and still holds this content — it is the
+ * catalogue entry, it is what the challenge cards link to, and it carries its
+ * own `<head>`. What is gone is the detour from here to there.
+ */
 function Brief({ event }: { event: EventDetail }) {
+  const images = event.assets.filter((asset) => asset.type === ChallengeAssetType.REFERENCE_IMAGE);
+  const files = event.assets.filter((asset) => asset.type === ChallengeAssetType.REFERENCE_FILE);
+
   return (
-    <Panel>
-      <PanelHeader>
-        <PanelTitle>The brief</PanelTitle>
-      </PanelHeader>
-      <PanelBody className="flex flex-col gap-3">
-        <p className="font-display text-lg font-bold text-bone">{event.title}</p>
-        <Link
-          href={`/challenges/${event.slug}`}
-          className="text-sm font-extrabold text-aqua hover:text-mint"
-        >
-          Read the full brief →
-        </Link>
-      </PanelBody>
-    </Panel>
+    <section className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+      <div className="flex flex-col gap-6">
+        <Panel>
+          <PanelHeader>
+            <PanelTitle>The brief</PanelTitle>
+          </PanelHeader>
+          <PanelBody className="flex flex-col gap-4">
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-bone-faint">
+              <div className="flex gap-2">
+                <dt>Time</dt>
+                <dd className="text-bone">{event.estimatedMinutes} min</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>Reward</dt>
+                <dd className="text-sun">{event.rewardXp} XP</dd>
+              </div>
+              {event.blenderVersion ? (
+                <div className="flex gap-2">
+                  <dt>Blender</dt>
+                  <dd className="text-bone">{event.blenderVersion}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {/* `whitespace-pre-line`: managers write these with paragraph breaks,
+                and collapsing them turns a brief into a wall. */}
+            <p className="whitespace-pre-line text-sm leading-relaxed text-bone-muted">
+              {event.description}
+            </p>
+          </PanelBody>
+        </Panel>
+
+        {images.length > 0 ? (
+          <Panel>
+            <PanelHeader>
+              <PanelTitle>Reference</PanelTitle>
+            </PanelHeader>
+            <PanelBody className="grid gap-3 sm:grid-cols-2">
+              {images.map((asset) => (
+                // eslint-disable-next-line @next/next/no-img-element -- Cloudinary-sized asset
+                <img
+                  key={asset.id}
+                  src={asset.url}
+                  alt={asset.filename}
+                  className="w-full rounded-[12px] border-2 border-edge object-cover"
+                />
+              ))}
+            </PanelBody>
+          </Panel>
+        ) : null}
+      </div>
+
+      <aside className="flex flex-col gap-6">
+        {event.objectives.length > 0 ? (
+          <Panel>
+            <PanelHeader>
+              <PanelTitle>Judged on</PanelTitle>
+            </PanelHeader>
+            <PanelBody>
+              <ul className="flex flex-col gap-2">
+                {event.objectives.map((objective) => (
+                  <li key={objective} className="flex gap-3 text-sm font-extrabold text-bone">
+                    <span
+                      className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-sun"
+                      aria-hidden="true"
+                    />
+                    {objective}
+                  </li>
+                ))}
+              </ul>
+            </PanelBody>
+          </Panel>
+        ) : null}
+
+        {event.rules || event.allowedAssets || event.forbiddenAssets ? (
+          <Panel>
+            <PanelHeader>
+              <PanelTitle>Rules</PanelTitle>
+            </PanelHeader>
+            <PanelBody className="flex flex-col gap-4 text-sm">
+              {event.rules ? (
+                <p className="whitespace-pre-line text-bone-muted">{event.rules}</p>
+              ) : null}
+              {event.allowedAssets ? (
+                <div>
+                  <p className="eyebrow">Allowed</p>
+                  <p className="mt-1 text-bone-muted">{event.allowedAssets}</p>
+                </div>
+              ) : null}
+              {event.forbiddenAssets ? (
+                <div>
+                  <p className="eyebrow">Not allowed</p>
+                  <p className="mt-1 text-bone-muted">{event.forbiddenAssets}</p>
+                </div>
+              ) : null}
+            </PanelBody>
+          </Panel>
+        ) : null}
+
+        {files.length > 0 ? (
+          <Panel>
+            <PanelHeader>
+              <PanelTitle>Files</PanelTitle>
+            </PanelHeader>
+            <PanelBody className="flex flex-col gap-2">
+              {files.map((asset) => (
+                <a
+                  key={asset.id}
+                  href={asset.url}
+                  download
+                  rel="noopener noreferrer nofollow"
+                  className="flex items-center justify-between gap-3 rounded-xl border-2 border-edge px-3 py-2 font-mono text-xs text-bone-muted hover:border-sun hover:text-sun"
+                >
+                  <span className="truncate">{asset.filename}</span>
+                  <span className="shrink-0">{Math.round(asset.bytes / 1024)} KB</span>
+                </a>
+              ))}
+            </PanelBody>
+          </Panel>
+        ) : null}
+
+        {event.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {event.tags.map((tag) => (
+              <Link
+                key={tag.id}
+                href={`/challenges?tag=${tag.slug}`}
+                className="rounded-lg border-2 border-edge px-2 py-1 font-mono text-xs text-bone-faint hover:border-sun hover:text-sun"
+              >
+                {tag.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </aside>
+    </section>
   );
 }
 
 function Upcoming({ event }: { event: EventDetail }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Brief event={event} />
+    // One panel, not the old two-column split — the brief that used to fill the
+    // other column is now the section below, in every phase.
+    <div>
       <Panel>
         <PanelHeader>
           <PanelTitle>Not open yet</PanelTitle>
@@ -197,9 +347,7 @@ function OpenPhase({ event }: { event: EventDetail }) {
   const canSubmit = Boolean(files.image && files.workspace) && !enter.isPending;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Brief event={event} />
-
+    <div>
       <Panel active={!alreadyEntered}>
         <PanelHeader>
           <PanelTitle>{alreadyEntered ? 'Entry received' : 'Enter the challenge'}</PanelTitle>
