@@ -80,7 +80,7 @@ export default function ManageChallengesPage() {
         is what makes this worth showing rather than a row of zeros.
       */}
       {metrics ? (
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile label="Published" value={metrics.challenges.published} color="text-aqua" />
           <StatTile label="Drafts" value={metrics.challenges.draft} color="text-flame-lift" />
           <StatTile label="Archived" value={metrics.challenges.archived} />

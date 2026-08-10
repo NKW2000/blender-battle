@@ -55,7 +55,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-48" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton key={index} className="h-20 w-full" />
           ))}
@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
         </Panel>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Players" value={metrics.users.total} />
         <StatTile label="Online now" value={metrics.users.online} color="text-mint" />
         <StatTile label="Contests completed" value={metrics.contests.completed} color="text-flame" />
@@ -122,7 +122,7 @@ export default function AdminDashboardPage() {
         <StatTile label="Entries" value={metrics.engagement.totalEntries} color="text-sun" />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Panel className="lg:col-span-1">
           <PanelHeader>
             <PanelTitle>Active players</PanelTitle>
@@ -170,7 +170,7 @@ export default function AdminDashboardPage() {
         </Panel>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader>
             <PanelTitle>Signups per day</PanelTitle>
@@ -211,7 +211,7 @@ export default function AdminDashboardPage() {
         </Panel>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader>
             <PanelTitle>Top players</PanelTitle>

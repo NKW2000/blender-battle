@@ -142,7 +142,7 @@ export function EventDetailView({
       {event.phase === 'voting' ? (
         <VoteScreen event={event} />
       ) : (
-        <div className="grid items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-2">
           {event.phase === 'upcoming' ? <UpcomingPanel event={event} /> : null}
           {event.phase === 'open' ? <EnterPanel event={event} /> : null}
           {event.phase === 'finished' ? <WinnerPanel event={event} /> : null}
@@ -150,7 +150,7 @@ export function EventDetailView({
         </div>
       )}
 
-      <div className="grid items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
+      <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
         <BriefPanel brief={event} />
         {event.objectives.length > 0 ? <JudgedOnPanel objectives={event.objectives} /> : null}
       </div>
@@ -186,7 +186,30 @@ function EventHeader({ event }: { event: EventDetail }) {
         ? 'Closes in'
         : event.phase === 'voting'
           ? 'Voting closes in'
-          : 'Finished';
+          : 'Result';
+
+  /*
+    The clock, or a word — never the phase name twice.
+
+    This printed `event.phase` whenever there was no countdown to show, under a
+    label derived from that same phase: a finished event read "FINISHED" above
+    "finished", and during the server render — where `remaining` is always null,
+    because the ticker has not started — every event read its own phase back
+    under its own label.
+
+    `remaining` is null in two quite different situations and only one of them
+    is a missing value: a finished event has nothing left to count, and a first
+    paint has not measured yet. The first deserves a word, the second deserves
+    the em dash rather than a flash of the wrong thing.
+  */
+  const clock =
+    remaining !== null
+      ? formatRemaining(remaining)
+      : event.phase === 'finished'
+        ? 'Closed'
+        : event.phase === 'voting'
+          ? 'Open'
+          : '—';
 
   return (
     <header className="flex flex-wrap items-end justify-between gap-5">
@@ -212,7 +235,7 @@ function EventHeader({ event }: { event: EventDetail }) {
             {label}
           </div>
           <div className="mt-0.5 font-display text-2xl font-bold leading-none text-cream">
-            {remaining !== null ? formatRemaining(remaining) : event.phase}
+            {clock}
           </div>
         </div>
       </div>
@@ -355,7 +378,7 @@ function OtherEntries({ event }: { event: EventDetail }) {
   return (
     <section className="flex flex-col gap-4">
       <h2 className="font-display text-xl font-bold text-cream">Other entries</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {others.map((entry) => (
           <div
             key={entry.id}

@@ -256,7 +256,7 @@ export function Extras({ brief }: { brief: BriefLike }) {
 
   return (
     <div className="flex flex-col gap-[clamp(14px,1.8vw,24px)]">
-      <div className="grid items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
+      <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
         {hasRules ? (
           <Panel>
             <PanelHeader tone="punch" icon={PANEL_ICON.lines}>

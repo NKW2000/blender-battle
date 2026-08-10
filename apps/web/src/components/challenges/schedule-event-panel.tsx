@@ -87,7 +87,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
             `PanelTile` is what makes the schedule look like it belongs to the
             same application as the brief sitting under it.
           */
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ScheduleFact label="Status" value={phase} accent />
             <ScheduleFact label="Opens" value={fmt(event?.startDate ?? null)} />
             <ScheduleFact label="Submissions close" value={fmt(event?.endDate ?? null)} />
@@ -112,7 +112,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
               />
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <span className="eyebrow text-aqua">Submission window</span>
                 <div className="mt-2 flex gap-2">

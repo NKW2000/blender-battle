@@ -190,7 +190,7 @@ function SequentialBallot({
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <figure className="flex flex-col gap-2">
             <figcaption className="eyebrow text-aqua">Reference</figcaption>
             {ballot.referenceImageUrl ? (
@@ -291,7 +291,7 @@ function RunoffGrid({
           </figure>
         ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ballot.entries.map((entry) => {
             const isPicked = picked === entry.submissionId;
             return (

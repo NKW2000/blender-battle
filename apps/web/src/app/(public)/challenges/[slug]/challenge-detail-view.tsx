@@ -157,7 +157,7 @@ export function ChallengeDetailView({
         is what you came to do; there is nothing to enter here, so the reference
         takes the full width below and gets a larger image for it.
       */}
-      <div className="grid items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
+      <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
         <BriefPanel brief={challenge} />
         {challenge.objectives.length > 0 ? (
           <JudgedOnPanel objectives={challenge.objectives} />

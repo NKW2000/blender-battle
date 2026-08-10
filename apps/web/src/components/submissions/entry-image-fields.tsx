@@ -128,7 +128,7 @@ export function EntryImageFields({
 
       Stacked below `sm`, where two columns would be about 150px each.
     */
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <ImageField
         label="Final render"
         accent="sun"

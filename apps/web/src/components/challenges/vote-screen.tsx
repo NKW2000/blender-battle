@@ -159,7 +159,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
   const pickedIndex = entries.findIndex((entry) => entry.id === picked);
 
   return (
-    <div className="grid gap-[clamp(16px,2.4vw,34px)] lg:grid-cols-[1.25fr_.9fr]">
+    <div className="grid grid-cols-1 gap-[clamp(16px,2.4vw,34px)] lg:grid-cols-[1.25fr_.9fr]">
       {/* --- The wheel --------------------------------------------------------- */}
       <div className="flex min-h-0 flex-col">
         {/*

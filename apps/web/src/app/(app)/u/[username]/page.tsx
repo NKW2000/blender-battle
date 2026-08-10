@@ -227,7 +227,7 @@ export default function ProfilePage({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {archive.map((item) => (
               <ArchiveCard key={item.id} item={item} />
             ))}
@@ -274,7 +274,7 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid items-stretch gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-[1.4fr_1fr]">
         {/* Featured image */}
         <div
           className="relative overflow-hidden rounded-[20px] border-4 border-edge bg-void"
@@ -512,7 +512,7 @@ function ProfileSkeleton() {
   return (
     <div className="flex flex-col gap-12">
       <Skeleton className="h-96 w-full rounded-[28px]" />
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <Skeleton key={index} className="aspect-square w-full rounded-[20px]" />
         ))}

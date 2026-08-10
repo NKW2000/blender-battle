@@ -97,7 +97,7 @@ export default function RoomsPage() {
         </Panel>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Panel className="flex flex-col">
           <PanelHeader>
             <PanelTitle>Create a room</PanelTitle>
@@ -428,7 +428,7 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
                 rather than shown with nothing to choose between. */}
             <div
               className={
-                (categories?.length ?? 0) > 1 ? 'grid gap-3 sm:grid-cols-2' : 'grid gap-3'
+                (categories?.length ?? 0) > 1 ? 'grid grid-cols-1 gap-3 sm:grid-cols-2' : 'grid grid-cols-1 gap-3'
               }
             >
               {(categories?.length ?? 0) > 1 ? (

@@ -251,7 +251,7 @@ export function DateTimeField({
   };
 
   return (
-    <div ref={rootRef} className={cn('grid gap-3 sm:grid-cols-2', className)}>
+    <div ref={rootRef} className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2', className)}>
       <div className="relative">
         <FieldTrigger
           ariaLabel={`${ariaLabel} date`}
