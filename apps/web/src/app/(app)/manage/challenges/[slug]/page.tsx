@@ -88,7 +88,7 @@ export default function EditChallengePage({
       {/* The header spans the page like every other screen; the editor does not.
           A brief is a column of text inputs, and stretching them to 1150px makes
           them harder to read, not more consistent. */}
-      <div className="flex max-w-3xl flex-col gap-8">
+      <div className="flex w-full min-w-0 max-w-3xl flex-col gap-8">
       <Panel>
         <PanelHeader>
           <PanelTitle>Attachments</PanelTitle>
@@ -107,7 +107,17 @@ export default function EditChallengePage({
               {challenge.assets.map((asset) => (
                 <li
                   key={asset.id}
-                  className="flex items-center justify-between gap-3 border border-edge p-2"
+                  /*
+                    `min-w-0` is what makes the `truncate` below work.
+
+                    This is a grid item, and a grid item's `min-width` defaults
+                    to `auto`, meaning "do not shrink below your content". The
+                    filename is a 60-character Cloudinary key with no spaces, so
+                    the row grew to fit it, the panel grew to fit the row, and
+                    the whole page scrolled sideways on a phone — with every
+                    other panel squeezed into what was left.
+                  */
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-[14px] border-[2.5px] border-ink bg-white/5 p-2"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     {asset.type === ChallengeAssetType.REFERENCE_IMAGE ? (

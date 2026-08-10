@@ -296,7 +296,7 @@ export function Extras({ brief }: { brief: BriefLike }) {
                   href={asset.url}
                   download
                   rel="noopener noreferrer nofollow"
-                  className="flex items-center justify-between gap-3 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3 text-[13px] font-extrabold text-haze transition-colors hover:bg-white/10 hover:text-cream"
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3 text-[13px] font-extrabold text-haze transition-colors hover:bg-white/10 hover:text-cream"
                   style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
                 >
                   <span className="truncate">{asset.filename}</span>
