@@ -99,36 +99,17 @@ export enum ChallengeAssetType {
 }
 
 /**
- * Battle phases. The server is the only authority on which phase a battle is in;
- * clients render whatever they are told and never advance the phase themselves.
+ * The outcome recorded against a room participant.
+ *
+ * Named `BattleResult` because that is the Postgres enum type's name and the
+ * column has data in it; renaming would be a migration that buys nothing.
+ *
+ * `DRAW` remains a legal value and is never produced. A room is ranked by
+ * likes and every tie escalates to a runoff, which itself falls back to the
+ * earliest submission — a rule chosen precisely so that a result always
+ * separates. `users.draws` therefore stays at zero, and the
+ * `chk_users_battles_consistent` constraint still needs the column.
  */
-export enum BattleStatus {
-  /**
-   * Matched, waiting for both players to accept. Nothing is at stake yet — a
-   * battle that times out here is cancelled and nobody is scored.
-   */
-  READY_CHECK = 'ready_check',
-  /** Both accepted; the brief is revealed and the pre-battle countdown runs. */
-  COUNTDOWN = 'countdown',
-  /** Modelling window open. */
-  ACTIVE = 'active',
-  /** Work stopped, spectators voting. */
-  VOTING = 'voting',
-  COMPLETED = 'completed',
-  /** Ended before it started — opponent never confirmed. No XP either way. */
-  CANCELLED = 'cancelled',
-}
-
-/**
- * Two sides, not two players. A duel puts one player on each side; Phase 5 team
- * battles put several on each, without the battle row or the vote tally
- * changing shape.
- */
-export enum BattleSide {
-  A = 'a',
-  B = 'b',
-}
-
 export enum BattleResult {
   WIN = 'win',
   LOSS = 'loss',
@@ -136,12 +117,12 @@ export enum BattleResult {
 }
 
 /**
- * Who can find and join a room.
+ * Who can find a room.
  *
- * Visibility is not only a discovery setting — it decides whether the room can
- * award anything. A private room is a closed group of the host's choosing, which
- * is exactly the arrangement needed to trade likes back and forth, so private
- * rooms are always casual.
+ * Discovery only. Whether a room's result counts is decided by how many people
+ * actually submitted (`ROOM_RANKED_MIN_SUBMISSIONS`), not by who could see it —
+ * a private room of four artists who each did the work is a real contest, and a
+ * listed one of two is not. Every room has a join code either way.
  */
 export enum RoomVisibility {
   PUBLIC = 'public',
@@ -175,75 +156,29 @@ export enum RoomParticipantStatus {
   LEFT = 'left',
 }
 
-export enum ReactionType {
-  FIRE = 'fire',
-  CLAP = 'clap',
-  MIND_BLOWN = 'mind_blown',
-  LAUGH = 'laugh',
-}
-
-/**
- * Socket event names, shared so a typo cannot silently desynchronise the two
- * sides. Prefixed by direction: `client:*` is sent by the browser, `battle:*`
- * and `queue:*` are broadcast by the server.
- */
-export const SOCKET_EVENTS = {
-  // client → server
-  JOIN_BATTLE: 'client:join_battle',
-  LEAVE_BATTLE: 'client:leave_battle',
-  CAST_VOTE: 'client:cast_vote',
-  SEND_REACTION: 'client:send_reaction',
-
-  // server → client
-  BATTLE_STATE: 'battle:state',
-  BATTLE_PHASE_CHANGED: 'battle:phase_changed',
-  BATTLE_TALLY: 'battle:tally',
-  BATTLE_REACTION: 'battle:reaction',
-  BATTLE_COMPLETED: 'battle:completed',
-  SPECTATOR_COUNT: 'battle:spectators',
-
-  QUEUE_MATCHED: 'queue:matched',
-  QUEUE_TIMEOUT: 'queue:timeout',
-
-  /** Pushed to the recipient's personal room the moment one is created. */
-  NOTIFICATION_NEW: 'notification:new',
-
-  ERROR: 'error',
-} as const;
-
 /**
  * What a notification is about. The type drives the icon and the link, so the
  * client never parses the message text to decide where to send someone.
+ *
+ * The previous set named a matchmaking feature (`battle_matched`) and an
+ * achievements system (`achievement_unlocked`) that were never built — and
+ * since nothing had ever called `NotificationsService.create`, the bell was
+ * permanently empty while its empty state promised "unlocks".
  */
 export enum NotificationType {
-  BATTLE_MATCHED = 'battle_matched',
-  BATTLE_RESULT = 'battle_result',
-  ACHIEVEMENT_UNLOCKED = 'achievement_unlocked',
+  /** The host pressed Start; the brief is being revealed. */
+  ROOM_STARTED = 'room_started',
+  /** The modelling deadline passed and the ballot is open. */
+  ROOM_VOTING_OPEN = 'room_voting_open',
+  /** A room you competed in has a result. */
+  ROOM_RESULT = 'room_result',
+  /** A public challenge you entered has moved to voting. */
+  EVENT_VOTING_OPEN = 'event_voting_open',
+  /** A public challenge you entered has a winner. */
+  EVENT_RESULT = 'event_result',
   ROLE_CHANGED = 'role_changed',
   ACCOUNT_STATUS = 'account_status',
   CHALLENGE_PUBLISHED = 'challenge_published',
-}
-
-/**
- * How an achievement is earned. Every criterion is a threshold on a statistic
- * the platform already maintains, which is what lets unlocks be evaluated with
- * one cheap comparison after a battle rather than a bespoke query per badge.
- */
-export enum AchievementStat {
-  WINS = 'wins',
-  BATTLES = 'total_battles',
-  CURRENT_STREAK = 'current_streak',
-  HIGHEST_STREAK = 'highest_streak',
-  TOTAL_XP = 'total_xp',
-  VOTES_RECEIVED = 'total_votes_received',
-  SCORE = 'score',
-}
-
-/** Rarity drives presentation only — it has no effect on how a badge is earned. */
-export enum AchievementTier {
-  BRONZE = 'bronze',
-  SILVER = 'silver',
-  GOLD = 'gold',
 }
 
 /** Third-party identity providers. */
@@ -263,6 +198,8 @@ export enum ActivityAction {
   ADMIN_ROLE_CHANGED = 'admin.role_changed',
   ADMIN_STATUS_CHANGED = 'admin.status_changed',
   SECURITY_TOKEN_REUSE_DETECTED = 'security.token_reuse_detected',
+  SECURITY_PASSWORD_RESET_REQUESTED = 'security.password_reset_requested',
+  SECURITY_PASSWORD_RESET_COMPLETED = 'security.password_reset_completed',
   SECURITY_LOGIN_FAILED = 'security.login_failed',
   CHALLENGE_CREATED = 'challenge.created',
   CHALLENGE_UPDATED = 'challenge.updated',

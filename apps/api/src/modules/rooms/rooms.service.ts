@@ -10,9 +10,13 @@ import {
   ROOM_DRAW_SECONDS,
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
+  NotificationType,
+  ROOM_RANKED_MIN_SUBMISSIONS,
   RoomParticipantStatus,
   RoomStatus,
   RoomVisibility,
+  SCORE_LOSS,
+  SCORE_WIN,
   VOTE_WINDOW_SECONDS,
 } from '@bb/shared';
 import { randomInt } from 'node:crypto';
@@ -21,6 +25,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { AppException } from '@/common/exceptions/app.exception';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { ChallengesService } from '@/modules/challenges/challenges.service';
+import { NotificationsService } from '@/modules/notifications/notifications.service';
 
 import { Room } from './entities/room.entity';
 import { RoomParticipant } from './entities/room-participant.entity';
@@ -51,6 +56,7 @@ export class RoomsService {
     @InjectRepository(Submission) private readonly submissions: Repository<Submission>,
     private readonly challenges: ChallengesService,
     private readonly dataSource: DataSource,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // --- Creation and joining ---------------------------------------------------
@@ -74,6 +80,7 @@ export class RoomsService {
       categoryId?: string;
       difficulty?: Difficulty;
       maxPlayers?: number;
+      visibility?: RoomVisibility;
       endsAt: string;
     },
   ): Promise<Room> {
@@ -94,12 +101,17 @@ export class RoomsService {
     const room = await this.rooms.save(
       this.rooms.create({
         name: dto.name.trim(),
-        // Every room is invite-only, so every room gets a code.
+        // Every room gets a code, listed or not: a code is how you invite a
+        // specific person, which is orthogonal to whether strangers can find it.
         joinCode: this.generateCode(),
         hostId: host.id,
         categoryId: dto.categoryId ?? null,
         difficulty: dto.difficulty ?? null,
         maxPlayers,
+        // Assigned rather than left at the column default. Every room still gets
+        // a join code — a listed room is discoverable *and* shareable — but only
+        // a public one appears in the browse list.
+        visibility: dto.visibility ?? RoomVisibility.PRIVATE,
         endsAt,
         // Informational until Start recomputes it against the real kickoff
         // time — shown in the lobby as "about this long", not a promise.
@@ -286,6 +298,33 @@ export class RoomsService {
 
     if (!claimed.affected) throw AppException.conflict('This room has already started');
 
+    /*
+      Count the play.
+
+      `challenges.times_played` has existed since the challenge tables were
+      created, is read by the admin and manager dashboards, and was never
+      written by anything — so "most played brief" was permanently empty and
+      every manager's total sat at zero however many rooms had used their work.
+
+      Incremented here rather than at room creation because this is the moment a
+      brief is actually drawn and modelled against. It also has to be after the
+      conditional UPDATE above: a double-tapped Start that failed to claim the
+      room must not still count a play.
+    */
+    await this.challenges.recordPlay(challenge.id);
+
+    // Everyone in the lobby, including the host — the host is a competitor and
+    // wants the link as much as anyone.
+    await this.notify(
+      active.map((participant) => participant.userId),
+      {
+        type: NotificationType.ROOM_STARTED,
+        title: `"${room.name}" has started`,
+        body: `The brief is ${challenge.title}. The deadline is fixed — good luck.`,
+        link: `/rooms/${roomId}`,
+      },
+    );
+
     return this.findOrFail(roomId);
   }
 
@@ -385,6 +424,101 @@ export class RoomsService {
   // --- Deadline ---------------------------------------------------------------
 
   /**
+   * Bring a room up to the phase its own timestamps say it should be in.
+   *
+   * This is the difference between a room being correct and a room being
+   * correct *only while a background process happens to be awake*.
+   *
+   * Every deadline here is already a stored absolute instant, so the phase a
+   * room belongs in is a pure function of those timestamps and the current
+   * time — exactly the way public challenges compute `phaseOf` on read. Rooms
+   * stored `status` instead and relied on a sweeper to move it, which meant the
+   * flagship feature's correctness depended on a process being alive at a
+   * specific wall-clock moment. On hosting that sleeps after fifteen minutes
+   * idle, that is not an operational annoyance: the deadline passes, nothing
+   * moves, and every player sits watching a timer at 0:00 in a room that will
+   * never advance.
+   *
+   * Called on read, so the people who care about the transition are the ones
+   * who trigger it. A sleeping API wakes on their first request and advances
+   * the room correctly, because a stored deadline does not care how late it is
+   * read. The sweeper still runs — it now handles the case where *nobody* is
+   * looking (abandoned rooms) rather than being the only thing that works.
+   *
+   * Safe to call concurrently. Every transition below is a conditional
+   * `UPDATE ... WHERE status = :from`, so of any number of simultaneous callers
+   * exactly one wins each step and the rest observe the result.
+   */
+  async reconcile(roomId: string): Promise<Room> {
+    let room = await this.findOrFail(roomId);
+
+    /*
+      A loop, not a single step, because a room can be several phases behind.
+      A room whose players all closed their tabs over lunch may need to go
+      DRAWING → ACTIVE → VOTING → COMPLETED on one page load, and stopping
+      after one transition would leave it stuck one phase short with nothing
+      scheduled to finish the job.
+
+      Bounded so a transition that somehow fails to change the status cannot
+      spin: there are only four hops from the earliest live phase to the last.
+    */
+    for (let step = 0; step < 4; step += 1) {
+      const advanced = await this.advanceIfDue(room);
+      if (!advanced) return room;
+      room = advanced;
+    }
+
+    return room;
+  }
+
+  /**
+   * One phase hop, if this room's current deadline has passed.
+   *
+   * Returns the updated room, or null when the room is either not due or was
+   * advanced by somebody else first — both of which mean the caller should
+   * stop.
+   */
+  private async advanceIfDue(room: Room): Promise<Room | null> {
+    const now = Date.now();
+    const elapsed = (deadline: Date | null | undefined) =>
+      Boolean(deadline && deadline.getTime() <= now);
+
+    if (room.status === RoomStatus.DRAWING && elapsed(room.startsAt)) {
+      return this.beginModelling(room.id);
+    }
+
+    if (room.status === RoomStatus.ACTIVE && elapsed(room.endsAt)) {
+      return this.closeSubmissions(room.id);
+    }
+
+    const voting = room.status === RoomStatus.VOTING || room.status === RoomStatus.RUNOFF;
+    if (voting && elapsed(room.votingEndsAt)) {
+      return this.finalise(room.id);
+    }
+
+    return null;
+  }
+
+  /**
+   * The reveal is over; the modelling clock starts.
+   *
+   * Lived inline in the scheduler until the same transition was needed on read.
+   * Two copies of a conditional update is two places for the guard to be got
+   * wrong, and the guard is the only thing making concurrent advancement safe.
+   */
+  async beginModelling(roomId: string): Promise<Room | null> {
+    const claimed = await this.rooms
+      .createQueryBuilder()
+      .update(Room)
+      .set({ status: RoomStatus.ACTIVE })
+      .where('id = :id AND status = :drawing', { id: roomId, drawing: RoomStatus.DRAWING })
+      .execute();
+
+    if (!claimed.affected) return null;
+    return this.findOrFail(roomId);
+  }
+
+  /**
    * Close the modelling window: eliminate non-submitters and open the ballot.
    *
    * Elimination carries no XP penalty and no loss on record. Someone who ran out
@@ -427,24 +561,50 @@ export class RoomsService {
     }
 
     /*
-      Whether this room counts is decided here, once, and stored — the entity has
-      always documented that, but nothing wrote it, so every room stayed at the
-      column default of `false` and no result ever earned XP.
+      Whether this room counts is decided here, once, and stored.
 
-      Stored rather than recomputed at read time so a finished room's history
-      cannot change meaning if the threshold is ever retuned, and taken from the
-      count of real submissions rather than the number who joined: a room where
-      one person uploads and the rest time out is not a contest.
+      Two things were wrong with the previous rule. It required
+      `visibility === PUBLIC`, and nothing ever assigned `visibility`, so the
+      clause was tautologically true and looked like a control while enforcing
+      nothing. And the floor it used was `ROOM_MIN_PLAYERS` — two — while
+      `ROOM_RANKED_MIN_SUBMISSIONS` sat unimported in the shared constants with
+      a comment explaining that four is the number which stops a private group
+      minting rank by trading likes. Two friends could rank each other all
+      afternoon.
+
+      The floor is now the constant that documents it. Visibility is gone from
+      the condition on purpose: a private room of four artists who each did the
+      work is a real contest, and a public one of two is not, so discoverability
+      was never the thing that made a result trustworthy — the number of people
+      who actually submitted is.
+
+      Stored rather than recomputed at read time, so a finished room's history
+      cannot change meaning if the threshold is ever retuned. Counted from real
+      submissions rather than joins: padding a room with idle accounts must not
+      clear the bar.
     */
-    const room = await this.findOrFail(roomId);
     await this.rooms.update(
       { id: roomId },
+      { isRanked: submitted >= ROOM_RANKED_MIN_SUBMISSIONS },
+    );
+
+    const room = await this.findOrFail(roomId);
+
+    // Only the people who may actually vote. Telling an eliminated player the
+    // ballot is open would be an invitation to a room that will refuse them.
+    await this.notify(
+      room.participants
+        .filter((participant) => participant.status === RoomParticipantStatus.SUBMITTED)
+        .map((participant) => participant.userId),
       {
-        isRanked: room.visibility === RoomVisibility.PUBLIC && submitted >= ROOM_MIN_PLAYERS,
+        type: NotificationType.ROOM_VOTING_OPEN,
+        title: `Voting is open in "${room.name}"`,
+        body: 'A blind ballot — shuffled, timed, and no names. A few minutes to judge.',
+        link: `/rooms/${roomId}`,
       },
     );
 
-    return this.findOrFail(roomId);
+    return room;
   }
 
   // --- Results ----------------------------------------------------------------
@@ -574,7 +734,24 @@ export class RoomsService {
       completedAt: new Date(),
     });
 
-    return this.findOrFail(roomId);
+    const finished = await this.findOrFail(roomId);
+
+    // Sent after the result is committed, so a notification can never announce
+    // an outcome that a failed rollup then rolls back. Only the people who
+    // placed — an eliminated player has no result to read.
+    await this.notify(
+      finished.participants
+        .filter((participant) => participant.placement !== null)
+        .map((participant) => participant.userId),
+      {
+        type: NotificationType.ROOM_RESULT,
+        title: `"${finished.name}" is finished`,
+        body: 'The votes are in and the entries are no longer anonymous.',
+        link: `/rooms/${roomId}`,
+      },
+    );
+
+    return finished;
   }
 
   private async persistLikeCounts(
@@ -656,6 +833,21 @@ export class RoomsService {
           Votes received uses the main-ballot tally: in a runoff `entry.likes`
           counts only the second round.
         */
+        /*
+          XP and score are different currencies and are no longer the same
+          number.
+
+          XP is cumulative and never falls — it measures how much you have done.
+          Score is a standing and must be able to go down, or the leaderboard
+          becomes a ranking of who has entered the most rooms rather than who
+          wins them, and a player could climb it by losing repeatedly.
+
+          Floored at zero so a run of losses cannot put someone below a player
+          who has never competed, which would read as a punishment for taking
+          part.
+        */
+        const scoreDelta = room.isRanked ? (isWinner ? SCORE_WIN : SCORE_LOSS) : 0;
+
         await manager.query(
           `UPDATE users
               SET total_battles        = total_battles + 1,
@@ -663,7 +855,7 @@ export class RoomsService {
                   losses               = losses + $3,
                   total_votes_received = total_votes_received + $4,
                   total_xp             = total_xp + $5,
-                  score                = score + $5,
+                  score                = GREATEST(0, score + $6),
                   current_streak       = CASE WHEN $2 = 1 THEN current_streak + 1 ELSE 0 END,
                   highest_streak       = CASE WHEN $2 = 1
                                               THEN GREATEST(highest_streak, current_streak + 1)
@@ -675,10 +867,34 @@ export class RoomsService {
             isWinner ? 0 : 1,
             Math.max(0, participant.likeCount),
             xp,
+            scoreDelta,
           ],
         );
       }
     });
+  }
+
+  /**
+   * Tell people something happened in their room.
+   *
+   * Every call is wrapped, because a notification is an aside: the room has
+   * already advanced by the time this runs, and a failure to write a row saying
+   * so must never roll back or interrupt the transition that actually matters.
+   * The bell being wrong is a nuisance; a room stuck in the wrong phase is not.
+   */
+  private async notify(
+    userIds: string[],
+    notice: { type: NotificationType; title: string; body?: string; link: string },
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+
+    try {
+      await this.notifications.createMany(
+        userIds.map((userId) => ({ userId, ...notice })),
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send room notifications: ${(error as Error).message}`);
+    }
   }
 
   /** Flat, placement-based XP. Bounded so one room cannot mint a rank. */
@@ -695,6 +911,50 @@ export class RoomsService {
     const room = await this.rooms.findOne({ where: { id }, relations: ROOM_RELATIONS });
     if (!room) throw AppException.notFound('Room');
     return room;
+  }
+
+  /**
+   * Rooms anyone may join, newest first.
+   *
+   * Until this existed a room was reachable only by someone handing over a
+   * six-character code, which put the product in an odd position: every
+   * structural defence in this file assumes adversarial strangers — a host who
+   * would pre-read the brief, a player who would peek at rivals, an account
+   * farmed to swing a vote — while the only way in was a personal invitation.
+   * Airport security for a dinner party.
+   *
+   * Lobbies only. A room that has started cannot be joined, so listing one
+   * would be advertising a door that is already shut; the player's own live
+   * room is served by `findActiveForUser` instead.
+   *
+   * Backed by `idx_rooms_visibility_status`, which has been on the table since
+   * rooms were built and had nothing to serve because `visibility` was never
+   * assigned.
+   */
+  async listPublicLobbies(limit = 30): Promise<Room[]> {
+    return this.rooms
+      .createQueryBuilder('room')
+      .leftJoinAndSelect('room.host', 'host')
+      .leftJoinAndSelect('room.category', 'category')
+      .leftJoinAndSelect('room.participants', 'participant')
+      .where('room.visibility = :visibility', { visibility: RoomVisibility.PUBLIC })
+      .andWhere('room.status = :status', { status: RoomStatus.LOBBY })
+      // A lobby whose deadline has already passed can never produce a real
+      // modelling window, so it is not joinable in practice — `start` would
+      // refuse it. Hiding it here saves someone joining a dead room.
+      .andWhere('room.ends_at > now()')
+      /*
+        The entity property, not the column.
+
+        `take` makes TypeORM build a distinct-id subquery and re-derive the sort
+        from the select list, and that step looks the ordering term up in the
+        entity metadata — a raw column name is not found there and it dereferences
+        undefined. The other query builders in this file order by raw column names
+        safely only because none of them paginate.
+      */
+      .orderBy('room.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
   }
 
   /** The room this player is currently in, so a refresh lands back in it. */

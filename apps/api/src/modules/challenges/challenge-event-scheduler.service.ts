@@ -6,7 +6,8 @@ import { RedisService } from '@/modules/redis/redis.service';
 import { ChallengeEventsService } from './challenge-events.service';
 
 /**
- * Closes public challenges whose voting deadline has passed.
+ * Announces open ballots and closes public challenges whose voting deadline
+ * has passed.
  *
  * A vote window ends on a wall-clock date, and that has to be honoured whether
  * or not anyone is looking — so a sweep freezes the winner rather than waiting
@@ -41,6 +42,11 @@ export class ChallengeEventSchedulerService {
     if (!acquired) return;
 
     try {
+      const opened = await this.events.notifyDueVotingWindows();
+      if (opened > 0) {
+        this.logger.log(`Announced voting for ${opened} challenge event(s)`);
+      }
+
       const resolved = await this.events.resolveDueEvents();
       if (resolved > 0) {
         this.logger.log(`Resolved ${resolved} challenge event(s) at the vote deadline`);

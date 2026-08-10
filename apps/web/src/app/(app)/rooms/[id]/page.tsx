@@ -21,6 +21,7 @@ import { BallotView } from '@/components/rooms/ballot-view';
 import { CountdownGate } from '@/components/rooms/countdown-gate';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
+import { useSound } from '@/features/sound/use-sound';
 import {
   useLeaveRoom,
   useRoom,
@@ -395,9 +396,30 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
 }
 
 function Results({ room }: { room: RoomDetail }) {
+  const { user } = useSession();
+  const play = useSound();
   const ranked = [...room.participants]
     .filter((entry) => entry.placement !== null)
     .sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99));
+
+  const myPlacement =
+    room.participants.find((entry) => entry.userId === user?.id)?.placement ?? null;
+
+  /*
+    Plays once when the result first appears.
+
+    Keyed on the room id rather than firing on every render: this panel is
+    inside a polled page, so without the key a re-fetch would replay the
+    fanfare every few seconds. Eliminated players get nothing — they have no
+    placement, and a losing sting for someone who ran out of time would be
+    punishing the attempt.
+  */
+  const soundedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (myPlacement === null || soundedFor.current === room.id) return;
+    soundedFor.current = room.id;
+    play(myPlacement === 1 ? 'win' : 'lose');
+  }, [room.id, myPlacement, play]);
 
   return (
     <Panel active>

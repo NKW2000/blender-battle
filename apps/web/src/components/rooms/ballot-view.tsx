@@ -10,7 +10,14 @@ import { useSound } from '@/features/sound/use-sound';
 import { useBallot, useLikeEntry, type RoomDetail } from '@/features/rooms/use-rooms';
 
 /**
- * The ballot.
+ * The blind ballot.
+ *
+ * "Blind" is used here and deliberately not on the public-challenge vote
+ * screen. Both hide the author, so both are *anonymous*; only this one also
+ * shuffles the order per voter and gives each entry a fixed ten seconds, so
+ * nobody can linger on a rival's work, compare freely, or be advantaged by
+ * appearing first. One word for both made two different promises sound
+ * identical.
  *
  * Two shapes, one component, because they are the same act with different rules:
  *
@@ -50,7 +57,7 @@ export function BallotView({ room, canVote }: { room: RoomDetail; canVote: boole
           <p className="max-w-md text-sm font-extrabold text-bone-muted">
             {isRunoff
               ? 'It ended level at the top. The tied entries are shown together — pick the one you think won. You can move your pick until voting closes.'
-              : "You'll see each entry beside the reference, ten seconds at a time. Like the ones that earn it. Your own work is not in the deck."}
+              : "A blind ballot: each entry appears beside the reference for ten seconds, in an order picked just for you, with no name attached. Like the ones that earn it. Your own work is not in the deck."}
           </p>
           <ChunkyButton size="md" sheen onClick={() => setStarted(true)}>
             {isRunoff ? 'OPEN TIE-BREAK' : "I'M READY TO VOTE"}

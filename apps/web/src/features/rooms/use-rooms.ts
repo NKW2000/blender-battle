@@ -1,6 +1,11 @@
 'use client';
 
-import type { Difficulty, RoomParticipantStatus, RoomStatus } from '@bb/shared';
+import type {
+  Difficulty,
+  RoomParticipantStatus,
+  RoomStatus,
+  RoomVisibility,
+} from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type ApiError } from '@/lib/api/client';
@@ -73,6 +78,7 @@ export interface Ballot {
 
 export const roomKeys = {
   active: ['rooms', 'active'] as const,
+  browse: ['rooms', 'browse'] as const,
   detail: (id: string) => ['rooms', 'detail', id] as const,
   ballot: (id: string) => ['rooms', 'ballot', id] as const,
 };
@@ -103,6 +109,20 @@ export function useRoom(id: string | null) {
   });
 }
 
+/**
+ * Open lobbies anyone may join.
+ *
+ * Polled rather than cached hard: a lobby fills up and starts within minutes,
+ * and a stale list sends people at rooms that are already running.
+ */
+export function usePublicRooms() {
+  return useQuery({
+    queryKey: roomKeys.browse,
+    queryFn: () => api.get<RoomSummary[]>('/rooms'),
+    refetchInterval: 15_000,
+  });
+}
+
 export function useCreateRoom() {
   const queryClient = useQueryClient();
 
@@ -114,6 +134,8 @@ export function useCreateRoom() {
       categoryId?: string;
       difficulty?: Difficulty;
       maxPlayers?: number;
+      /** Listed in the browse list, or reachable only by code. */
+      visibility?: RoomVisibility;
       /** ISO instant — already converted from the host's local date/time pick. */
       endsAt: string;
     }
@@ -121,6 +143,7 @@ export function useCreateRoom() {
     mutationFn: (dto) => api.post<RoomDetail>('/rooms', dto),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.active });
+      void queryClient.invalidateQueries({ queryKey: roomKeys.browse });
     },
   });
 }

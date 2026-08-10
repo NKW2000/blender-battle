@@ -4,6 +4,7 @@ import {
   ROOM_MIN_PLAYERS,
   ROOM_NAME_MAX_LENGTH,
   ROOM_NAME_MIN_LENGTH,
+  RoomVisibility,
 } from '@bb/shared';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 
@@ -39,6 +40,25 @@ export class CreateRoomDto {
   @Min(ROOM_MIN_PLAYERS)
   @Max(ROOM_MAX_PLAYERS)
   maxPlayers?: number;
+
+  /**
+   * Whether the room appears in the public list.
+   *
+   * The column has existed since rooms were built and nothing ever assigned it,
+   * so every room sat at the `public` default while being reachable only by
+   * someone handing over the join code — a listing flag that listed nothing and
+   * a "public" room nobody could find.
+   *
+   * Private is the default because that is what rooms have actually been until
+   * now, and silently publishing every existing host's next room would be a
+   * surprising way to ship a listing.
+   *
+   * A private room is not a lesser contest: whether a result counts is decided
+   * by how many people submitted, not by who could see the room.
+   */
+  @IsOptional()
+  @IsEnum(RoomVisibility)
+  visibility?: RoomVisibility;
 
   @IsDateString()
   endsAt: string;

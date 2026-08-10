@@ -17,6 +17,7 @@ import { ApiErrorCode, SUBMISSION_IMAGE_MAX_BYTES } from '@bb/shared';
 import { IsOptional, IsString, IsUUID, Length } from 'class-validator';
 
 import { CurrentUser } from '@/common/decorators';
+import { EntryNotesDto } from '@/common/dto/entry-notes.dto';
 import { AppException } from '@/common/exceptions/app.exception';
 import { ResponseMessage } from '@/common/interceptors/response.interceptor';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
@@ -46,24 +47,53 @@ export class RoomsController {
     private readonly ballots: BallotService,
   ) {}
 
+  /**
+   * Open lobbies anyone may join.
+   *
+   * Authenticated rather than public. "Public" here means listed to other
+   * players, which is what a host opting in is agreeing to — it is not an
+   * invitation for anonymous scrapers to index room names somebody typed
+   * expecting an audience of artists. Joining requires an account anyway, so
+   * nothing is lost by asking for one to browse.
+   */
+  @Get()
+  async browse() {
+    const rooms = await this.rooms.listPublicLobbies();
+    return rooms.map((room) => RoomMapper.summary(room));
+  }
+
   /** The room this player is already in, so a reload lands back in it. */
   @Get('active')
   async active(@CurrentUser() user: AuthenticatedUser) {
     const room = await this.rooms.findActiveForUser(user.id);
-    return room ? RoomMapper.summary(room) : null;
+    if (!room) return null;
+
+    // A room found here may be several phases behind if the API was asleep when
+    // its deadline passed. Reconciling before the summary is what stops a
+    // player being sent back into a room the clock says is already over.
+    return RoomMapper.summary(await this.rooms.reconcile(room.id));
   }
 
+  /**
+   * The room, brought up to date first.
+   *
+   * `reconcile` rather than a plain read: the client polls this endpoint while
+   * a room is live, so the players waiting on a phase change are exactly the
+   * traffic that triggers it. That is what makes the room survive an API that
+   * was asleep when the deadline passed — the deadline is a stored instant and
+   * does not care how late it is read.
+   */
   @Get(':id')
   async detail(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const room = await this.rooms.findOrFail(id);
+    const room = await this.rooms.reconcile(id);
     return RoomMapper.detail(room, user.id);
   }
 
-  // Room creation is cheap to spam and each one is publicly listed, so it is
-  // rate limited harder than an ordinary write.
+  // Room creation is cheap to spam and a public one appears in the browse list,
+  // so it is rate limited harder than an ordinary write.
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ResponseMessage('Room created')
@@ -118,7 +148,7 @@ export class RoomsController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFiles()
     files: { image?: Express.Multer.File[]; workspace?: Express.Multer.File[] },
-    @Body() body: { notes?: string },
+    @Body() body: EntryNotesDto,
   ) {
     /*
       Authorisation before file handling.

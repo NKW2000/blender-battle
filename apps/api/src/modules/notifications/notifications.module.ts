@@ -7,11 +7,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Notification]),
-    // forwardRef because battles notify players of results while notifications
-    // reach them through the battle gateway's socket server.
-  ],
+  imports: [TypeOrmModule.forFeature([Notification])],
   controllers: [NotificationsController],
   providers: [NotificationsService],
   exports: [NotificationsService],

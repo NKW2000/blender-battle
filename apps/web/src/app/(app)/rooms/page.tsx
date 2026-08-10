@@ -8,6 +8,7 @@ import {
   ROOM_MIN_PLAYERS,
   ROOM_NAME_MAX_LENGTH,
   ROOM_NAME_MIN_LENGTH,
+  RoomVisibility,
 } from '@bb/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,7 +19,13 @@ import { DateTimeField, toLocalInputValue } from '@/components/ui/date-time-fiel
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import { useCategories } from '@/features/challenges/use-challenges';
-import { useActiveRoom, useCreateRoom, useJoinRoom } from '@/features/rooms/use-rooms';
+import {
+  useActiveRoom,
+  useCreateRoom,
+  useJoinRoom,
+  usePublicRooms,
+  type RoomSummary,
+} from '@/features/rooms/use-rooms';
 import { cn } from '@/lib/utils';
 
 const DIFFICULTY_LABEL: Record<Difficulty, string> = {
@@ -41,16 +48,20 @@ function endsAtFromNow(minutes: number): string {
 }
 
 /**
- * Rooms are invite-only.
+ * Two ways in: a code, or the list.
  *
- * There is no browse list because there are no public rooms: a room is reached
- * by creating one or by being given its code. That is the whole of its access
- * control, which is why the code is only ever shown to the host.
+ * A room used to be reachable only by someone handing over its six-character
+ * code, which sat oddly against the rest of the design — every structural
+ * defence in the room flow assumes adversarial strangers, while the only door
+ * was a personal invitation. Hosts now choose. The code still exists for every
+ * room, listed or not, because inviting one specific person is a different job
+ * from being findable, and it is still shown only to the host.
  */
 export default function RoomsPage() {
   const router = useRouter();
   const join = useJoinRoom();
   const { data: active } = useActiveRoom();
+  const { data: openRooms } = usePublicRooms();
   const [code, setCode] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -124,15 +135,75 @@ export default function RoomsPage() {
         </Panel>
       </div>
 
-      {!active ? (
-        <Panel>
-          <EmptyState
-            title="Nothing running"
-            description="Create a room and share the code, or paste a code you were given."
-          />
-        </Panel>
-      ) : null}
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>Open rooms</PanelTitle>
+        </PanelHeader>
+        <PanelBody>
+          {!openRooms ? (
+            <p className="py-6 text-center text-sm font-extrabold text-bone-faint">Loading…</p>
+          ) : openRooms.length === 0 ? (
+            <EmptyState
+              title="No open rooms"
+              description="Nobody has a listed room waiting. Create one, or join with a code."
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {openRooms.map((room) => (
+                <OpenRoomRow
+                  key={room.id}
+                  room={room}
+                  disabled={join.isPending || Boolean(active)}
+                  onJoin={() =>
+                    join.mutate(
+                      { roomId: room.id },
+                      { onSuccess: (joined) => router.push(`/rooms/${joined.id}`) },
+                    )
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </PanelBody>
+      </Panel>
     </div>
+  );
+}
+
+/** One joinable lobby. */
+function OpenRoomRow({
+  room,
+  disabled,
+  onJoin,
+}: {
+  room: RoomSummary;
+  disabled: boolean;
+  onJoin: () => void;
+}) {
+  const full = room.playerCount >= room.maxPlayers;
+
+  return (
+    <li className="flex items-center justify-between gap-4 rounded-2xl border-2 border-edge bg-panel-raised px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate font-display text-base font-bold text-bone">{room.name}</p>
+        <p className="text-xs font-extrabold text-bone-faint">
+          {room.hostUsername ? `${room.hostUsername} · ` : ''}
+          {room.playerCount}/{room.maxPlayers} players
+          {room.category ? ` · ${room.category.name}` : ''}
+        </p>
+      </div>
+
+      <ChunkyButton
+        size="sm"
+        tone="aqua"
+        onClick={onJoin}
+        // A full room and a player who is already in one are different reasons
+        // for the same disabled state, so the label says which.
+        disabled={disabled || full}
+      >
+        {full ? 'Full' : 'Join'}
+      </ChunkyButton>
+    </li>
   );
 }
 
@@ -160,6 +231,14 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
   const [categoryId, setCategoryId] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty | ''>('');
   const [maxPlayers, setMaxPlayers] = useState(8);
+  /*
+    Private by default.
+
+    That is what rooms have been until now — reachable only by code — and
+    silently listing everyone's next room would be a surprising way to ship a
+    browse page. A host opts in.
+  */
+  const [visibility, setVisibility] = useState<RoomVisibility>(RoomVisibility.PRIVATE);
   const [endsAtLocal, setEndsAtLocal] = useState(() => endsAtFromNow(DEFAULT_DURATION_MINUTES));
   // The deadline is absolute, so every second the dialog sits open eats into it.
   // Re-reading the clock keeps the "in X" readout and the minimum-time check
@@ -245,6 +324,7 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
         categoryId: categoryId || undefined,
         difficulty: difficulty || undefined,
         maxPlayers,
+        visibility,
         // The browser reads the picked wall-clock value in its own timezone —
         // toISOString() is what turns that into the single UTC instant every
         // other player's client will later render back in theirs.
@@ -386,6 +466,36 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
                 +
               </StepperButton>
             </div>
+          </FormSection>
+
+          <FormSection label="Who can join" hint="You always get a code">
+            <Select
+              ariaLabel="Room visibility"
+              value={visibility}
+              onChange={(value) => setVisibility(value as RoomVisibility)}
+              options={[
+                {
+                  value: RoomVisibility.PRIVATE,
+                  label: 'Invite only',
+                  hint: 'Reachable with the code',
+                },
+                {
+                  value: RoomVisibility.PUBLIC,
+                  label: 'Listed',
+                  hint: 'Anyone can find and join it',
+                },
+              ]}
+            />
+            {/*
+              Worth stating, because the two settings look like they should
+              differ here and deliberately do not: whether a result counts is
+              decided by how many people actually submitted, not by who could
+              see the room.
+            */}
+            <p className="mt-2 text-xs font-extrabold text-bone-faint">
+              Either way, a room counts towards the leaderboard once enough
+              artists submit.
+            </p>
           </FormSection>
 
           <FormSection label="Deadline" hint={`Up to ${CHALLENGE_MAX_MINUTES / 60} hours`}>

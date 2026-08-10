@@ -116,7 +116,7 @@ export function NotificationBell() {
 
           {items.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-bone-muted">
-              Nothing yet. Battle results and unlocks land here.
+              Nothing yet. Room results and challenge news land here.
             </p>
           ) : (
             <ul className="divide-y divide-edge/60">

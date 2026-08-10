@@ -130,6 +130,16 @@ export class Challenge extends BaseEntity {
   @Column({ type: 'timestamptz', name: 'voting_ends_at', nullable: true })
   votingEndsAt: Date | null;
 
+  /**
+   * When entrants were told voting had opened.
+   *
+   * Records a delivery, not a state. The phase itself is derived from the dates
+   * and never stored — but "voting is open" is a condition that stays true, so
+   * without a marker the sweep would re-notify the same entrants on every tick.
+   */
+  @Column({ type: 'timestamptz', name: 'voting_notified_at', nullable: true })
+  votingNotifiedAt: Date | null;
+
   /** Set once voting has resolved, so a finished event stops re-tallying. */
   @Column({ type: 'uuid', name: 'winner_entry_id', nullable: true })
   winnerEntryId: string | null;
