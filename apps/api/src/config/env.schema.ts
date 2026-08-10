@@ -45,6 +45,29 @@ export const envSchema = z
      * quietly dial localhost, which is the failure this schema exists to prevent.
      */
     DATABASE_URL: z.string().url().optional(),
+
+    /**
+     * Apply pending migrations when the API boots.
+     *
+     * Off by default, because a migration that fails then takes the process
+     * down with it rather than failing in a terminal where someone is watching.
+     *
+     * It exists because the alternative was worse for this deployment: the
+     * machine holding the repository cannot open a Postgres connection at all —
+     * TCP connects and the protocol goes silent, a middlebox on the network —
+     * so `migration:run` cannot be run from where the migrations live, and the
+     * schema was being moved by pasting SQL into a web console. That is a
+     * process that works until the day someone pastes half of it.
+     *
+     * Safe here specifically because the API runs as a single instance. With
+     * several, two booting at once would race for the same migration; TypeORM
+     * takes a lock, but the loser waits on it rather than skipping, and a slow
+     * migration would hold up every replica's startup.
+     */
+    RUN_MIGRATIONS_ON_BOOT: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     DATABASE_HOST: z.string().min(1).optional(),
     DATABASE_PORT: z.coerce.number().int().positive().default(5432),
     DATABASE_USER: z.string().min(1).optional(),

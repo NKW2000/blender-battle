@@ -118,6 +118,11 @@ export class AppConfig {
     };
   }
 
+  /** Whether to apply pending migrations at boot. See the env schema. */
+  get runMigrationsOnBoot(): boolean {
+    return this.get('RUN_MIGRATIONS_ON_BOOT');
+  }
+
   get mail() {
     return {
       driver: this.get('MAIL_DRIVER'),
