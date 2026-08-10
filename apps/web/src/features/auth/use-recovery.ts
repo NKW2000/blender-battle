@@ -1,7 +1,8 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { sessionKeys } from '@/features/auth/use-session';
 import { api, type ApiError } from '@/lib/api/client';
 
 /**
@@ -32,9 +33,24 @@ export function useResetPassword() {
  * no user id in the request, so it cannot be used to make the service email
  * somebody else.
  */
+export type VerificationSendResult = 'sent' | 'already-verified' | 'send-failed';
+
 export function useResendVerification() {
-  return useMutation<void, ApiError, void>({
-    mutationFn: () => api.post<void>('/auth/email/verify/resend'),
+  const queryClient = useQueryClient();
+
+  return useMutation<{ result: VerificationSendResult }, ApiError, void>({
+    mutationFn: () => api.post<{ result: VerificationSendResult }>('/auth/email/verify/resend'),
+    onSuccess: (data) => {
+      /*
+        `already-verified` means this client's copy of the session is stale —
+        most often because a completed password reset confirmed the address on
+        the server. Refetching makes the banner disappear on its own rather
+        than leaving someone pressing a button that will never do anything.
+      */
+      if (data.result === 'already-verified') {
+        void queryClient.invalidateQueries({ queryKey: sessionKeys.me });
+      }
+    },
   });
 }
 

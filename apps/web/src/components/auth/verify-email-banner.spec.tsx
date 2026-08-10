@@ -14,12 +14,21 @@ const session = vi.hoisted(() => ({ user: null as unknown }));
 vi.mock('@/features/auth/use-session', () => ({
   useSession: () => session,
 }));
+const resend = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  isPending: false,
+  isSuccess: false,
+  data: undefined as { result: string } | undefined,
+}));
+
 vi.mock('@/features/auth/use-recovery', () => ({
-  useResendVerification: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false }),
+  useResendVerification: () => resend,
 }));
 
 const asUser = (overrides: Record<string, unknown> = {}) => {
   session.user = { email: 'ada@example.com', emailVerifiedAt: null, ...overrides };
+  resend.isSuccess = false;
+  resend.data = undefined;
 };
 
 describe('VerifyEmailBanner', () => {
@@ -57,6 +66,30 @@ describe('VerifyEmailBanner', () => {
     render(<VerifyEmailBanner />);
 
     expect(screen.getByText(/an\.extremely\.long/)).toHaveClass('break-all');
+  });
+
+  it('says so when the provider refused, rather than claiming success', async () => {
+    /*
+      The failure this exists for. On a testing sender the provider will only
+      accept one address, so "Sent" is a lie that leaves the user waiting for a
+      message that was rejected before it left. The offer to retry stays.
+    */
+    asUser();
+    resend.isSuccess = true;
+    resend.data = { result: 'send-failed' };
+    render(<VerifyEmailBanner />);
+
+    expect(screen.getByText(/could not send/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('confirms a real send', async () => {
+    asUser();
+    resend.isSuccess = true;
+    resend.data = { result: 'sent' };
+    render(<VerifyEmailBanner />);
+
+    expect(screen.getByText(/Sent again to/i)).toBeInTheDocument();
   });
 
   it('disappears when dismissed', async () => {

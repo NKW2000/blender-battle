@@ -15,6 +15,16 @@ import { TokenFamilyRevokeReason } from '../entities/refresh-token-family.entity
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 
+/**
+ * What came of asking for a verification link.
+ *
+ * Three outcomes rather than a boolean, because "no email is coming" has two
+ * causes that need different words in front of a user: one is a provider
+ * failure worth retrying, the other means the address is already confirmed and
+ * there is nothing to retry.
+ */
+export type VerificationSendResult = 'sent' | 'already-verified' | 'send-failed';
+
 /** How long a link is good for, by purpose. */
 const TTL_MINUTES: Record<AccountTokenPurpose, number> = {
   /*
@@ -136,13 +146,25 @@ export class AccountRecoveryService {
     });
   }
 
-  /** Emails a fresh verification link. No-op for an already-verified address. */
-  async requestEmailVerification(user: User): Promise<void> {
-    if (user.emailVerifiedAt) return;
+  /**
+   * Emails a fresh verification link.
+   *
+   * Reports which of three things happened rather than returning nothing. Two
+   * of them mean no email is coming, and from the outside all three look
+   * identical — so a caller that says "sent" regardless leaves somebody
+   * refreshing an inbox for a message that was never going to arrive.
+   *
+   * `already-verified` is a real and easily-hit case, not a defensive branch:
+   * completing a password reset marks the address confirmed, because reading
+   * that email proves control of the inbox. Afterwards this correctly does
+   * nothing, and saying so is the whole point.
+   */
+  async requestEmailVerification(user: User): Promise<VerificationSendResult> {
+    if (user.emailVerifiedAt) return 'already-verified';
 
     const token = await this.issue(user, AccountTokenPurpose.EMAIL_VERIFICATION);
 
-    await this.mail.send({
+    const sent = await this.mail.send({
       to: user.email,
       subject: 'Confirm your Blender Battle address',
       text:
@@ -150,6 +172,8 @@ export class AccountRecoveryService {
         `${this.mail.link(`/verify-email?token=${token}`)}\n\n` +
         `The link is good for three days.`,
     });
+
+    return sent ? 'sent' : 'send-failed';
   }
 
   // --- Redeeming -------------------------------------------------------------

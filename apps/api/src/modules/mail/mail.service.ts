@@ -37,15 +37,20 @@ export class MailService {
   constructor(private readonly config: AppConfig) {}
 
   /**
-   * Sends, or logs.
+   * Sends, or logs. Returns whether it actually went.
    *
-   * Never throws. Callers are auth flows whose response must not depend on the
-   * outcome: `forgot password` answers the same way whether or not the address
-   * exists, and it would defeat that if a provider outage produced a different
-   * status code for a real address than for an unknown one. Failures are logged
-   * and swallowed, and the user is told to check their inbox either way.
+   * Never throws — several callers are flows whose response must not depend on
+   * the outcome. `forgot password` answers the same way whether or not the
+   * address exists, and it would defeat that if a provider outage produced a
+   * different status code for a real address than for an unknown one.
+   *
+   * It returns a boolean rather than nothing so a caller that *is* entitled to
+   * care can act on it. Resending your own verification link is authenticated
+   * and targets your own address: there is nothing to leak there, and reporting
+   * "sent" when the provider refused only leaves someone waiting for mail that
+   * never left the building.
    */
-  async send(mail: OutgoingMail): Promise<void> {
+  async send(mail: OutgoingMail): Promise<boolean> {
     const { driver, apiKey, from } = this.config.mail;
 
     if (driver === 'log') {
@@ -61,7 +66,9 @@ export class MailService {
       this.logger.log(
         `[mail:log] to=${mail.to} subject="${mail.subject}"\n${mail.text}`,
       );
-      return;
+      // Written somewhere a developer can read it, which counts as delivered
+      // for this driver's purposes.
+      return true;
     }
 
     try {
@@ -85,9 +92,13 @@ export class MailService {
         this.logger.error(
           `Mail send failed (${response.status}): ${await response.text()}`,
         );
+        return false;
       }
+
+      return true;
     } catch (error) {
       this.logger.error(`Mail send threw: ${(error as Error).message}`);
+      return false;
     }
   }
 

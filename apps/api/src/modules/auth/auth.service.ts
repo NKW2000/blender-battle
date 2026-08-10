@@ -17,7 +17,10 @@ import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import { TokenFamilyRevokeReason } from './entities/refresh-token-family.entity';
 import { PasswordService } from './services/password.service';
-import { AccountRecoveryService } from './services/account-recovery.service';
+import {
+  AccountRecoveryService,
+  type VerificationSendResult,
+} from './services/account-recovery.service';
 import { TokenService } from './services/token.service';
 import type { IssuedSession, IssuedTokens } from './auth.types';
 
@@ -43,10 +46,10 @@ export class AuthService {
    * arbitrary user id would let anyone make the service email anybody who has
    * an account here.
    */
-  async resendVerification(userId: string): Promise<void> {
+  async resendVerification(userId: string): Promise<VerificationSendResult> {
     const user = await this.users.findOne({ where: { id: userId } });
-    if (!user) return;
-    await this.recovery.requestEmailVerification(user);
+    if (!user) return 'send-failed';
+    return this.recovery.requestEmailVerification(user);
   }
 
   async register(dto: RegisterDto, context: RequestContext): Promise<IssuedSession> {

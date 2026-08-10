@@ -49,7 +49,10 @@ import {
   VerifyEmailDto,
 } from './dto/recovery.dto';
 import { RegisterDto } from './dto/register.dto';
-import { AccountRecoveryService } from './services/account-recovery.service';
+import {
+  AccountRecoveryService,
+  type VerificationSendResult,
+} from './services/account-recovery.service';
 import { OAuthService } from './services/oauth.service';
 
 /**
@@ -198,12 +201,22 @@ export class AuthController {
     await this.recovery.verifyEmail(dto.token);
   }
 
-  /** Send another verification link to the signed-in user's own address. */
+  /**
+   * Send another verification link to the signed-in user's own address.
+   *
+   * Reports the outcome, unlike every other endpoint in this section. Those
+   * stay silent to avoid confirming whether an address is registered; this one
+   * is authenticated and acts on the caller's own address, so there is nothing
+   * to disclose — and "sent" when nothing was sent is the difference between a
+   * user checking their spam folder and a user waiting for ever.
+   */
   @Post('email/verify/resend')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
-  async resendVerification(@CurrentUser() user: AuthenticatedUser): Promise<void> {
-    await this.auth.resendVerification(user.id);
+  async resendVerification(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ result: VerificationSendResult }> {
+    return { result: await this.auth.resendVerification(user.id) };
   }
 
   // --- OAuth ----------------------------------------------------------------

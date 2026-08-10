@@ -28,6 +28,16 @@ export function VerifyEmailBanner() {
   // Nothing to say to a signed-out visitor or a confirmed account.
   if (!user || user.emailVerifiedAt || dismissed) return null;
 
+  /*
+    The provider refused it.
+
+    Worth saying out loud rather than showing "Sent": the commonest cause is a
+    deployment still on a testing sender, which can only email one address. A
+    user told "sent" in that situation waits for ever for a message that was
+    rejected before it left.
+  */
+  const failed = resend.data?.result === 'send-failed';
+
   return (
     /*
       Stacked on a phone, one row from `sm` up.
@@ -58,7 +68,7 @@ export function VerifyEmailBanner() {
       <div className="min-w-0 flex-1 pr-8 sm:pr-0">
         <p className="font-display text-sm font-bold text-bone">Confirm your email address</p>
         <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
-          {resend.isSuccess ? 'Sent again to ' : 'We sent a link to '}
+          {failed ? 'We could not send to ' : resend.isSuccess ? 'Sent again to ' : 'We sent a link to '}
           {/*
             The address gets its own element so it can break.
 
@@ -68,13 +78,15 @@ export function VerifyEmailBanner() {
             the one string here that is not under our control.
           */}
           <span className="break-all text-bone">{user.email}</span>
-          {resend.isSuccess
-            ? ' — check your spam folder too.'
-            : '. You can still enter challenges; voting needs a confirmed address.'}
+          {failed
+            ? '. The mail service refused it — that usually means the address is not one this deployment is allowed to email yet. Nothing is wrong with your account.'
+            : resend.isSuccess
+              ? ' — check your spam folder too.'
+              : '. You can still enter challenges; voting needs a confirmed address.'}
         </p>
       </div>
 
-      {resend.isSuccess ? null : (
+      {resend.isSuccess && !failed ? null : (
         // Full width on a phone, natural width beside the text from `sm` up.
         // A small button floating alone under a paragraph is easy to miss and
         // easy to mis-tap.
@@ -86,7 +98,7 @@ export function VerifyEmailBanner() {
             onClick={() => resend.mutate()}
             disabled={resend.isPending}
           >
-            {resend.isPending ? 'Sending…' : 'Send again'}
+            {resend.isPending ? 'Sending…' : failed ? 'Try again' : 'Send again'}
           </Button>
         </div>
       )}
