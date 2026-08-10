@@ -58,11 +58,23 @@ export function useChallenges(filters: ChallengeFilters) {
   });
 }
 
-export function useChallenge(slug: string) {
+/**
+ * One brief.
+ *
+ * `initialData` is the copy the server rendered with. Passing it means the page
+ * paints its content immediately instead of flashing a skeleton over markup the
+ * visitor can already see, and the query refetches in the background to pick up
+ * anything that changed since.
+ */
+export function useChallenge(slug: string, initialData?: ChallengeDetail) {
   return useQuery({
     queryKey: challengeKeys.detail(slug),
     queryFn: () => api.get<ChallengeDetail>(`/challenges/${slug}`),
     enabled: Boolean(slug),
+    initialData,
+    // Without this the server copy counts as fresh forever and a manager who
+    // publishes would keep seeing the draft they arrived with.
+    staleTime: 30_000,
   });
 }
 

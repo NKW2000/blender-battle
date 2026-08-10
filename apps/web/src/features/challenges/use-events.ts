@@ -65,12 +65,25 @@ export function useEvents() {
  * — the window opens, closes, and resolves whether or not this tab acts. A
  * finished event never changes again, so polling stops there.
  */
-export function useEvent(id: string | null) {
+export function useEvent(id: string | null, initialData?: EventDetail) {
   return useQuery({
     queryKey: eventKeys.detail(id ?? ''),
     queryFn: () => api.get<EventDetail>(`/challenge-events/${id}`),
     enabled: Boolean(id),
     refetchInterval: (query) => (query.state.data?.phase === 'finished' ? false : 15_000),
+    /*
+      Seeded from the server render, which was made without credentials — so
+      `myEntryId` and `myVoteEntryId` are null in it even for someone who has
+      entered.
+
+      `initialDataUpdatedAt: 0` marks that copy as already stale, so the query
+      refetches immediately on mount with the visitor's own token and fills
+      those in. Without it a signed-in entrant would be shown the anonymous
+      view until the first poll, and the ballot would refuse a vote they appear
+      to be allowed to cast.
+    */
+    initialData,
+    initialDataUpdatedAt: 0,
   });
 }
 

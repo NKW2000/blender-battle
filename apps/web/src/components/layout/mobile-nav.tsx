@@ -32,7 +32,11 @@ export function MobileNav({
 }: {
   links: NavLink[];
   pathname: string;
-  onSignOut: () => void;
+  /**
+   * Omitted when nobody is signed in — the drawer then offers sign-in instead.
+   * Optional rather than a boolean flag beside it, so the two cannot disagree.
+   */
+  onSignOut?: () => void;
   signingOut: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -216,15 +220,21 @@ export function MobileNav({
               className="border-t-[3px] border-white/10 p-3"
               style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
             >
-              <ChunkyButton
-                tone="ghost"
-                size="md"
-                className="w-full"
-                onClick={onSignOut}
-                disabled={signingOut}
-              >
-                {signingOut ? 'Signing out…' : 'Sign out'}
-              </ChunkyButton>
+              {onSignOut ? (
+                <ChunkyButton
+                  tone="ghost"
+                  size="md"
+                  className="w-full"
+                  onClick={onSignOut}
+                  disabled={signingOut}
+                >
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </ChunkyButton>
+              ) : (
+                <ChunkyButton asChild size="md" className="w-full">
+                  <Link href="/login">Sign in</Link>
+                </ChunkyButton>
+              )}
             </div>
           </div>
         </div>,

@@ -1,8 +1,7 @@
 'use client';
 
-import { ChallengeAssetType, ChallengeStatus, Role } from '@bb/shared';
+import { ChallengeAssetType, ChallengeStatus, Role, type ChallengeDetail } from '@bb/shared';
 import Link from 'next/link';
-import { use } from 'react';
 
 import { DifficultyBadge, StatusBadge } from '@/components/challenges/challenge-card';
 import { ScheduleEventPanel } from '@/components/challenges/schedule-event-panel';
@@ -12,16 +11,26 @@ import { useSession } from '@/features/auth/use-session';
 import { useChallenge, useChallengeLifecycle } from '@/features/challenges/use-challenges';
 import { formatDate } from '@/lib/utils';
 
-export default function ChallengeDetailPage({
-  params,
+/**
+ * The interactive half of a brief.
+ *
+ * Split out of `page.tsx`, which is now a server component: the page renders
+ * the brief into the initial HTML and builds `<head>`, and this hydrates on top
+ * to add the manager controls and keep the data fresh.
+ *
+ * `initialChallenge` is the copy the server already fetched. Seeding the query
+ * with it means no loading flash on first paint and no second request for data
+ * that is already on the page.
+ */
+export function ChallengeDetailView({
+  slug,
+  initialChallenge,
 }: {
-  params: Promise<{ slug: string }>;
+  slug: string;
+  initialChallenge: ChallengeDetail | null;
 }) {
-  // A brief is for reading, so the field thins out and slows down.
-
-  const { slug } = use(params);
   const { user } = useSession();
-  const { data: challenge, isLoading, isError } = useChallenge(slug);
+  const { data: challenge, isLoading, isError } = useChallenge(slug, initialChallenge ?? undefined);
   const { publish, archive } = useChallengeLifecycle();
 
   if (isLoading) {
