@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ChevronIcon } from '@/components/ui/icons';
+import { useSession } from '@/features/auth/use-session';
 import { useSound } from '@/features/sound/use-sound';
 import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/challenges/use-events';
 
@@ -31,6 +32,7 @@ import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/chal
  * loops — stepping past the last entry wraps to the first, and vice versa.
  */
 export function VoteScreen({ event }: { event: EventDetail }) {
+  const { user } = useSession();
   const vote = useVoteEvent(event.id);
   const play = useSound();
   const [active, setActive] = useState(0);
@@ -55,7 +57,16 @@ export function VoteScreen({ event }: { event: EventDetail }) {
     that returns 403 is worse still.
   */
   const didEnter = event.myEntryId !== null;
-  const canVote = didEnter && !hasVoted;
+  /*
+    A confirmed address, too — the server refuses a vote without one.
+
+    Reflected here rather than left to the 403, for the same reason the
+    entrants-only rule is: a button that looks live and then fails reads as a
+    broken site, and the remedy (check your inbox) is not something anyone
+    guesses from an error toast.
+  */
+  const isVerified = Boolean(user?.emailVerifiedAt);
+  const canVote = didEnter && isVerified && !hasVoted;
 
   const step = useCallback(
     (dir: number) => {
@@ -167,6 +178,18 @@ export function VoteScreen({ event }: { event: EventDetail }) {
               Only artists who entered this challenge can vote on it — it is what keeps a
               handful of new accounts from deciding the result. You can still look through
               every entry.
+            </p>
+          </div>
+        ) : !isVerified ? (
+          <div
+            role="note"
+            className="mb-3 rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3"
+          >
+            <p className="font-display text-sm font-bold text-bone">Confirm your email to vote</p>
+            <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
+              Your entry is in and will be judged either way. Voting is the one thing that
+              needs a confirmed address — check your inbox, or send a new link from the
+              banner at the top of the page.
             </p>
           </div>
         ) : null}
@@ -321,9 +344,11 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                             ? 'Yours'
                             : hasVoted
                               ? 'Locked'
-                              : didEnter
-                                ? 'Vote'
-                                : 'Entrants only'}
+                              : !didEnter
+                                ? 'Entrants only'
+                                : !isVerified
+                                  ? 'Confirm email'
+                                  : 'Vote'}
                       </button>
                     </div>
                   </div>

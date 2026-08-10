@@ -65,6 +65,15 @@ export interface SelfUserProfile extends PublicUserProfile {
   status: UserStatus;
   updatedAt: string;
   /**
+   * Whether the address has been confirmed, and when.
+   *
+   * Owner-only: it is on `SelfUserProfile` and deliberately not on
+   * `PublicUserProfile`. Whether a stranger has confirmed their email is
+   * nobody else's business, and exposing it would make the profile page a
+   * convenient list of accounts whose owner never read the welcome mail.
+   */
+  emailVerifiedAt: string | null;
+  /**
    * The artist's curated showcase: entry ids, in display order, at most ten.
    * Only exposed to the owner — a viewer sees the resolved works, not the id
    * list — because it is the input to the settings picker, not public data.

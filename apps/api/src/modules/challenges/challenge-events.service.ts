@@ -6,6 +6,8 @@ import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { AppException } from '@/common/exceptions/app.exception';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 
+import { User } from '@/modules/users/entities/user.entity';
+
 import { Challenge } from './entities/challenge.entity';
 import { ChallengeEntry } from './entities/challenge-entry.entity';
 import { ChallengeVote } from './entities/challenge-vote.entity';
@@ -19,6 +21,7 @@ export class ChallengeEventsService {
     @InjectRepository(Challenge) private readonly challenges: Repository<Challenge>,
     @InjectRepository(ChallengeEntry) private readonly entries: Repository<ChallengeEntry>,
     @InjectRepository(ChallengeVote) private readonly votes: Repository<ChallengeVote>,
+    @InjectRepository(User) private readonly users: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
   ) {}
@@ -192,6 +195,32 @@ export class ChallengeEventsService {
         ApiErrorCode.CONFLICT,
         phase === 'finished' ? 'Voting has closed' : 'Voting has not opened yet',
         409,
+      );
+    }
+
+    /*
+      A confirmed address.
+
+      Verification is enforced here and nowhere else, on purpose. Gating
+      registration would turn a mail outage into "nobody can sign up"; gating
+      entry would mean an artist who did the work cannot submit it because a
+      message went to spam. Voting is the one action where an unverified account
+      is worth something to somebody else — it is the point at which an
+      anonymous inbox becomes influence over someone's result.
+
+      An account can still browse, enter, and be judged while unverified. It
+      just cannot decide who wins.
+    */
+    const voter = await this.users.findOne({
+      where: { id: voterId },
+      select: { id: true, emailVerifiedAt: true },
+    });
+
+    if (!voter?.emailVerifiedAt) {
+      throw new AppException(
+        ApiErrorCode.FORBIDDEN,
+        'Confirm your email address before voting. Check your inbox, or send a new link from Settings.',
+        403,
       );
     }
 

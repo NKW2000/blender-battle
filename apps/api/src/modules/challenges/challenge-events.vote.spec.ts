@@ -26,6 +26,7 @@ function createService(options: {
   voterHasEntry?: boolean;
   targetOwnerId?: string;
   alreadyVoted?: boolean;
+  voterVerified?: boolean;
 } = {}) {
   const challenge = {
     id: 'challenge-1',
@@ -60,6 +61,13 @@ function createService(options: {
       findOne: async () => (options.alreadyVoted ? { id: 'vote-1' } : null),
     } as never,
     {
+      // The voter's own account, for the email-verification gate.
+      findOne: async () => ({
+        id: 'voter-1',
+        emailVerifiedAt: options.voterVerified === false ? null : new Date(),
+      }),
+    } as never,
+    {
       transaction: async (work: (m: unknown) => Promise<void>) =>
         work({
           insert: async (_entity: unknown, values: unknown) => {
@@ -91,6 +99,21 @@ describe('vote — who may cast one', () => {
       entryId: 'entry-2',
     });
     expect(inserted).toHaveLength(1);
+  });
+
+  it('refuses a vote from an unconfirmed address', async () => {
+    /*
+      Verification is enforced at this one action and nowhere else. An
+      unverified account may browse, enter and be judged — it just cannot
+      decide who wins, which is the only point where an anonymous inbox turns
+      into influence over somebody else's result.
+    */
+    const { service, inserted } = createService({ voterHasEntry: true, voterVerified: false });
+
+    await expect(service.vote('challenge-1', 'voter-1', 'entry-2')).rejects.toMatchObject({
+      code: ApiErrorCode.FORBIDDEN,
+    });
+    expect(inserted).toHaveLength(0);
   });
 
   it('refuses a vote from someone who did not enter', async () => {

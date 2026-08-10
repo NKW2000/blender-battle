@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ArcadeLogo, ArcadeWordmark } from '@/components/arcade/chunky';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
 import { Button } from '@/components/ui/button';
 import { SoundToggle } from '@/components/ui/sound-toggle';
 import { useLogout, useSession } from '@/features/auth/use-session';
@@ -146,7 +147,10 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+        <VerifyEmailBanner />
+        {children}
+      </main>
     </div>
   );
 }

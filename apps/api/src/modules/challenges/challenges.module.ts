@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
+import { User } from '@/modules/users/entities/user.entity';
 import { UploadsModule } from '@/modules/uploads/uploads.module';
 
 import { ChallengeAssetsService } from './challenge-assets.service';
@@ -19,7 +20,15 @@ import { Tag } from './entities/tag.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Challenge, Category, Tag, ChallengeAsset, ChallengeEntry, ChallengeVote]),
+    TypeOrmModule.forFeature([
+      Challenge,
+      Category,
+      Tag,
+      ChallengeAsset,
+      ChallengeEntry,
+      ChallengeVote,
+      User,
+    ]),
     UploadsModule,
     NotificationsModule,
   ],

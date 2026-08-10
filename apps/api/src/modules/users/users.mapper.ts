@@ -49,6 +49,7 @@ export const UserMapper = {
     return {
       ...UserMapper.toPublic(user, rank),
       email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
       role: user.role,
       status: user.status,
       updatedAt: user.updatedAt.toISOString(),

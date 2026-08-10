@@ -25,6 +25,19 @@ export function useResetPassword() {
   });
 }
 
+/**
+ * Ask for another verification link.
+ *
+ * Authenticated and scoped server-side to the caller's own address — there is
+ * no user id in the request, so it cannot be used to make the service email
+ * somebody else.
+ */
+export function useResendVerification() {
+  return useMutation<void, ApiError, void>({
+    mutationFn: () => api.post<void>('/auth/email/verify/resend'),
+  });
+}
+
 export function useVerifyEmail() {
   return useMutation<void, ApiError, { token: string }>({
     mutationFn: (dto) => api.post<void>('/auth/email/verify', dto),

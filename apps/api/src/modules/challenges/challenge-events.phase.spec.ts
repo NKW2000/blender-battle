@@ -21,6 +21,7 @@ const service = new ChallengeEventsService(
   null as never,
   null as never,
   null as never,
+  null as never,
 );
 
 const OPENS = new Date('2026-03-01T12:00:00.000Z');
