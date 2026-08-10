@@ -366,7 +366,7 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.15fr]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_1.15fr]">
         <Panel active={!submitted}>
           <PanelHeader tone="sun" icon={PANEL_ICON.upload}>
             <PanelTitle>{submitted ? 'Entry received' : 'Upload your entry'}</PanelTitle>

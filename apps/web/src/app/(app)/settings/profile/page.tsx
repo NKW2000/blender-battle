@@ -14,17 +14,32 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
+  OAuthProvider,
 } from '@bb/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type UseFormRegister } from 'react-hook-form';
 import { z } from 'zod';
 
+import { ChunkyButton } from '@/components/arcade/chunky';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
-import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
+import {
+  EmptyState,
+  PANEL_ICON,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Skeleton,
+} from '@/components/ui/panel';
+import {
+  useForgotPassword,
+  useLinkedAccounts,
+  useResendVerification,
+} from '@/features/auth/use-recovery';
 import { useSession } from '@/features/auth/use-session';
 import { usePortfolio, useUpdateProfile, useUploadAvatar } from '@/features/users/use-users';
 import { collectFormMessages, notify } from '@/lib/notify';
@@ -206,10 +221,20 @@ export default function ProfileSettingsPage() {
         to the full width, which is worse; splitting it puts the avatar in a side
         column and leaves the form at roughly the width it already had.
       */}
-      <div className="grid items-start gap-8 lg:grid-cols-[1fr_1.6fr]">
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_1.6fr]">
+      {/*
+        A column, not a single card.
+
+        The avatar panel is about 220px tall against a form nearly four times
+        that, so the side column was mostly empty space. What fills it is the
+        part of "your account" this screen never had: the address everything is
+        sent to, whether it has been confirmed, how to change the password, and
+        which providers the account can be signed in with.
+      */}
+      <div className="flex min-w-0 flex-col gap-8">
       <Panel>
-        <PanelHeader>
-          <PanelTitle className="text-sun">Avatar</PanelTitle>
+        <PanelHeader tone="aqua" icon={PANEL_ICON.image}>
+          <PanelTitle>Avatar</PanelTitle>
         </PanelHeader>
         <PanelBody className="flex items-center gap-5">
           {user.avatarUrl ? (
@@ -256,6 +281,10 @@ export default function ProfileSettingsPage() {
           </div>
         </PanelBody>
       </Panel>
+
+      <AccountPanel />
+      <ConnectedAccountsPanel />
+      </div>
 
       <form
         onSubmit={handleSubmit(onSubmit, (fieldErrors) =>
@@ -362,6 +391,190 @@ export default function ProfileSettingsPage() {
           one thing the old narrow column actually hurt. */}
       <ShowcasePicker username={user.username} initial={user.showcaseEntryIds ?? []} />
     </div>
+  );
+}
+
+/**
+ * The account itself: the address everything is sent to, and the password.
+ *
+ * Settings had neither. Your email was not shown anywhere in the application
+ * once you had registered, so there was no way to check which address a
+ * verification link had gone to, and no way to change a password without
+ * signing out first and using "forgot password" from the login screen.
+ */
+function AccountPanel() {
+  const { user } = useSession();
+  const resend = useResendVerification();
+  const forgot = useForgotPassword();
+
+  if (!user) return null;
+
+  const verified = Boolean(user.emailVerifiedAt);
+
+  return (
+    <Panel>
+      <PanelHeader tone="sun" icon={PANEL_ICON.upload}>
+        <PanelTitle>Account</PanelTitle>
+      </PanelHeader>
+      <PanelBody className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-black uppercase tracking-[1.2px] text-haze-5">
+            Email
+          </span>
+          {/* `break-all`: an address is one unbroken token to the browser, and a
+              long one would otherwise widen this panel past its column. */}
+          <span className="break-all text-sm font-extrabold text-cream">{user.email}</span>
+
+          <span
+            className={`mt-1 w-fit rounded-full border-2 px-3 py-1 text-[11px] font-black uppercase tracking-[1px] ${
+              verified
+                ? 'border-mint bg-mint/14 text-mint'
+                : 'border-sun bg-sun/14 text-sun'
+            }`}
+          >
+            {verified ? 'Confirmed' : 'Not confirmed'}
+          </span>
+
+          {!verified ? (
+            <>
+              <p className="mt-1 text-xs font-extrabold leading-relaxed text-haze">
+                Voting needs a confirmed address. Entering challenges does not.
+              </p>
+              <ChunkyButton
+                size="sm"
+                tone="cream"
+                className="mt-1 w-full"
+                onClick={() => resend.mutate()}
+                disabled={resend.isPending}
+              >
+                {resend.isPending ? 'Sending…' : 'Send the link again'}
+              </ChunkyButton>
+              {resend.isSuccess ? (
+                <p className="text-xs font-extrabold text-mint">Sent — check your spam folder.</p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-1.5 border-t-[3px] border-ink pt-4">
+          <span className="text-[11px] font-black uppercase tracking-[1.2px] text-haze-5">
+            Password
+          </span>
+          {/*
+            A reset link rather than an old/new password pair.
+
+            There is no authenticated change-password endpoint, and inventing one
+            here would mean a second way to set a password with its own rules to
+            keep in step with the first. Mailing the same link the login screen
+            sends reuses a path that already revokes every session on success,
+            which is the behaviour you want when a password changes.
+          */}
+          {forgot.isSuccess ? (
+            <p className="text-xs font-extrabold text-mint">
+              A reset link is on its way to {user.email}.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-extrabold leading-relaxed text-haze">
+                We email you a link. Using it signs you out everywhere else.
+              </p>
+              <ChunkyButton
+                size="sm"
+                tone="ghost"
+                className="mt-1 w-full"
+                onClick={() => forgot.mutate({ email: user.email })}
+                disabled={forgot.isPending}
+              >
+                {forgot.isPending ? 'Sending…' : 'Change password'}
+              </ChunkyButton>
+            </>
+          )}
+        </div>
+
+        <dl className="flex flex-col gap-2 border-t-[3px] border-ink pt-4 text-xs font-extrabold">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-haze-5">Joined</dt>
+            <dd className="text-haze">{formatDate(user.joinedAt)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-haze-5">Role</dt>
+            <dd className="uppercase text-haze">{user.role}</dd>
+          </div>
+        </dl>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+/**
+ * Which providers this account can be signed in with.
+ *
+ * `/auth/oauth/linked` has been served the whole time with nothing calling it,
+ * so an account could be connected to Google or Discord and no screen would say
+ * so. Connecting is a redirect to the same endpoint the sign-in buttons use,
+ * with the caller's id taken from their token rather than the query string.
+ */
+function ConnectedAccountsPanel() {
+  const { data: linked, isLoading } = useLinkedAccounts();
+
+  const providers: Array<{ id: OAuthProvider; label: string }> = [
+    { id: OAuthProvider.GOOGLE, label: 'Google' },
+    { id: OAuthProvider.DISCORD, label: 'Discord' },
+  ];
+
+  return (
+    <Panel>
+      <PanelHeader tone="mint" icon={PANEL_ICON.users}>
+        <PanelTitle>Sign-in methods</PanelTitle>
+      </PanelHeader>
+      <PanelBody className="flex flex-col gap-2.5">
+        {isLoading ? (
+          <Skeleton className="h-12 w-full" />
+        ) : (
+          providers.map((provider) => {
+            const account = linked?.find((item) => item.provider === provider.id);
+
+            return (
+              <div
+                key={provider.id}
+                className="flex min-w-0 items-center justify-between gap-3 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3"
+                style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-cream">{provider.label}</p>
+                  {account ? (
+                    <p className="truncate text-xs font-extrabold text-mint">
+                      {account.handle ?? 'Connected'}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-extrabold text-haze-5">Not connected</p>
+                  )}
+                </div>
+
+                {account ? (
+                  <span className="shrink-0 text-xs font-black uppercase tracking-[1px] text-mint">
+                    ✓
+                  </span>
+                ) : (
+                  <ChunkyButton
+                    size="sm"
+                    tone="cream"
+                    className="shrink-0"
+                    onClick={() => {
+                      const base =
+                        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+                      window.location.href = `${base}/auth/oauth/${provider.id}?link=1`;
+                    }}
+                  >
+                    Connect
+                  </ChunkyButton>
+                )}
+              </div>
+            );
+          })
+        )}
+      </PanelBody>
+    </Panel>
   );
 }
 

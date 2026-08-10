@@ -1,6 +1,7 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { LinkedAccount } from '@bb/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { sessionKeys } from '@/features/auth/use-session';
 import { api, type ApiError } from '@/lib/api/client';
@@ -57,5 +58,21 @@ export function useResendVerification() {
 export function useVerifyEmail() {
   return useMutation<void, ApiError, { token: string }>({
     mutationFn: (dto) => api.post<void>('/auth/email/verify', dto),
+  });
+}
+
+/**
+ * Which sign-in providers this account is connected to.
+ *
+ * `/auth/oauth/linked` has been served the whole time with nothing calling it,
+ * so an account could be linked to Google or Discord and there was no screen in
+ * the application that would tell you. Settings is where someone goes to find
+ * out, so it is asked for here.
+ */
+export function useLinkedAccounts() {
+  return useQuery({
+    queryKey: ['auth', 'oauth', 'linked'] as const,
+    queryFn: () => api.get<LinkedAccount[]>('/auth/oauth/linked'),
+    staleTime: 5 * 60 * 1000,
   });
 }
