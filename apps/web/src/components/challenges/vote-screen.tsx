@@ -13,11 +13,17 @@ import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/chal
  * A vertical wheel of entries on the left — one card in focus, the rest stacked,
  * scaled back and blurred — beside a fixed reference panel on the right.
  *
- * The ballot is blind and final. During voting the server sends the image only —
- * no author, no vote count — so a card is judged on the work alone. A vote is
- * confirmed, then cast once and cannot be changed: pressing it opens a dialog,
- * and after it lands every card locks until the next challenge. The names and the
- * tally appear only when voting closes, on the finished screen.
+ * The ballot is anonymous and final. During voting the server sends the image
+ * only — no author, no vote count — so a card is judged on the work alone. A
+ * vote is confirmed, then cast once and cannot be changed: pressing it opens a
+ * dialog, and after it lands every card locks until the next challenge. The
+ * names and the tally appear only when voting closes, on the finished screen.
+ *
+ * Deliberately *not* called a "blind ballot". That is the rooms mechanic, which
+ * additionally shuffles the order per voter and time-boxes each entry; here you
+ * browse the wheel at your own pace and vote when you like. Both hide the
+ * author, so both are anonymous — only one takes the pacing out of your hands,
+ * and calling them the same thing made two different promises sound identical.
  *
  * The wheel is a transform-only layout: every card is absolutely positioned and
  * offset by `translateY((i - active) * 100%)`, so moving the focus is one state
@@ -40,6 +46,16 @@ export function VoteScreen({ event }: { event: EventDetail }) {
   const count = entries.length;
   // One vote, final: once cast, the whole ballot locks for this voter.
   const hasVoted = picked !== null;
+  /*
+    Only artists who entered may vote, and the server refuses anyone else.
+
+    Shown as a disabled ballot with an explanation rather than a hidden one:
+    hiding it would leave a viewer who arrived from a shared link staring at a
+    page with no obvious reason why they cannot take part, and an enabled button
+    that returns 403 is worse still.
+  */
+  const didEnter = event.myEntryId !== null;
+  const canVote = didEnter && !hasVoted;
 
   const step = useCallback(
     (dir: number) => {
@@ -70,7 +86,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
   // voter who has already voted, or is looking at their own entry, cannot open
   // it at all.
   const requestVote = (entry: EventEntry) => {
-    if (hasVoted || entry.id === event.myEntryId) return;
+    if (!canVote || entry.id === event.myEntryId) return;
     setPending(entry);
   };
 
@@ -135,6 +151,26 @@ export function VoteScreen({ event }: { event: EventDetail }) {
     <div className="grid gap-[clamp(16px,2.4vw,34px)] lg:grid-cols-[1.25fr_.9fr]">
       {/* --- The wheel --------------------------------------------------------- */}
       <div className="flex min-h-0 flex-col">
+        {/*
+          Says why the ballot is locked, rather than leaving a viewer to work it
+          out from greyed-out buttons. The reason is worth stating plainly: it
+          is the thing that stops a handful of throwaway accounts deciding the
+          winner, and it reads as a rule rather than a fault with their account.
+        */}
+        {!didEnter ? (
+          <div
+            role="note"
+            className="mb-3 rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3"
+          >
+            <p className="font-display text-sm font-bold text-bone">Voting is for entrants</p>
+            <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
+              Only artists who entered this challenge can vote on it — it is what keeps a
+              handful of new accounts from deciding the result. You can still look through
+              every entry.
+            </p>
+          </div>
+        ) : null}
+
         <div className="mb-3 flex items-center justify-between gap-3">
           <span className="font-display text-sm font-semibold uppercase tracking-[2px] text-aqua">
             Entries · {count}
@@ -245,13 +281,13 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                         >
                           {/* No tally during voting — it is revealed only at the
                               finish, so nobody votes toward a leader. */}
-                          Judged blind
+                          Anonymous
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => requestVote(entry)}
-                        disabled={isMine || hasVoted}
+                        disabled={isMine || !canVote}
                         className="flex-none rounded-[13px] font-display text-[15px] font-bold"
                         style={
                           voted
@@ -262,7 +298,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                                 boxShadow: '0 5px 0 #0E0B2B',
                                 padding: '11px 20px',
                               }
-                            : isMine || hasVoted
+                            : isMine || !canVote
                               ? {
                                   color: '#9E96D2',
                                   background: 'rgba(255,255,255,.06)',
@@ -279,7 +315,15 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                                 }
                         }
                       >
-                        {voted ? '✓ Voted' : isMine ? 'Yours' : hasVoted ? 'Locked' : 'Vote'}
+                        {voted
+                          ? '✓ Voted'
+                          : isMine
+                            ? 'Yours'
+                            : hasVoted
+                              ? 'Locked'
+                              : didEnter
+                                ? 'Vote'
+                                : 'Entrants only'}
                       </button>
                     </div>
                   </div>
@@ -345,11 +389,11 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                 : { color: '#8E86C9' }
             }
           >
-            {/* Blind and final: acknowledge the vote without naming the entry —
+            {/* Anonymous and final: acknowledge the vote without naming the entry —
                 names come only at the reveal. */}
             {hasVoted && pickedIndex >= 0
               ? `Vote cast — Entry ${pickedIndex + 1}, final`
-              : 'One blind vote — choose carefully'}
+              : 'One vote, and it is final — choose carefully'}
           </span>
         </div>
       </div>

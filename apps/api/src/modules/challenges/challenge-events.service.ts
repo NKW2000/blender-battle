@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ApiErrorCode, ChallengeStatus } from '@bb/shared';
+import { ApiErrorCode, ChallengeStatus, NotificationType } from '@bb/shared';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
 
 import { AppException } from '@/common/exceptions/app.exception';
+import { NotificationsService } from '@/modules/notifications/notifications.service';
 
 import { Challenge } from './entities/challenge.entity';
 import { ChallengeEntry } from './entities/challenge-entry.entity';
@@ -19,7 +20,38 @@ export class ChallengeEventsService {
     @InjectRepository(ChallengeEntry) private readonly entries: Repository<ChallengeEntry>,
     @InjectRepository(ChallengeVote) private readonly votes: Repository<ChallengeVote>,
     private readonly dataSource: DataSource,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Tell entrants something happened to a challenge they are in.
+   *
+   * Wrapped, and never in the path of a state change: the event has already
+   * moved by the time this runs, and failing to write a row saying so must not
+   * undo it.
+   */
+  private async notifyEntrants(
+    challengeId: string,
+    notice: { type: NotificationType; title: string; body?: string },
+  ): Promise<void> {
+    try {
+      const entrants = await this.entries.find({
+        where: { challengeId, isHidden: false },
+        select: { userId: true },
+      });
+      if (entrants.length === 0) return;
+
+      await this.notifications.createMany(
+        entrants.map((entry) => ({
+          userId: entry.userId,
+          ...notice,
+          link: `/events/${challengeId}`,
+        })),
+      );
+    } catch {
+      // Best effort by design — see above.
+    }
+  }
 
   /**
    * The phase is computed from the dates rather than stored.
@@ -160,6 +192,40 @@ export class ChallengeEventsService {
         ApiErrorCode.CONFLICT,
         phase === 'finished' ? 'Voting has closed' : 'Voting has not opened yet',
         409,
+      );
+    }
+
+    /*
+      Only entrants vote.
+
+      Registration is free and email is not verified, so before this the cost of
+      a fake vote was one throwaway address: make ten accounts, cast ten votes,
+      decide the winner. Every other defence in this file — the blind ballot,
+      the self-vote refusal, the one-vote constraint — assumes the voters are
+      distinct people, and none of them can tell.
+
+      Requiring an entry changes what a sockpuppet costs. An account that wants
+      to vote must first produce a 1024×1024 render and a matching screenshot of
+      a Blender workspace, which is expensive to fake and obvious to everyone
+      looking at the ballot when it is faked badly. It is the same rule rooms
+      have always enforced, and the cost it imposes is the work itself.
+
+      What this gives up is spectator voting. That is a real loss in a product
+      with an audience; this one has no room discovery and no public traffic, so
+      what is actually being given up is the ability of a stranger with ten
+      email addresses to pick the winner.
+    */
+    // A withdrawn entry does not count. It is excluded from the ballot and from
+    // every tally, so its author is not competing — and a moderated entry
+    // buying a vote would make hiding one a way to vote without being judged.
+    const myEntry = await this.entries.findOne({
+      where: { challengeId, userId: voterId, isHidden: false },
+    });
+    if (!myEntry) {
+      throw new AppException(
+        ApiErrorCode.FORBIDDEN,
+        'Only artists who entered this challenge can vote on it',
+        403,
       );
     }
 
@@ -312,9 +378,55 @@ export class ChallengeEventsService {
         .set({ winnerEntryId: this.pickWinner(entries).id })
         .where('id = :id AND winner_entry_id IS NULL', { id: challenge.id })
         .execute();
-      if (claimed.affected) resolved += 1;
+      if (claimed.affected) {
+        resolved += 1;
+        await this.notifyEntrants(challenge.id, {
+          type: NotificationType.EVENT_RESULT,
+          title: `"${challenge.title}" has a winner`,
+          body: 'Voting has closed and every entry is now credited to its artist.',
+        });
+      }
     }
     return resolved;
+  }
+
+  /**
+   * Tell entrants that the submission window closed and the ballot is open.
+   *
+   * Claimed with a conditional UPDATE on the marker rather than a read followed
+   * by a write: two API instances sweeping at the same instant would otherwise
+   * both see a null marker and both send, and a duplicate notification is the
+   * kind of bug people notice immediately and trust you less for.
+   */
+  async notifyDueVotingWindows(now = new Date()): Promise<number> {
+    const due = await this.challenges
+      .createQueryBuilder('challenge')
+      .where('challenge.voting_notified_at IS NULL')
+      .andWhere('challenge.end_date IS NOT NULL AND challenge.end_date <= :now', { now })
+      .andWhere('challenge.start_date IS NOT NULL')
+      .take(50)
+      .getMany();
+
+    let notified = 0;
+    for (const challenge of due) {
+      const claimed = await this.challenges
+        .createQueryBuilder()
+        .update(Challenge)
+        .set({ votingNotifiedAt: () => 'now()' })
+        .where('id = :id AND voting_notified_at IS NULL', { id: challenge.id })
+        .execute();
+
+      if (!claimed.affected) continue;
+
+      await this.notifyEntrants(challenge.id, {
+        type: NotificationType.EVENT_VOTING_OPEN,
+        title: `Voting is open in "${challenge.title}"`,
+        body: 'Entries are anonymous until the result is frozen.',
+      });
+      notified += 1;
+    }
+
+    return notified;
   }
 
   private async freezeWinner(challengeId: string, entries: ChallengeEntry[]): Promise<void> {
