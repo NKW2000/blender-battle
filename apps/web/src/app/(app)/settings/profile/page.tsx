@@ -283,7 +283,6 @@ export default function ProfileSettingsPage() {
       </Panel>
 
       <AccountPanel />
-      <ConnectedAccountsPanel />
       </div>
 
       <form
@@ -386,6 +385,17 @@ export default function ProfileSettingsPage() {
         </Panel>
       </form>
       </div>
+
+      {/*
+        Full width, below the two columns.
+
+        It sat in the side column, which made that column taller than the form
+        beside it and left a matching hole under the form — the same emptiness
+        as before, moved to the other side. Two provider rows are also a poor
+        use of a narrow column and a good use of a wide one, so here they sit
+        side by side instead of stacked.
+      */}
+      <ConnectedAccountsPanel />
 
       {/* Full width on purpose: it is a gallery of finished work, and it was the
           one thing the old narrow column actually hurt. */}
@@ -527,7 +537,7 @@ function ConnectedAccountsPanel() {
       <PanelHeader tone="mint" icon={PANEL_ICON.users}>
         <PanelTitle>Sign-in methods</PanelTitle>
       </PanelHeader>
-      <PanelBody className="flex flex-col gap-2.5">
+      <PanelBody className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {isLoading ? (
           <Skeleton className="h-12 w-full" />
         ) : (
