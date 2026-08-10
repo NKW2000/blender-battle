@@ -9,13 +9,9 @@ import {
   BriefCrumbs,
   BriefPanel,
   BriefTitle,
-  Card,
-  CardHead,
   DifficultyPill,
   Extras,
-  ICON,
   JudgedOnPanel,
-  PanelIcon,
   ReferencePanel,
 } from '@/components/challenges/brief-parts';
 import {
@@ -24,7 +20,15 @@ import {
 } from '@/components/submissions/entry-image-fields';
 import { UI_LOCALE } from '@/lib/utils';
 import { FireIcon } from '@/components/ui/icons';
-import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
+import {
+  EmptyState,
+  PANEL_ICON,
+  Panel,
+  PanelHeader,
+  PanelIcon,
+  PanelTitle,
+  Skeleton,
+} from '@/components/ui/panel';
 import { VoteScreen } from '@/components/challenges/vote-screen';
 import { useEnterEvent, useEvent, type EventDetail } from '@/features/challenges/use-events';
 
@@ -202,7 +206,7 @@ function EventHeader({ event }: { event: EventDetail }) {
         className="flex shrink-0 items-center gap-3.5 rounded-[18px] border-[3px] border-punch bg-punch/12 px-5 py-3"
         style={{ boxShadow: '0 6px 0 var(--color-ink)' }}
       >
-        <PanelIcon tone="punch">{ICON.clock}</PanelIcon>
+        <PanelIcon tone="punch">{PANEL_ICON.clock}</PanelIcon>
         <div>
           <div className="text-[11px] font-black uppercase tracking-[1.6px] text-punch-soft">
             {label}
@@ -229,7 +233,7 @@ function EnterPanel({ event }: { event: EventDetail }) {
       style={{ boxShadow: '0 10px 0 var(--color-ink)' }}
     >
       <div className="flex items-center gap-3 border-b-[3px] border-ink bg-linear-to-b from-sun/16 to-transparent px-5 py-5 sm:px-7">
-        <PanelIcon tone="sun">{ICON.upload}</PanelIcon>
+        <PanelIcon tone="sun">{PANEL_ICON.upload}</PanelIcon>
         <span className="font-display text-[23px] font-bold text-cream">
           {alreadyEntered ? 'Entry received' : 'Enter the challenge'}
         </span>
@@ -280,10 +284,10 @@ function EnterPanel({ event }: { event: EventDetail }) {
 
 function UpcomingPanel({ event }: { event: EventDetail }) {
   return (
-    <Card>
-      <CardHead tone="aqua" icon={ICON.clock}>
-        Not open yet
-      </CardHead>
+    <Panel>
+      <PanelHeader tone="aqua" icon={PANEL_ICON.clock}>
+        <PanelTitle>Not open yet</PanelTitle>
+      </PanelHeader>
       <div className="flex flex-1 items-center px-5 py-6 sm:px-6.5">
         <p className="text-[15px] font-extrabold leading-[1.55] text-haze">
           Entries open{' '}
@@ -293,7 +297,7 @@ function UpcomingPanel({ event }: { event: EventDetail }) {
           . Come back then to upload your work.
         </p>
       </div>
-    </Card>
+    </Panel>
   );
 }
 

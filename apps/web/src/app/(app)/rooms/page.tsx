@@ -183,7 +183,7 @@ function OpenRoomRow({
   const full = room.playerCount >= room.maxPlayers;
 
   return (
-    <li className="flex items-center justify-between gap-4 rounded-2xl border-2 border-edge bg-panel-raised px-4 py-3">
+    <li className="flex items-center justify-between gap-4 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3">
       <div className="min-w-0">
         <p className="truncate font-display text-base font-bold text-bone">{room.name}</p>
         <p className="text-xs font-extrabold text-bone-faint">

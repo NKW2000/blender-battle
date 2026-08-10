@@ -204,7 +204,7 @@ export default function ProfileSettingsPage() {
             />
           ) : (
             <div
-              className="flex h-24 w-24 items-center justify-center rounded-2xl border-[3px] border-edge bg-panel-raised font-display text-2xl text-bone-faint"
+              className="flex h-24 w-24 items-center justify-center rounded-2xl border-[3px] border-ink bg-white/6 font-display text-2xl text-haze-5"
               style={{ boxShadow: '0 5px 0 var(--color-edge)' }}
             >
               {user.username.slice(0, 2).toUpperCase()}

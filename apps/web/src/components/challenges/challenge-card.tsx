@@ -78,10 +78,10 @@ export function ChallengeCard({ challenge }: { challenge: ChallengeSummary }) {
   return (
     <Link
       href={`/challenges/${challenge.slug}`}
-      className="arcade-press group flex flex-col overflow-hidden rounded-[20px] border-4 border-edge bg-panel-raised [--press-depth:5px]"
+      className="arcade-press group flex flex-col overflow-hidden rounded-[22px] border-[3px] border-ink bg-white/4 [--press-depth:5px]"
       style={{ boxShadow: '0 6px 0 var(--color-edge)' }}
     >
-      <div className="relative aspect-square overflow-hidden border-b-4 border-edge bg-void">
+      <div className="relative aspect-square overflow-hidden border-b-[3px] border-ink bg-arcade-deep">
         {challenge.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- Cloudinary serves a pre-sized asset
           <img

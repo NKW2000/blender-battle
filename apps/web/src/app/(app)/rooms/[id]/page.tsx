@@ -430,7 +430,7 @@ function Results({ room }: { room: RoomDetail }) {
         {ranked.map((entry) => (
           <div
             key={entry.userId}
-            className="flex items-center justify-between gap-4 rounded-xl border-2 border-edge bg-panel-raised px-4 py-3"
+            className="flex items-center justify-between gap-4 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3"
           >
             <div className="flex items-center gap-3">
               <span className="font-display text-xl font-bold text-sun tabular-nums">
@@ -464,7 +464,7 @@ function Roster({ room }: { room: RoomDetail }) {
         {room.participants.map((entry) => (
           <span
             key={entry.userId}
-            className="flex items-center gap-2 rounded-full border-2 border-edge bg-panel-raised px-3 py-1.5 text-sm font-extrabold text-bone"
+            className="flex items-center gap-2 rounded-full border-2 border-ink bg-white/8 px-3 py-1.5 text-sm font-extrabold text-bone"
           >
             {entry.username}
             {entry.userId === room.hostId ? (

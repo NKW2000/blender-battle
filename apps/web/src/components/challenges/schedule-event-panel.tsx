@@ -4,7 +4,14 @@ import { useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
 import { UI_LOCALE } from '@/lib/utils';
-import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
+import {
+  PANEL_ICON,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTile,
+  PanelTitle,
+} from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import {
   useCloseEvent,
@@ -66,28 +73,25 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
 
   return (
     <Panel>
-      <PanelHeader>
+      <PanelHeader tone="aqua" icon={PANEL_ICON.calendar}>
         <PanelTitle>Public event schedule</PanelTitle>
       </PanelHeader>
       <PanelBody className="flex flex-col gap-5">
         {isScheduled ? (
-          <div className="flex flex-col gap-2 rounded-xl border-2 border-edge bg-panel-raised px-4 py-3 text-sm font-extrabold">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-bone-faint">Status</span>
-              <span className="uppercase tracking-wide text-aqua">{phase}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-bone-faint">Opens</span>
-              <span className="text-bone">{fmt(event?.startDate ?? null)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-bone-faint">Submissions close</span>
-              <span className="text-bone">{fmt(event?.endDate ?? null)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-bone-faint">Voting closes</span>
-              <span className="text-bone">{fmt(event?.votingEndsAt ?? null)}</span>
-            </div>
+          /*
+            Four tiles rather than four rows in a flat box.
+
+            These are the same kind of fact the brief shows as stats — a label
+            and a value — and they were the one part of this screen still drawn
+            in the old language: a thin 2px border, no shadow, no tile. Reusing
+            `PanelTile` is what makes the schedule look like it belongs to the
+            same application as the brief sitting under it.
+          */
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ScheduleFact label="Status" value={phase} accent />
+            <ScheduleFact label="Opens" value={fmt(event?.startDate ?? null)} />
+            <ScheduleFact label="Submissions close" value={fmt(event?.endDate ?? null)} />
+            <ScheduleFact label="Voting closes" value={fmt(event?.votingEndsAt ?? null)} />
           </div>
         ) : (
           <p className="text-sm font-extrabold text-bone-muted">
@@ -104,7 +108,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
                 type="datetime-local"
                 value={startLocal}
                 onChange={(e) => setStartLocal(e.target.value)}
-                className="arcade-focus mt-2 w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
+                className="arcade-focus mt-2 w-full rounded-xl border-[3px] border-ink bg-white/6 px-4 py-3 font-bold text-cream"
               />
             </label>
 
@@ -117,7 +121,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
                     min={1}
                     value={submitValue}
                     onChange={(e) => setSubmitValue(Math.max(1, Number(e.target.value)))}
-                    className="arcade-focus h-11 w-20 rounded-2xl border-[3px] border-edge bg-panel px-3 font-bold text-bone"
+                    className="arcade-focus h-11 w-20 rounded-2xl border-[3px] border-ink bg-white/6 px-3 font-bold text-cream"
                   />
                   <Select
                     className="flex-1"
@@ -137,7 +141,7 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
                     min={1}
                     value={voteValue}
                     onChange={(e) => setVoteValue(Math.max(1, Number(e.target.value)))}
-                    className="arcade-focus h-11 w-20 rounded-2xl border-[3px] border-edge bg-panel px-3 font-bold text-bone"
+                    className="arcade-focus h-11 w-20 rounded-2xl border-[3px] border-ink bg-white/6 px-3 font-bold text-cream"
                   />
                   <Select
                     className="flex-1"
@@ -203,5 +207,35 @@ export function ScheduleEventPanel({ challengeId }: { challengeId: string }) {
         ) : null}
       </PanelBody>
     </Panel>
+  );
+}
+
+/**
+ * One scheduled date, as a tile.
+ *
+ * Split out rather than repeated four times inline: the value is a formatted
+ * date that can be long, so it wraps under its label instead of fighting it for
+ * one row, which is what the old two-column rows did on a phone.
+ */
+function ScheduleFact({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <PanelTile>
+      <div className="text-[11px] font-black uppercase tracking-[1.2px] text-haze-5">{label}</div>
+      <div
+        className={`mt-1 font-display text-[15px] font-bold ${
+          accent ? 'uppercase text-aqua' : 'text-cream'
+        }`}
+      >
+        {value}
+      </div>
+    </PanelTile>
   );
 }

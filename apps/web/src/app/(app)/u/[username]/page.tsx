@@ -315,7 +315,7 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
 
         {/* Details panel */}
         <div
-          className="flex flex-col justify-center gap-3 rounded-[20px] border-4 border-edge bg-panel-raised p-6"
+          className="flex flex-col justify-center gap-3 rounded-[22px] border-[3px] border-ink bg-white/4 p-6"
           style={{ boxShadow: '0 8px 0 var(--color-edge)' }}
         >
           <div className="flex flex-wrap items-center gap-2">

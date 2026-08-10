@@ -4,6 +4,15 @@ import { ChallengeAssetType, type ChallengeAsset, type TagSummary } from '@bb/sh
 import Link from 'next/link';
 import { useState } from 'react';
 
+import {
+  PANEL_ICON,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTile,
+  PanelTitle,
+} from '@/components/ui/panel';
+
 /**
  * The brief, in the arcade language.
  *
@@ -33,131 +42,27 @@ export interface BriefLike {
   assets: ChallengeAsset[];
 }
 
-export type Tone = 'sun' | 'aqua' | 'mint' | 'punch' | 'ember';
-
-/** The icon tile the design puts at the head of every panel. */
-export function PanelIcon({ tone, children }: { tone: Tone; children: React.ReactNode }) {
-  const fill = {
-    sun: 'bg-sun',
-    aqua: 'bg-aqua',
-    mint: 'bg-mint',
-    punch: 'bg-punch',
-    ember: 'bg-ember',
-  }[tone];
-
-  return (
-    <span
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-[2.5px] border-ink text-ink ${fill}`}
-      style={{ boxShadow: '0 3px 0 var(--color-ink)' }}
-      aria-hidden="true"
-    >
-      {children}
-    </span>
-  );
-}
-
-export const ICON = {
-  upload: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 16V4M8 8l4-4 4 4" />
-      <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" />
-    </svg>
-  ),
-  image: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2.5" />
-      <circle cx="8.5" cy="9" r="1.6" />
-      <path d="M21 16l-5-5-6 6" />
-    </svg>
-  ),
-  lines: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 5h16M4 12h16M4 19h10" />
-    </svg>
-  ),
-  check: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 7L9 18l-5-5" />
-    </svg>
-  ),
-  clock: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-      <circle cx="12" cy="13" r="8" />
-      <path d="M12 9v4l2.5 2M12 2h4M12 2H8" />
-    </svg>
-  ),
-  file: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  ),
-  calendar: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2.5" />
-      <path d="M8 3v4M16 3v4M3 11h18" />
-    </svg>
-  ),
-} as const;
-
-/** The design's outer panel: ink outline, hard shadow, header rule. */
-export function Card({ className = '', children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <div
-      className={`flex flex-col overflow-hidden rounded-[22px] border-[3px] border-ink bg-white/4 ${className}`}
-      style={{ boxShadow: '0 8px 0 var(--color-ink)' }}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function CardHead({
-  tone,
-  icon,
-  action,
-  children,
-}: {
-  tone: Tone;
-  icon: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 border-b-[3px] border-ink bg-white/3 px-5 py-4 sm:px-6.5 sm:py-5">
-      <PanelIcon tone={tone}>{icon}</PanelIcon>
-      <span className="font-display text-xl font-bold text-cream">{children}</span>
-      {action ? <div className="ml-auto">{action}</div> : null}
-    </div>
-  );
-}
-
-/** A stat tile from the design's brief header. */
+/** A stat tile from the design's brief header. Now the shared panel tile. */
 export function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div
-      className={`min-w-[110px] flex-1 rounded-[14px] border-[2.5px] border-ink px-4 py-3.5 ${
-        accent ? 'bg-sun/10' : 'bg-white/5'
-      }`}
-      style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
-    >
+    <PanelTile className={`min-w-[110px] flex-1 ${accent ? 'bg-sun/10' : ''}`}>
       <div className="text-[11px] font-black uppercase tracking-[1.2px] text-haze-5">{label}</div>
       <div
         className={`mt-1 font-display text-[22px] font-bold ${accent ? 'text-sun' : 'text-cream'}`}
       >
         {value}
       </div>
-    </div>
+    </PanelTile>
   );
 }
 
 export function BriefPanel({ brief }: { brief: BriefLike }) {
   return (
-    <Card>
-      <CardHead tone="ember" icon={ICON.lines}>
-        The brief
-      </CardHead>
-      <div className="flex flex-col gap-5.5 px-5 py-6 sm:px-6.5">
+    <Panel>
+      <PanelHeader tone="ember" icon={PANEL_ICON.lines}>
+        <PanelTitle>The brief</PanelTitle>
+      </PanelHeader>
+      <PanelBody className="flex flex-col gap-5.5">
         <div className="flex flex-wrap gap-3">
           <Stat label="Time" value={`${brief.estimatedMinutes} min`} />
           <Stat label="Reward" value={`${brief.rewardXp} XP`} accent />
@@ -171,8 +76,8 @@ export function BriefPanel({ brief }: { brief: BriefLike }) {
         <p className="whitespace-pre-line text-base font-extrabold leading-[1.55] text-haze">
           {brief.description}
         </p>
-      </div>
-    </Card>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -181,10 +86,10 @@ const CRITERION_TONE = ['bg-ember', 'bg-aqua', 'bg-sun', 'bg-mint', 'bg-punch'] 
 
 export function JudgedOnPanel({ objectives }: { objectives: string[] }) {
   return (
-    <Card>
-      <CardHead tone="mint" icon={ICON.check}>
-        Judged on
-      </CardHead>
+    <Panel>
+      <PanelHeader tone="mint" icon={PANEL_ICON.check}>
+        <PanelTitle>Judged on</PanelTitle>
+      </PanelHeader>
       <ol className="flex flex-1 flex-col justify-center gap-3.5 px-5 py-5 sm:px-6.5">
         {objectives.map((objective, i) => (
           <li key={objective} className="flex items-center gap-3.5">
@@ -200,7 +105,7 @@ export function JudgedOnPanel({ objectives }: { objectives: string[] }) {
           </li>
         ))}
       </ol>
-    </Card>
+    </Panel>
   );
 }
 
@@ -222,26 +127,26 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
 
   if (count === 0) {
     return (
-      <Card>
-        <CardHead tone="punch" icon={ICON.image}>
-          Reference
-        </CardHead>
+      <Panel>
+        <PanelHeader tone="punch" icon={PANEL_ICON.image}>
+        <PanelTitle>Reference</PanelTitle>
+      </PanelHeader>
         <div className="flex flex-1 items-center justify-center px-6 py-10">
           <p className="text-center text-sm font-extrabold text-haze-5">
             No reference images for this challenge.
           </p>
         </div>
-      </Card>
+      </Panel>
     );
   }
 
   const go = (next: number) => setIndex(((next % count) + count) % count);
 
   return (
-    <Card>
-      <CardHead tone="punch" icon={ICON.image}>
-        Reference
-      </CardHead>
+    <Panel>
+      <PanelHeader tone="punch" icon={PANEL_ICON.image}>
+        <PanelTitle>Reference</PanelTitle>
+      </PanelHeader>
 
       <div className="flex flex-1 flex-col px-5 py-5 sm:px-6.5 sm:py-6">
         <div
@@ -315,7 +220,7 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
           </div>
         ) : null}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -353,10 +258,10 @@ export function Extras({ brief }: { brief: BriefLike }) {
     <div className="flex flex-col gap-[clamp(14px,1.8vw,24px)]">
       <div className="grid items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
         {hasRules ? (
-          <Card>
-            <CardHead tone="punch" icon={ICON.lines}>
-              Rules
-            </CardHead>
+          <Panel>
+            <PanelHeader tone="punch" icon={PANEL_ICON.lines}>
+        <PanelTitle>Rules</PanelTitle>
+      </PanelHeader>
             <div className="flex flex-col gap-4 px-5 py-6 text-[15px] font-extrabold leading-[1.55] sm:px-6.5">
               {brief.rules ? <p className="whitespace-pre-line text-haze">{brief.rules}</p> : null}
               {brief.allowedAssets ? (
@@ -376,14 +281,14 @@ export function Extras({ brief }: { brief: BriefLike }) {
                 </div>
               ) : null}
             </div>
-          </Card>
+          </Panel>
         ) : null}
 
         {files.length > 0 ? (
-          <Card>
-            <CardHead tone="aqua" icon={ICON.file}>
-              Files
-            </CardHead>
+          <Panel>
+            <PanelHeader tone="aqua" icon={PANEL_ICON.file}>
+        <PanelTitle>Files</PanelTitle>
+      </PanelHeader>
             <div className="flex flex-col gap-2.5 px-5 py-6 sm:px-6.5">
               {files.map((asset) => (
                 <a
@@ -399,7 +304,7 @@ export function Extras({ brief }: { brief: BriefLike }) {
                 </a>
               ))}
             </div>
-          </Card>
+          </Panel>
         ) : null}
       </div>
 
