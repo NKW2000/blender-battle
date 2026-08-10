@@ -208,6 +208,17 @@ export function DateTimeField({
   };
 
   const cells = monthGrid(viewMonth.getFullYear(), viewMonth.getMonth());
+  /*
+    The same cells, grouped into weeks.
+
+    Needed because `role="grid"` requires `role="row"` between the grid and its
+    cells. The flat list still drives the arrow-key navigation, which indexes
+    into it by ±1 and ±7 — splitting it there too would mean two representations
+    of the same month that could disagree.
+  */
+  const weeks = Array.from({ length: cells.length / 7 }, (_, week) =>
+    cells.slice(week * 7, week * 7 + 7),
+  );
   const today = new Date();
   const shown = selected ?? today;
 
@@ -297,53 +308,71 @@ export function DateTimeField({
               ))}
             </div>
 
+            {/*
+              `role="grid"` requires rows.
+
+              The cells were emitted straight into the grid container, which is
+              an invalid structure: a `gridcell` must have a `row` ancestor, and
+              without one assistive technology cannot report "week 3, Tuesday"
+              or navigate by row at all — some implementations drop the grid
+              semantics entirely and read forty-two loose buttons.
+
+              The CSS grid is unchanged; `display: contents` lets each row carry
+              the semantics without becoming a layout box that would break the
+              seven-column track.
+            */}
             <div
               ref={gridRef}
               role="grid"
+              aria-label="Calendar"
               onKeyDown={onGridKeyDown}
               className="mt-1 grid grid-cols-7 gap-1"
             >
-              {cells.map((day, index) => {
-                if (!day) return <span key={`pad-${index}`} className="h-10" />;
+              {weeks.map((week, weekIndex) => (
+                <div role="row" key={`week-${weekIndex}`} style={{ display: 'contents' }}>
+                  {week.map((day, index) => {
+                    if (!day) return <span key={`pad-${weekIndex}-${index}`} className="h-10" />;
 
-                const isSelected = Boolean(selected && sameDay(day, selected));
-                const isToday = sameDay(day, today);
-                const disabled = dayDisabled(day);
+                    const isSelected = Boolean(selected && sameDay(day, selected));
+                    const isToday = sameDay(day, today);
+                    const disabled = dayDisabled(day);
 
-                return (
-                  <button
-                    key={day.toISOString()}
-                    type="button"
-                    role="gridcell"
-                    aria-selected={isSelected}
-                    aria-label={day.toLocaleDateString(UI_LOCALE, {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                    disabled={disabled}
-                    // Roving tabindex: one stop for the grid, not forty-two.
-                    tabIndex={isSelected ? 0 : -1}
-                    onClick={() => pickDay(day)}
-                    className={cn(
-                      'arcade-focus relative flex h-10 items-center justify-center rounded-xl font-display text-sm font-bold transition-colors',
-                      isSelected
-                        ? 'border-2 border-ink bg-sun text-ink'
-                        : 'text-bone hover:bg-white/12',
-                      disabled && 'cursor-not-allowed opacity-20 hover:bg-transparent',
-                    )}
-                    style={isSelected ? { boxShadow: '0 3px 0 var(--color-ink)' } : undefined}
-                  >
-                    {day.getDate()}
-                    {isToday && !isSelected ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute bottom-1.5 h-1 w-1 rounded-full bg-aqua"
-                      />
-                    ) : null}
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        type="button"
+                        role="gridcell"
+                        aria-selected={isSelected}
+                        aria-label={day.toLocaleDateString(UI_LOCALE, {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                        disabled={disabled}
+                        // Roving tabindex: one stop for the grid, not forty-two.
+                        tabIndex={isSelected ? 0 : -1}
+                        onClick={() => pickDay(day)}
+                        className={cn(
+                          'arcade-focus relative flex h-10 items-center justify-center rounded-xl font-display text-sm font-bold transition-colors',
+                          isSelected
+                            ? 'border-2 border-ink bg-sun text-ink'
+                            : 'text-bone hover:bg-white/12',
+                          disabled && 'cursor-not-allowed opacity-20 hover:bg-transparent',
+                        )}
+                        style={isSelected ? { boxShadow: '0 3px 0 var(--color-ink)' } : undefined}
+                      >
+                        {day.getDate()}
+                        {isToday && !isSelected ? (
+                          <span
+                            aria-hidden="true"
+                            className="absolute bottom-1.5 h-1 w-1 rounded-full bg-aqua"
+                          />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
 
             <PopoverFooter onDone={() => setOpenPart(null)}>

@@ -70,11 +70,20 @@ export function Select({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
 
-  // Opening lands the highlight on the current value, so the first arrow press
-  // moves from where you are rather than from the top.
+  /*
+    Opening lands the highlight on the current value, so the first arrow press
+    moves from where you are rather than from the top.
+
+    Falling back to the first option when nothing is selected matters more than
+    it looks: `findIndex` returns -1 for an unset value, and -1 meant no
+    `aria-activedescendant` at all — so opening the list announced nothing to a
+    screen reader, and the first arrow press appeared to do nothing because it
+    only moved the highlight from "none" to the top.
+  */
   useEffect(() => {
     if (open) {
-      setActiveIndex(options.findIndex((option) => option.value === value));
+      const current = options.findIndex((option) => option.value === value);
+      setActiveIndex(current === -1 ? 0 : current);
     }
   }, [open, options, value]);
 
@@ -100,7 +109,23 @@ export function Select({
         break;
       case 'ArrowUp':
         event.preventDefault();
-        if (open) setActiveIndex((index) => Math.max(0, index - 1));
+        // Opens when closed, matching ArrowDown. The WAI combobox pattern has
+        // both open the list; only handling one is the kind of gap a mouse user
+        // never notices and a keyboard user hits immediately.
+        if (!open) setOpen(true);
+        else setActiveIndex((index) => Math.max(0, index - 1));
+        break;
+      case 'Home':
+        if (open) {
+          event.preventDefault();
+          setActiveIndex(0);
+        }
+        break;
+      case 'End':
+        if (open) {
+          event.preventDefault();
+          setActiveIndex(options.length - 1);
+        }
         break;
       case 'Enter':
       case ' ':
@@ -127,8 +152,21 @@ export function Select({
         onClick={() => !disabled && setOpen((value) => !value)}
         onKeyDown={disabled ? undefined : onKeyDown}
         disabled={disabled}
+        /*
+          The combobox is the button, and the button keeps focus the whole time.
+
+          `aria-activedescendant` therefore belongs here, not on the listbox.
+          It was on the `<ul>`, which has `tabIndex={-1}` and is never focused —
+          and a screen reader only reads the active descendant of the element
+          that actually has focus. The visual highlight moved with the arrow
+          keys and nothing was announced, which is precisely the failure that
+          is invisible unless someone tests with a screen reader.
+        */
+        role="combobox"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         aria-label={ariaLabel}
         className={cn(
           'arcade-focus flex h-11 w-full items-center justify-between gap-2 rounded-2xl border-[3px] px-4 text-left font-bold text-bone transition-colors disabled:cursor-not-allowed disabled:opacity-40',
@@ -148,7 +186,7 @@ export function Select({
           ref={listRef}
           role="listbox"
           id={listId}
-          aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+          aria-label={ariaLabel}
           tabIndex={-1}
           className="select-listbox absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-y-auto rounded-[16px] border-4 border-edge bg-panel-raised p-1.5"
           style={{ boxShadow: '0 8px 0 var(--color-edge)', animation: 'bbPop .16s ease both' }}
