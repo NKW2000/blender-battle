@@ -64,6 +64,25 @@ export const ROOM_RANKED_MIN_SUBMISSIONS = 4;
 /** How long the drawn brief is revealed on the reel before the clock starts. */
 export const ROOM_DRAW_SECONDS = 7;
 
+/**
+ * The disciplines actually offered.
+ *
+ * Fourteen were seeded up front on the assumption the platform would fill them.
+ * It has not, and an empty filter is worse than no filter: someone picks
+ * "Texturing", gets nothing back, and reasonably concludes the site is broken
+ * rather than that the category has no briefs in it yet.
+ *
+ * Enforced in code rather than only by deleting rows, because the two are not
+ * the same promise. A migration fixes the database it is run against; this
+ * decides what the application offers, on every deployment, the moment it
+ * starts. The migration still exists and still tidies the table — it is just no
+ * longer what the behaviour depends on.
+ *
+ * Adding a discipline back is this array plus a row. Difficulty is untouched:
+ * that one genuinely varies per challenge and is the axis people choose along.
+ */
+export const ACTIVE_CATEGORY_SLUGS = ['modeling'] as const;
+
 // --- Submissions -------------------------------------------------------------
 
 /**

@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  ACTIVE_CATEGORY_SLUGS,
   ActivityAction,
   ApiErrorCode,
   ChallengeStatus,
@@ -137,8 +138,25 @@ export class ChallengesService {
     return ChallengeMapper.detail(challenge);
   }
 
+  /**
+   * The disciplines on offer.
+   *
+   * Filtered to `ACTIVE_CATEGORY_SLUGS` rather than returning the table. Every
+   * picker, filter and authoring form in the application reads this one method,
+   * so narrowing it here narrows all of them at once — and it does so on deploy,
+   * without depending on a migration having been run against this particular
+   * database.
+   *
+   * Rows for retired disciplines are left alone. Challenges still point at them
+   * through a NOT NULL foreign key, and a challenge whose category has been
+   * deleted from under it is a broken read; this makes them unofferable, which
+   * is the actual requirement.
+   */
   async listCategories(): Promise<Category[]> {
-    return this.categories.find({ order: { sortOrder: 'ASC', name: 'ASC' } });
+    return this.categories.find({
+      where: { slug: In([...ACTIVE_CATEGORY_SLUGS]) },
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
   }
 
   async listTags(): Promise<Tag[]> {
@@ -486,9 +504,24 @@ export class ChallengesService {
     if (!isOwner && !isAdmin) throw AppException.notFound('Challenge');
   }
 
+  /**
+   * The category must exist *and* still be offered.
+   *
+   * The pickers only show active disciplines, so this closes the gap a stale
+   * client or a direct API call leaves open — otherwise a brief could be filed
+   * under a discipline nothing lists, and it would then be unreachable through
+   * every filter in the application while looking perfectly saved.
+   */
   private async assertCategoryExists(categoryId: string): Promise<void> {
-    const exists = await this.categories.existsBy({ id: categoryId });
-    if (!exists) throw AppException.notFound('Category');
+    const category = await this.categories.findOne({
+      where: { id: categoryId },
+      select: { id: true, slug: true },
+    });
+    if (!category) throw AppException.notFound('Category');
+
+    if (!ACTIVE_CATEGORY_SLUGS.includes(category.slug as (typeof ACTIVE_CATEGORY_SLUGS)[number])) {
+      throw AppException.conflict('That discipline is not currently offered.');
+    }
   }
 
   /** Finds existing tags by slug and creates the ones that do not exist yet. */
