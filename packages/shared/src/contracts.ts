@@ -220,6 +220,24 @@ export interface LeaderboardEntry {
  */
 export interface AdminMetrics {
   generatedAt: string;
+  /**
+   * Whether this deployment can actually send email.
+   *
+   * Here because there was no way to find out. Verification links and password
+   * resets fail silently by design — the send is swallowed so `forgot password`
+   * cannot be used to tell a registered address from an unknown one — which
+   * means a deployment with no mail driver configured looks exactly like one
+   * that is working, from every screen. An admin can now see which it is.
+   *
+   * Never the credential, only whether one is present.
+   */
+  mail: {
+    driver: 'log' | 'resend' | 'sendgrid' | 'brevo' | 'smtp';
+    /** False when the driver is `log`, or when its credentials are missing. */
+    canSend: boolean;
+    /** The address recipients will see, so a wrong one is visible before use. */
+    from: string;
+  };
   users: {
     total: number;
     byRole: { player: number; manager: number; admin: number };

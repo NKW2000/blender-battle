@@ -52,20 +52,30 @@ export default function EventsPage() {
       />
 
       <div className="flex flex-wrap gap-3">
-        <Select
-          className="w-56"
-          ariaLabel="Filter by challenge type"
-          value={categoryId}
-          onChange={setCategoryId}
-          placeholder="All types"
-          options={[
-            { value: '', label: 'All types' },
-            ...(categories ?? []).map((category) => ({
-              value: category.id,
-              label: category.name,
-            })),
-          ]}
-        />
+        {/*
+          Hidden while there is only one discipline to choose between.
+
+          A filter with a single option cannot change what is shown, so it is
+          furniture that invites a pointless interaction. Conditional rather than
+          deleted: the categories table and this picker both still work, so
+          bringing a second discipline back is an INSERT, not a code change.
+        */}
+        {(categories?.length ?? 0) > 1 ? (
+          <Select
+            className="w-56"
+            ariaLabel="Filter by challenge type"
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder="All types"
+            options={[
+              { value: '', label: 'All types' },
+              ...(categories ?? []).map((category) => ({
+                value: category.id,
+                label: category.name,
+              })),
+            ]}
+          />
+        ) : null}
 
         <Select
           className="w-56"

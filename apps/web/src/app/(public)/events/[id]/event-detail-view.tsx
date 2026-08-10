@@ -254,9 +254,8 @@ function EnterPanel({ event }: { event: EventDetail }) {
           )}
         </p>
 
-        <div className="grid flex-1 gap-4">
-          <EntryImageFields value={files} onChange={setFiles} disabled={enter.isPending} />
-        </div>
+        {/* The pair lays itself out now — two squares side by side. */}
+        <EntryImageFields value={files} onChange={setFiles} disabled={enter.isPending} />
 
         {enter.isError ? (
           <p role="alert" className="mt-4 text-sm font-extrabold text-punch-soft">

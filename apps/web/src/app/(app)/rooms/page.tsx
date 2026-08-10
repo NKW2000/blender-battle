@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  CHALLENGE_MAX_MINUTES,
   CHALLENGE_MIN_MINUTES,
   Difficulty,
   ROOM_MAX_PLAYERS,
@@ -302,9 +301,7 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
     ? 'Pick an end date and time.'
     : minutesFromNow < CHALLENGE_MIN_MINUTES
       ? `Must be at least ${CHALLENGE_MIN_MINUTES} minutes from now.`
-      : minutesFromNow > CHALLENGE_MAX_MINUTES
-        ? `Must be within ${Math.round(CHALLENGE_MAX_MINUTES / 60)} hours from now.`
-        : null;
+      : null;
 
   // An empty name is fine — it falls back to "Untitled room" on submit. Only a
   // name that was started and left too short is an error.
@@ -427,21 +424,29 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
           </FormSection>
 
           <FormSection label="The brief" hint="Drawn at start — hidden from you too">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                tone="field"
-                ariaLabel="Discipline"
-                value={categoryId}
-                onChange={setCategoryId}
-                placeholder="Any discipline"
-                options={[
-                  { value: '', label: 'Any discipline', hint: 'Surprise me' },
-                  ...(categories ?? []).map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  })),
-                ]}
-              />
+            {/* One column while there is one discipline — the filter is dropped
+                rather than shown with nothing to choose between. */}
+            <div
+              className={
+                (categories?.length ?? 0) > 1 ? 'grid gap-3 sm:grid-cols-2' : 'grid gap-3'
+              }
+            >
+              {(categories?.length ?? 0) > 1 ? (
+                <Select
+                  tone="field"
+                  ariaLabel="Discipline"
+                  value={categoryId}
+                  onChange={setCategoryId}
+                  placeholder="Any discipline"
+                  options={[
+                    { value: '', label: 'Any discipline', hint: 'Surprise me' },
+                    ...(categories ?? []).map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    })),
+                  ]}
+                />
+              ) : null}
               <Select
                 tone="field"
                 ariaLabel="Difficulty"
@@ -515,13 +520,12 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
             </p>
           </FormSection>
 
-          <FormSection label="Deadline" hint={`Up to ${CHALLENGE_MAX_MINUTES / 60} hours`}>
+          <FormSection label="Deadline" hint="Any time from 5 minutes out">
             <DateTimeField
               ariaLabel="Ends at"
               value={endsAtLocal}
               invalid={Boolean(endsAtError)}
               minDate={new Date(now + CHALLENGE_MIN_MINUTES * 60_000)}
-              maxDate={new Date(now + CHALLENGE_MAX_MINUTES * 60_000)}
               onChange={setEndsAtLocal}
             />
             <p

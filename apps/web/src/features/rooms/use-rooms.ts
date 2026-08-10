@@ -8,6 +8,8 @@ import type {
 } from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { BriefLike } from '@/components/challenges/brief-parts';
+
 import { api, type ApiError } from '@/lib/api/client';
 import { tokenStore } from '@/lib/api/token-store';
 
@@ -38,13 +40,24 @@ export interface RoomParticipantView {
 
 export interface RoomDetail extends RoomSummary {
   joinCode: string | null;
-  challenge: {
+  /*
+    The whole brief once the room has started — description, rules, criteria and
+    every reference — so a competitor reads it on the screen the clock is running
+    on rather than following a link off it.
+  */
+  challenge: (BriefLike & {
     id: string;
     title: string;
     slug: string;
     difficulty: Difficulty;
-    estimatedMinutes: number;
     category: { id: string; name: string };
+  }) | null;
+  /** Your own entry, so replacing it is a decision rather than a guess. */
+  mySubmission: {
+    imageUrl: string;
+    workspacePhotoUrl: string | null;
+    notes: string | null;
+    submittedAt: string;
   } | null;
   startsAt: string | null;
   endsAt: string | null;

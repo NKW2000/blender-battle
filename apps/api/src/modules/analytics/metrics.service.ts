@@ -3,6 +3,7 @@ import { Interval } from '@nestjs/schedule';
 import type { AdminMetrics, ManagerMetrics } from '@bb/shared';
 import { DataSource } from 'typeorm';
 
+import { AppConfig } from '@/config/app.config';
 import { RedisService } from '@/modules/redis/redis.service';
 
 const SNAPSHOT_KEY = 'metrics:admin:snapshot';
@@ -30,12 +31,36 @@ export class MetricsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly redis: RedisService,
+    private readonly config: AppConfig,
   ) {}
+
+  /**
+   * Can this deployment send mail, and as whom.
+   *
+   * Computed rather than cached with the rest of the snapshot: it is read from
+   * configuration, costs nothing, and a stale answer here would be actively
+   * misleading five minutes after someone fixed it.
+   */
+  private mailStatus(): AdminMetrics['mail'] {
+    const { driver, apiKey, from, smtp } = this.config.mail;
+
+    const canSend =
+      driver === 'smtp'
+        ? Boolean(smtp.host && smtp.user && smtp.password)
+        : driver === 'log'
+          ? false
+          : Boolean(apiKey);
+
+    return { driver, canSend, from };
+  }
 
   /** Cached snapshot, computing one on demand if the cache is cold. */
   async adminMetrics(): Promise<AdminMetrics> {
     const cached = await this.redis.client.get(SNAPSHOT_KEY);
-    if (cached) return JSON.parse(cached) as AdminMetrics;
+    // Mail status is overlaid fresh: it comes from configuration, not the
+    // database, and a cached "not configured" five minutes after someone fixed
+    // it would send an admin looking for a problem that no longer exists.
+    if (cached) return { ...(JSON.parse(cached) as AdminMetrics), mail: this.mailStatus() };
 
     const snapshot = await this.computeAdminSnapshot();
     await this.redis.setWithTtl(SNAPSHOT_KEY, JSON.stringify(snapshot), SNAPSHOT_TTL_SECONDS);
@@ -200,6 +225,7 @@ export class MetricsService {
 
     return {
       generatedAt: new Date().toISOString(),
+      mail: this.mailStatus(),
       users: {
         total: userStats.total,
         byRole: {

@@ -1,4 +1,11 @@
-import { BIO_MAX_LENGTH, ExperienceLevel, SHOWCASE_MAX_ITEMS } from '@bb/shared';
+import {
+  BIO_MAX_LENGTH,
+  ExperienceLevel,
+  SHOWCASE_MAX_ITEMS,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  USERNAME_PATTERN,
+} from '@bb/shared';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -10,7 +17,9 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  Matches,
   MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -74,13 +83,33 @@ class SocialLinksDto {
 }
 
 /**
- * Deliberately omits username, email, role, status and every statistic. Anything
+ * Deliberately omits email, role, status and every statistic. Anything
  * absent from this DTO cannot be changed through this endpoint, and the global
  * ValidationPipe strips unknown properties before the object ever reaches a
  * service — mass assignment is closed by construction, not by remembering to
  * blocklist fields.
  */
 export class UpdateProfileDto {
+  /**
+   * The display name, which is also the profile URL.
+   *
+   * Editable now — it was fixed at registration, so a typo in the one field
+   * everyone sees was permanent. Uniqueness is not checked here: two requests
+   * can pass validation at the same instant and only the unique index decides,
+   * so the service catches the constraint violation and reports it as a taken
+   * name rather than a 500.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(USERNAME_MIN_LENGTH)
+  @MaxLength(USERNAME_MAX_LENGTH)
+  @Matches(USERNAME_PATTERN, {
+    message:
+      'Letters, numbers, hyphens and underscores, starting and ending with a letter or number.',
+  })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  username?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(BIO_MAX_LENGTH)

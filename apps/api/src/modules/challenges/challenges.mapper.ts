@@ -73,6 +73,30 @@ export const ChallengeMapper = {
     };
   },
 
+  /**
+   * Summary plus the written brief, without the author.
+   *
+   * The piece a reader needs to actually attempt the challenge, and nothing
+   * that requires a relation beyond `assets` — `detail` reads `createdBy`, so
+   * calling it from a context that did not join the author throws. Rooms load
+   * the drawn challenge without its author and the event endpoint has no place
+   * to show one, so both use this.
+   */
+  brief(challenge: Challenge) {
+    return {
+      ...ChallengeMapper.summary(challenge),
+      description: challenge.description,
+      rules: challenge.rules,
+      objectives: challenge.objectives ?? [],
+      allowedAssets: challenge.allowedAssets,
+      forbiddenAssets: challenge.forbiddenAssets,
+      blenderVersion: challenge.blenderVersion,
+      assets: (challenge.assets ?? [])
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(ChallengeMapper.asset),
+    };
+  },
+
   detail(challenge: Challenge): ChallengeDetail {
     return {
       ...ChallengeMapper.summary(challenge),

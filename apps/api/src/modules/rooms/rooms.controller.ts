@@ -89,7 +89,8 @@ export class RoomsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const room = await this.rooms.reconcile(id);
-    return RoomMapper.detail(room, user.id);
+    const mine = await this.rooms.mySubmission(id, user.id);
+    return RoomMapper.detail(room, user.id, mine);
   }
 
   // Room creation is cheap to spam and a public one appears in the browse list,

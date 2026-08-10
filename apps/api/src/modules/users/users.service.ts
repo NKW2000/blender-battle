@@ -215,6 +215,7 @@ export class UsersService {
 
     // Explicit field assignment. Object.assign(user, dto) would happily write any
     // property that slipped through validation.
+    if (dto.username !== undefined) user.username = dto.username;
     if (dto.bio !== undefined) user.bio = dto.bio;
     if (dto.country !== undefined) user.country = dto.country;
     if (dto.experienceLevel !== undefined) user.experienceLevel = dto.experienceLevel;
@@ -223,7 +224,23 @@ export class UsersService {
       user.showcaseEntryIds = await this.resolveShowcaseIds(userId, dto.showcaseEntryIds);
     }
 
-    const saved = await this.users.save(user);
+    /*
+      The unique index is the authority on whether a name is free.
+
+      Checking first and then saving is a race: two people can both find the
+      name available and both proceed, and only one write can win. Postgres
+      decides, and 23505 is it saying so — reported as a taken name rather than
+      surfacing as an unexplained 500.
+    */
+    let saved: User;
+    try {
+      saved = await this.users.save(user);
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw AppException.conflict('That name is already taken.');
+      }
+      throw error;
+    }
 
     await this.activity.record({
       action: ActivityAction.USER_PROFILE_UPDATED,

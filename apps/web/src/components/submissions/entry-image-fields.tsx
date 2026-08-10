@@ -1,6 +1,10 @@
 'use client';
 
-import { SUBMISSION_IMAGE_SIZE } from '@bb/shared';
+import {
+  SUBMISSION_IMAGE_MAX_BYTES,
+  SUBMISSION_IMAGE_SIZE,
+  SUBMISSION_SIZE_HINT,
+} from '@bb/shared';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -75,6 +79,24 @@ export function EntryImageFields({
       return;
     }
 
+    /*
+      Size before dimensions.
+
+      The server refuses an oversized upload too, but only after the bytes have
+      crossed the wire — on a slow connection that is a long wait for a refusal.
+      Checking here turns it into an instant answer, and the answer carries the
+      actual repair: compression, not a smaller render.
+    */
+    if (file.size > SUBMISSION_IMAGE_MAX_BYTES) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      setErrors((prev) => ({
+        ...prev,
+        [slot]: `That file is ${mb}MB — the limit is ${SUBMISSION_IMAGE_MAX_BYTES / 1024 / 1024}MB. ${SUBMISSION_SIZE_HINT}`,
+      }));
+      onChange({ ...value, [slot]: null });
+      return;
+    }
+
     try {
       const { width, height } = await readImageSize(file);
       if (width !== SUBMISSION_IMAGE_SIZE || height !== SUBMISSION_IMAGE_SIZE) {
@@ -96,7 +118,17 @@ export function EntryImageFields({
   };
 
   return (
-    <>
+    /*
+      Side by side, and square.
+
+      They were full-width rows stacked vertically, which made each drop zone a
+      wide, short rectangle — the wrong shape for a target that accepts a square
+      1024x1024 image, and it pushed the submit button below the fold. Two square
+      tiles read as "two images of the same kind", which is what they are.
+
+      Stacked below `sm`, where two columns would be about 150px each.
+    */
+    <div className="grid gap-4 sm:grid-cols-2">
       <ImageField
         label="Final render"
         accent="sun"
@@ -130,7 +162,7 @@ export function EntryImageFields({
         disabled={disabled}
         onPick={(file) => void pick('workspace', file)}
       />
-    </>
+    </div>
   );
 }
 
@@ -237,7 +269,7 @@ function ImageField({
           onPick(event.dataTransfer.files?.[0] ?? null);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`relative flex min-h-[130px] flex-1 cursor-pointer flex-col items-center justify-center gap-2.5 overflow-hidden rounded-[18px] border-[3px] border-dashed p-5 text-center transition-colors ${
+        className={`relative flex aspect-square w-full min-h-[150px] cursor-pointer flex-col items-center justify-center gap-2.5 overflow-hidden rounded-[18px] border-[3px] border-dashed p-5 text-center transition-colors ${
           error ? 'border-punch/60 bg-punch/5' : dragging ? 'border-mint bg-mint/10' : `${tone.idle} ${tone.hover}`
         } ${disabled ? 'pointer-events-none opacity-50' : ''}`}
       >

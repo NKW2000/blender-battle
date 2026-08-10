@@ -67,10 +67,24 @@ export const ROOM_DRAW_SECONDS = 7;
 // --- Submissions -------------------------------------------------------------
 
 /**
- * The render is what voting actually shows, so it is the required artefact.
- * Without an image there is nothing to put on a ballot.
+ * The upload ceiling for a submission image.
+ *
+ * 2MB, down from 10MB. At the fixed 1024x1024 these are, 2MB is generous for
+ * anything Blender writes with PNG compression on — a lossless 1024 square of a
+ * rendered scene lands well inside it. What blew past 10MB was compression left
+ * at 0%, which stores the image essentially raw and produces a file many times
+ * larger for pixels that are bit-for-bit identical.
+ *
+ * So the limit is also the advice: if an entry is refused, the fix is Output
+ * Properties, Compression to 100% — not a smaller or worse render. Every place
+ * that rejects on size says so, because "file too large" on its own sends
+ * people to re-render at lower quality, which is the wrong repair.
  */
-export const SUBMISSION_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const SUBMISSION_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+
+/** The one-line repair for an oversized entry, shown wherever size is refused. */
+export const SUBMISSION_SIZE_HINT =
+  'Set Compression to 100% in Blender under Output Properties — it is lossless for PNG and usually cuts the file by most of its size.';
 
 /**
  * Exact pixel dimensions every entry image must have — the final render and the

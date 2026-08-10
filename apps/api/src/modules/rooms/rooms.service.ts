@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   BattleResult,
-  CHALLENGE_MAX_MINUTES,
   CHALLENGE_MIN_MINUTES,
   Difficulty,
   ROOM_CODE_ALPHABET,
@@ -89,12 +88,23 @@ export class RoomsService {
       Math.max(ROOM_MIN_PLAYERS, dto.maxPlayers ?? 8),
     );
 
+    /*
+      A floor, and no ceiling.
+
+      The deadline used to be capped at `CHALLENGE_MAX_MINUTES` from now, which
+      is the *challenge author's* estimate of how long a brief takes — a
+      reasonable bound on "how long should this take to model" and no business
+      being a bound on when a host may schedule their room to end. A group that
+      wants to run over a weekend was refused for no reason anyone could see.
+
+      The floor stays: a room whose deadline has already passed opens straight
+      into a closed submission window, which is not a schedule, it is a bug.
+    */
     const endsAt = new Date(dto.endsAt);
     const minEndsAt = new Date(Date.now() + CHALLENGE_MIN_MINUTES * 60_000);
-    const maxEndsAt = new Date(Date.now() + CHALLENGE_MAX_MINUTES * 60_000);
-    if (endsAt < minEndsAt || endsAt > maxEndsAt) {
+    if (endsAt < minEndsAt) {
       throw AppException.conflict(
-        `The end time must be between ${CHALLENGE_MIN_MINUTES} minutes and ${Math.round(CHALLENGE_MAX_MINUTES / 60)} hours from now.`,
+        `The end time must be at least ${CHALLENGE_MIN_MINUTES} minutes from now.`,
       );
     }
 
@@ -911,6 +921,17 @@ export class RoomsService {
     const room = await this.rooms.findOne({ where: { id }, relations: ROOM_RELATIONS });
     if (!room) throw AppException.notFound('Room');
     return room;
+  }
+
+  /**
+   * The viewer's own entry in this room, if they have one.
+   *
+   * Scoped to the one user by construction — the room screen shows it back so
+   * replacing an entry is an informed choice, and anyone else's render during
+   * the modelling window is precisely what the blind ballot exists to withhold.
+   */
+  async mySubmission(roomId: string, userId: string): Promise<Submission | null> {
+    return this.submissions.findOne({ where: { roomId, userId } });
   }
 
   /**

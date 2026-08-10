@@ -9,6 +9,7 @@ import {
   Difficulty,
   type ChallengeDetail,
 } from '@bb/shared';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -63,11 +64,13 @@ export function ChallengeForm({
 }) {
   const { data: categories } = useCategories();
 
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<ChallengeFormValues>({
     resolver: zodResolver(challengeSchema),
@@ -81,6 +84,21 @@ export function ChallengeForm({
       visibility: challenge?.visibility ?? ChallengeVisibility.PUBLIC,
     },
   });
+
+  /*
+    The only category, filled in for you.
+
+    `categoryId` is required by the server, so hiding the picker without this
+    would produce a form that validates locally and is refused on submit. Runs
+    only when there is exactly one and the field is empty, so it never overwrites
+    a real choice or fights the user once the list grows.
+  */
+  const onlyCategoryId = categories?.length === 1 ? categories[0]!.id : null;
+  useEffect(() => {
+    if (onlyCategoryId && !getValues('categoryId')) {
+      setValue('categoryId', onlyCategoryId, { shouldDirty: false });
+    }
+  }, [onlyCategoryId, getValues, setValue]);
 
   const submit = handleSubmit(
     (values) => {
@@ -138,25 +156,36 @@ export function ChallengeForm({
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="categoryId" className="eyebrow">
-                Category
-              </label>
-              <Select
-                tone="field"
-                ariaLabel="Category"
-                value={watch('categoryId') ?? ''}
-                onChange={(value) => setValue('categoryId', value, { shouldDirty: true })}
-                placeholder="Choose one"
-                options={[
-                  { value: '', label: 'Choose one' },
-                  ...(categories ?? []).map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  })),
-                ]}
-              />
-            </div>
+            {/*
+              Asked only when there is a choice.
+
+              With one discipline this was a required field with exactly one
+              valid answer — a step that cannot be got wrong and cannot be
+              skipped, which is pure friction. It is filled in automatically
+              below instead, and the field returns the moment a second category
+              exists.
+            */}
+            {(categories?.length ?? 0) > 1 ? (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="categoryId" className="eyebrow">
+                  Category
+                </label>
+                <Select
+                  tone="field"
+                  ariaLabel="Category"
+                  value={watch('categoryId') ?? ''}
+                  onChange={(value) => setValue('categoryId', value, { shouldDirty: true })}
+                  placeholder="Choose one"
+                  options={[
+                    { value: '', label: 'Choose one' },
+                    ...(categories ?? []).map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-2">
               <label htmlFor="difficulty" className="eyebrow">

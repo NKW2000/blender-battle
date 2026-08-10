@@ -11,6 +11,9 @@ import {
   SOCIAL_LINK_LABELS,
   type PortfolioItem,
   type SocialLinks,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  USERNAME_PATTERN,
 } from '@bb/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type UseFormRegister } from 'react-hook-form';
@@ -34,6 +37,17 @@ import { collectFormMessages, notify } from '@/lib/notify';
 const socialUrl = z.string().url('Include https://').optional().or(z.literal(''));
 
 const profileSchema = z.object({
+  /* Mirrors the server's rule exactly. The server still decides — it owns the
+     unique index — but matching the shape here means a malformed name is
+     refused before a round trip rather than after one. */
+  username: z
+    .string()
+    .min(USERNAME_MIN_LENGTH, `At least ${USERNAME_MIN_LENGTH} characters`)
+    .max(USERNAME_MAX_LENGTH, `At most ${USERNAME_MAX_LENGTH} characters`)
+    .regex(
+      USERNAME_PATTERN,
+      'Letters, numbers, hyphens and underscores, starting and ending with a letter or number.',
+    ),
   bio: z.string().max(BIO_MAX_LENGTH, `At most ${BIO_MAX_LENGTH} characters`).optional(),
   country: z
     .string()
@@ -111,6 +125,7 @@ export default function ProfileSettingsPage() {
     resolver: zodResolver(profileSchema),
     values: user
       ? {
+          username: user.username,
           bio: user.bio ?? '',
           country: user.country ?? '',
           experienceLevel: user.experienceLevel,
@@ -168,6 +183,9 @@ export default function ProfileSettingsPage() {
     );
 
     updateProfile.mutate({
+      // Sent only when actually changed, so an unrelated save cannot collide
+      // with the unique index over a name that is already yours.
+      username: values.username !== user?.username ? values.username : undefined,
       bio: values.bio || undefined,
       country: values.country || undefined,
       experienceLevel: values.experienceLevel,
@@ -251,6 +269,26 @@ export default function ProfileSettingsPage() {
           </PanelHeader>
 
           <PanelBody className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="username" className="eyebrow">
+                Name
+              </label>
+              <input
+                id="username"
+                maxLength={USERNAME_MAX_LENGTH}
+                className="arcade-focus w-full rounded-2xl border-[3px] border-white/16 bg-white/6 px-4 py-3 font-bold text-cream outline-none transition-colors placeholder:text-[#6E67A0] focus:border-sun focus:bg-sun/10"
+                {...register('username')}
+              />
+              <p className="text-xs font-extrabold text-haze-5">
+                This is your profile address too — changing it changes the link.
+              </p>
+              {errors.username ? (
+                <p role="alert" className="font-mono text-xs text-punch-soft">
+                  {errors.username.message}
+                </p>
+              ) : null}
+            </div>
+
             <div className="flex flex-col gap-2">
               <label htmlFor="bio" className="eyebrow">
                 Bio

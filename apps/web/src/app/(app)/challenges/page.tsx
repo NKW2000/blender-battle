@@ -86,20 +86,30 @@ function ChallengeCatalogue() {
           className="arcade-focus h-11 w-56 rounded-2xl border-[3px] border-edge bg-panel px-4 font-bold text-bone placeholder:text-bone-faint"
         />
 
-        <Select
-          className="w-56"
-          ariaLabel="Filter by category"
-          value={categoryId}
-          onChange={setCategoryId}
-          placeholder="All categories"
-          options={[
-            { value: '', label: 'All categories' },
-            ...(categories ?? []).map((category) => ({
-              value: category.id,
-              label: category.name,
-            })),
-          ]}
-        />
+        {/*
+          Hidden while there is only one discipline to choose between.
+
+          A filter with a single option cannot change what is shown, so it is
+          furniture that invites a pointless interaction. Conditional rather than
+          deleted: the categories table and this picker both still work, so
+          bringing a second discipline back is an INSERT, not a code change.
+        */}
+        {(categories?.length ?? 0) > 1 ? (
+          <Select
+            className="w-56"
+            ariaLabel="Filter by category"
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder="All categories"
+            options={[
+              { value: '', label: 'All categories' },
+              ...(categories ?? []).map((category) => ({
+                value: category.id,
+                label: category.name,
+              })),
+            ]}
+          />
+        ) : null}
 
         <Select
           className="w-56"

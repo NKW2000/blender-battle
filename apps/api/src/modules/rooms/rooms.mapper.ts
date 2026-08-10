@@ -3,6 +3,7 @@ import { RoomParticipantStatus, RoomStatus } from '@bb/shared';
 import { ChallengeMapper } from '@/modules/challenges/challenges.mapper';
 
 import type { Room } from './entities/room.entity';
+import type { Submission } from './entities/submission.entity';
 
 /**
  * Room → API shape.
@@ -37,7 +38,7 @@ export class RoomMapper {
     };
   }
 
-  static detail(room: Room, viewerId: string) {
+  static detail(room: Room, viewerId: string, mySubmission?: Submission | null) {
     const revealed = room.status !== RoomStatus.LOBBY;
 
     return {
@@ -46,7 +47,34 @@ export class RoomMapper {
       // to every member would make it meaningless the moment one shared a
       // screenshot.
       joinCode: room.hostId === viewerId ? room.joinCode : null,
-      challenge: revealed && room.challenge ? ChallengeMapper.summary(room.challenge) : null,
+      /*
+        The whole brief once the room has started, not just its title.
+
+        This was `summary`, so the room screen had the title and a link reading
+        "read the full brief" — which sent a competitor off a timed screen, with
+        a clock running, to read the rules of the thing they were being timed on.
+        The brief belongs on the page the work happens on.
+      */
+      challenge: revealed && room.challenge ? ChallengeMapper.brief(room.challenge) : null,
+
+      /*
+        Your own entry, so replacing it is a decision rather than a guess.
+
+        Submitting again silently overwrote whatever was there, with nothing on
+        screen to compare against — you could not tell whether the thing you were
+        about to replace was better than the thing you were about to upload.
+
+        Yours only. Another competitor's render during the modelling window is
+        exactly what the blind ballot exists to prevent.
+      */
+      mySubmission: mySubmission
+        ? {
+            imageUrl: mySubmission.imageUrl,
+            workspacePhotoUrl: mySubmission.workspacePhotoUrl,
+            notes: mySubmission.notes,
+            submittedAt: mySubmission.updatedAt.toISOString(),
+          }
+        : null,
       startsAt: room.startsAt?.toISOString() ?? null,
       endsAt: room.endsAt?.toISOString() ?? null,
       votingEndsAt: room.votingEndsAt?.toISOString() ?? null,

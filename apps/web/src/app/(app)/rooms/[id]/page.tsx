@@ -2,6 +2,7 @@
 
 import {
   CHALLENGE_MIN_MINUTES,
+  ChallengeAssetType,
   ROOM_DRAW_SECONDS,
   ROOM_MIN_PLAYERS,
   RoomParticipantStatus,
@@ -19,7 +20,21 @@ import {
 import { UI_LOCALE } from '@/lib/utils';
 import { BallotView } from '@/components/rooms/ballot-view';
 import { CountdownGate } from '@/components/rooms/countdown-gate';
-import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
+import {
+  EmptyState,
+  PANEL_ICON,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Skeleton,
+} from '@/components/ui/panel';
+import {
+  BriefPanel,
+  Extras,
+  JudgedOnPanel,
+  ReferencePanel,
+} from '@/components/challenges/brief-parts';
 import { useSession } from '@/features/auth/use-session';
 import { useSound } from '@/features/sound/use-sound';
 import {
@@ -331,67 +346,154 @@ function Drawing({ room }: { room: RoomDetail }) {
   return <CountdownGate seconds={remaining ?? 0} />;
 }
 
-/** Modelling window: the brief, the clock, and the upload. */
+/**
+ * Modelling window: the brief, the clock, and the upload.
+ *
+ * Three things were wrong here and they compounded. The brief was a title and a
+ * link, which sent a competitor off a timed screen to read the rules of the
+ * thing they were being timed on. The upload had no error branch, so a failed
+ * submit put the button back to "Submit entry" and said nothing — which is what
+ * "the submit button does not work" looks like from the outside. And an entry
+ * you had already made was invisible, so replacing it was a guess.
+ */
 function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean }) {
   const submit = useSubmitEntry(room.id);
   const [files, setFiles] = useState<EntryImages>({ image: null, workspace: null });
   const ready = Boolean(files.image && files.workspace);
+  const references = (room.challenge?.assets ?? []).filter(
+    (asset) => asset.type === ChallengeAssetType.REFERENCE_IMAGE,
+  );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Panel>
-        <PanelHeader>
-          <PanelTitle>The brief</PanelTitle>
-        </PanelHeader>
-        <PanelBody className="flex flex-col gap-3">
-          <p className="font-display text-lg font-bold text-bone">{room.challenge?.title}</p>
-          {room.challenge ? (
-            <Link
-              href={`/challenges/${room.challenge.slug}`}
-              className="text-sm font-extrabold text-aqua hover:text-mint"
+    <div className="flex flex-col gap-6">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.15fr]">
+        <Panel active={!submitted}>
+          <PanelHeader tone="sun" icon={PANEL_ICON.upload}>
+            <PanelTitle>{submitted ? 'Entry received' : 'Upload your entry'}</PanelTitle>
+          </PanelHeader>
+          <PanelBody className="flex flex-col gap-4">
+            {/*
+              Your current entry, shown before the fields rather than after.
+
+              Replacing used to be blind: the form looked identical whether or
+              not you had already submitted, so the choice was between an image
+              you could not see and one you had not uploaded yet.
+            */}
+            {room.mySubmission ? (
+              <div className="flex flex-col gap-2.5">
+                <p className="text-sm font-extrabold text-mint">
+                  You are on the ballot. Replace it any time before the deadline.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <CurrentEntryImage
+                    label="Your render"
+                    url={room.mySubmission.imageUrl}
+                    tone="sun"
+                  />
+                  {room.mySubmission.workspacePhotoUrl ? (
+                    <CurrentEntryImage
+                      label="Your workspace"
+                      url={room.mySubmission.workspacePhotoUrl}
+                      tone="aqua"
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm font-extrabold text-haze">
+                Both images are needed before the deadline. Anyone without an entry when the clock
+                runs out is eliminated.
+              </p>
+            )}
+
+            <EntryImageFields value={files} onChange={setFiles} disabled={submit.isPending} />
+
+            {/*
+              The failure the button used to swallow. An upload can be refused
+              for a deadline that passed mid-transfer or a file the server
+              rejects, and neither is guessable from a button that simply
+              stopped saying "Uploading".
+            */}
+            {submit.isError ? (
+              <p role="alert" className="text-sm font-extrabold text-punch-soft">
+                {submit.error.message}
+              </p>
+            ) : null}
+
+            <ChunkyButton
+              size="md"
+              onClick={() =>
+                files.image &&
+                files.workspace &&
+                submit.mutate({ image: files.image, workspace: files.workspace })
+              }
+              disabled={!ready || submit.isPending}
             >
-              Read the full brief →
-            </Link>
+              {submit.isPending
+                ? 'Uploading…'
+                : room.mySubmission
+                  ? 'Replace entry'
+                  : 'Submit entry'}
+            </ChunkyButton>
+
+            {/* Says why it is disabled. The button was greyed with nothing
+                explaining which of the two images was missing. */}
+            {!ready && !submit.isPending ? (
+              <p className="text-center text-xs font-extrabold text-haze-5">
+                {!files.image && !files.workspace
+                  ? 'Add both images to enable this.'
+                  : !files.image
+                    ? 'Still need your final render.'
+                    : 'Still need your workspace photo.'}
+              </p>
+            ) : null}
+          </PanelBody>
+        </Panel>
+
+        <ReferencePanel references={references} />
+      </div>
+
+      {room.challenge ? (
+        <div className="grid items-stretch gap-6 lg:grid-cols-[1.15fr_.85fr]">
+          <BriefPanel brief={room.challenge} />
+          {room.challenge.objectives.length > 0 ? (
+            <JudgedOnPanel objectives={room.challenge.objectives} />
           ) : null}
-        </PanelBody>
-      </Panel>
+        </div>
+      ) : null}
 
-      <Panel active={!submitted}>
-        <PanelHeader>
-          <PanelTitle>{submitted ? 'Entry received' : 'Upload your entry'}</PanelTitle>
-        </PanelHeader>
-        <PanelBody className="flex flex-col gap-4">
-          {submitted ? (
-            <p className="text-sm font-extrabold text-mint">
-              You are on the ballot. You can replace your entry until the deadline.
-            </p>
-          ) : (
-            <p className="text-sm font-extrabold text-bone-muted">
-              Both images are needed before the deadline. Anyone without an entry when the clock
-              runs out is eliminated.
-            </p>
-          )}
-
-          <EntryImageFields
-            value={files}
-            onChange={setFiles}
-            disabled={submit.isPending}
-          />
-
-          <ChunkyButton
-            size="md"
-            onClick={() =>
-              files.image &&
-              files.workspace &&
-              submit.mutate({ image: files.image, workspace: files.workspace })
-            }
-            disabled={!ready || submit.isPending}
-          >
-            {submit.isPending ? 'Uploading…' : submitted ? 'Replace entry' : 'Submit entry'}
-          </ChunkyButton>
-        </PanelBody>
-      </Panel>
+      {room.challenge ? <Extras brief={room.challenge} /> : null}
     </div>
+  );
+}
+
+/** One image from the entry already on the ballot. */
+function CurrentEntryImage({
+  label,
+  url,
+  tone,
+}: {
+  label: string;
+  url: string;
+  tone: 'sun' | 'aqua';
+}) {
+  return (
+    <figure className="flex flex-col gap-1.5">
+      <figcaption
+        className={`text-[11px] font-black uppercase tracking-[1.2px] ${
+          tone === 'sun' ? 'text-sun' : 'text-aqua'
+        }`}
+      >
+        {label}
+      </figcaption>
+      {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary asset */}
+      <img
+        src={url}
+        alt={label}
+        className="aspect-square w-full rounded-[14px] border-[2.5px] border-ink object-cover"
+        style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
+      />
+    </figure>
   );
 }
 

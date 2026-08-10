@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { ChunkyButton } from '@/components/arcade/chunky';
+import { PanelIcon } from '@/components/ui/panel';
 import { useResendVerification } from '@/features/auth/use-recovery';
 import { useSession } from '@/features/auth/use-session';
 
@@ -49,8 +50,25 @@ export function VerifyEmailBanner() {
     */
     <div
       role="status"
-      className="relative mx-auto mb-4 max-w-6xl rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3.5 sm:flex sm:items-center sm:gap-4"
+      /*
+        On the arcade language, and no longer a thin strip.
+
+        At desktop width this was a low bar of small grey text pinned across the
+        whole 1152px column — it read as chrome, which is exactly the wrong
+        reading for the one message telling you an action is incomplete. It is
+        now a block like every other surface, with the warning icon carrying the
+        meaning at a glance, and it stops at a readable width rather than
+        stretching a two-line sentence across the full page.
+      */
+      className="relative mx-auto mb-5 flex max-w-3xl flex-col gap-4 rounded-[22px] border-[3px] border-sun bg-sun/8 px-5 py-4 sm:flex-row sm:items-center sm:gap-5"
+      style={{ boxShadow: '0 8px 0 var(--color-ink)' }}
     >
+      <PanelIcon tone="sun">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2.5" />
+          <path d="M3.5 7l8.5 6 8.5-6" />
+        </svg>
+      </PanelIcon>
       {/*
         Out of flow, pinned to the corner. It is a secondary control and should
         not sit beside the primary one competing for the same glance. `pr-8` on
@@ -60,14 +78,14 @@ export function VerifyEmailBanner() {
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="Dismiss"
-        className="arcade-focus absolute right-2 top-2 rounded-lg px-2 py-1 text-sm font-extrabold leading-none text-bone-faint hover:text-bone"
+        className="arcade-focus absolute right-2.5 top-2.5 rounded-lg px-2 py-1 text-sm font-extrabold leading-none text-haze-5 hover:text-cream"
       >
         ✕
       </button>
 
-      <div className="min-w-0 flex-1 pr-8 sm:pr-0">
-        <p className="font-display text-sm font-bold text-bone">Confirm your email address</p>
-        <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
+      <div className="min-w-0 flex-1 pr-8 sm:pr-2">
+        <p className="font-display text-base font-bold text-cream">Confirm your email address</p>
+        <p className="mt-1 text-[13px] font-extrabold leading-relaxed text-haze">
           {failed ? 'We could not send to ' : resend.isSuccess ? 'Sent again to ' : 'We sent a link to '}
           {/*
             The address gets its own element so it can break.
@@ -77,7 +95,7 @@ export function VerifyEmailBanner() {
             the viewport — which makes the entire page scroll sideways. This is
             the one string here that is not under our control.
           */}
-          <span className="break-all text-bone">{user.email}</span>
+          <span className="break-all text-sun">{user.email}</span>
           {failed
             ? '. The mail service refused it — that usually means the address is not one this deployment is allowed to email yet. Nothing is wrong with your account.'
             : resend.isSuccess
@@ -90,16 +108,16 @@ export function VerifyEmailBanner() {
         // Full width on a phone, natural width beside the text from `sm` up.
         // A small button floating alone under a paragraph is easy to miss and
         // easy to mis-tap.
-        <div className="mt-3 sm:mt-0 sm:shrink-0">
-          <Button
+        <div className="sm:shrink-0">
+          <ChunkyButton
             size="sm"
-            variant="outline"
+            tone="cream"
             className="w-full sm:w-auto"
             onClick={() => resend.mutate()}
             disabled={resend.isPending}
           >
             {resend.isPending ? 'Sending…' : failed ? 'Try again' : 'Send again'}
-          </Button>
+          </ChunkyButton>
         </div>
       )}
     </div>
