@@ -29,39 +29,67 @@ export function VerifyEmailBanner() {
   if (!user || user.emailVerifiedAt || dismissed) return null;
 
   return (
+    /*
+      Stacked on a phone, one row from `sm` up.
+
+      The previous version was a single wrapping row, which on a narrow screen
+      dropped the action button and the dismiss cross onto their own line
+      left-aligned under the text — reading as two stray controls belonging to
+      nothing. `relative` is here so the cross can leave the flow entirely.
+    */
     <div
       role="status"
-      className="mx-auto mb-4 flex max-w-6xl flex-wrap items-center gap-3 rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3"
+      className="relative mx-auto mb-4 max-w-6xl rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3.5 sm:flex sm:items-center sm:gap-4"
     >
-      <div className="min-w-0 flex-1">
+      {/*
+        Out of flow, pinned to the corner. It is a secondary control and should
+        not sit beside the primary one competing for the same glance. `pr-8` on
+        the text below reserves its column so a long line cannot run underneath.
+      */}
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss"
+        className="arcade-focus absolute right-2 top-2 rounded-lg px-2 py-1 text-sm font-extrabold leading-none text-bone-faint hover:text-bone"
+      >
+        ✕
+      </button>
+
+      <div className="min-w-0 flex-1 pr-8 sm:pr-0">
         <p className="font-display text-sm font-bold text-bone">Confirm your email address</p>
         <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
+          {resend.isSuccess ? 'Sent again to ' : 'We sent a link to '}
+          {/*
+            The address gets its own element so it can break.
+
+            An email is one unbroken token as far as the browser is concerned,
+            and a long one on a 360px screen pushes the whole banner wider than
+            the viewport — which makes the entire page scroll sideways. This is
+            the one string here that is not under our control.
+          */}
+          <span className="break-all text-bone">{user.email}</span>
           {resend.isSuccess
-            ? `Sent. Check ${user.email} — and your spam folder.`
-            : `We sent a link to ${user.email}. You can enter challenges without it, but voting needs a confirmed address.`}
+            ? ' — check your spam folder too.'
+            : '. You can still enter challenges; voting needs a confirmed address.'}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {resend.isSuccess ? null : (
+      {resend.isSuccess ? null : (
+        // Full width on a phone, natural width beside the text from `sm` up.
+        // A small button floating alone under a paragraph is easy to miss and
+        // easy to mis-tap.
+        <div className="mt-3 sm:mt-0 sm:shrink-0">
           <Button
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() => resend.mutate()}
             disabled={resend.isPending}
           >
             {resend.isPending ? 'Sending…' : 'Send again'}
           </Button>
-        )}
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
-          className="arcade-focus rounded-lg px-2 py-1 text-xs font-extrabold text-bone-faint hover:text-bone"
-        >
-          ✕
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
