@@ -345,7 +345,7 @@ function WinnerPanel({ event }: { event: EventDetail }) {
           <img
             src={winner.imageUrl}
             alt={`Winning entry by ${winner.username}`}
-            className="w-full rounded-[16px] border-[3px] border-ink object-cover"
+            className="aspect-square w-full rounded-[16px] border-[3px] border-ink object-cover"
             style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
           />
           <div className="flex items-center justify-between gap-3">
@@ -390,7 +390,7 @@ function OtherEntries({ event }: { event: EventDetail }) {
             <img
               src={entry.imageUrl}
               alt={`Entry by ${entry.username}`}
-              className="w-full rounded-[12px] border-2 border-ink object-cover"
+              className="aspect-square w-full rounded-[12px] border-2 border-ink object-cover"
             />
             <div className="flex items-center justify-between gap-2 px-1 text-sm font-extrabold">
               <span className="truncate text-cream">{entry.username}</span>

@@ -198,7 +198,7 @@ function SequentialBallot({
               <img
                 src={ballot.referenceImageUrl}
                 alt="The challenge reference"
-                className="w-full rounded-[16px] border-4 border-edge object-cover"
+                className="aspect-square w-full rounded-[16px] border-4 border-ink object-cover"
               />
             ) : (
               <div className="flex h-56 items-center justify-center rounded-[16px] border-4 border-dashed border-white/20 text-sm font-extrabold text-bone-faint">
@@ -214,7 +214,7 @@ function SequentialBallot({
               key={entry.submissionId}
               src={entry.imageUrl}
               alt={`Entry ${index + 1}`}
-              className="w-full rounded-[16px] border-4 border-edge object-cover"
+              className="aspect-square w-full rounded-[16px] border-4 border-ink object-cover"
               style={{ animation: 'bbPop .3s cubic-bezier(.2,1.3,.35,1) both' }}
             />
           </figure>
@@ -286,7 +286,10 @@ function RunoffGrid({
             <img
               src={ballot.referenceImageUrl}
               alt="The challenge reference"
-              className="max-h-64 w-full rounded-[16px] border-4 border-edge object-contain"
+              /* Was `max-h-64 object-contain`, which letterboxed a square image
+                 into a 16rem-tall box — bars either side rather than a crop, but
+                 still not the shape the work was made in. */
+              className="mx-auto aspect-square w-full max-w-[320px] rounded-[16px] border-4 border-ink object-cover"
             />
           </figure>
         ) : null}
@@ -309,7 +312,7 @@ function RunoffGrid({
                 <img
                   src={entry.imageUrl}
                   alt="Tied entry"
-                  className="w-full rounded-[12px] border-2 border-edge object-cover"
+                  className="aspect-square w-full rounded-[12px] border-2 border-ink object-cover"
                 />
                 <span
                   className={`flex items-center justify-center gap-2 py-1 font-display text-sm font-bold ${

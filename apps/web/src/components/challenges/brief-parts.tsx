@@ -174,22 +174,23 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
       </PanelHeader>
 
       <div className="flex flex-1 flex-col px-5 py-5 sm:px-6.5 sm:py-6">
+        {/*
+          Square, and capped rather than stretched.
+
+          Every image this application accepts is exactly 1024x1024 — the upload
+          refuses anything else — so any container that is not 1:1 must either
+          crop the work or letterbox it. This one was 16/10 with `object-cover`,
+          which quietly cut the top and bottom off every reference.
+
+          The cap is what makes 1:1 safe here. `aspect-square` alone, on the
+          catalogue page where this panel spans the full width, would compute a
+          1270px-tall square from a 1270px-wide column. Bounded and centred, it
+          is a square at a sensible size on a wide layout and a full-width square
+          on a narrow one.
+        */}
+        <div className="mx-auto w-full max-w-[520px]">
         <div
-          /*
-            `aspect` and `max-h` are what make this safe standing alone.
-
-            `flex-1` alone has nothing to grow into in a column with no height of
-            its own, so the slides fell back to their natural size — a 1024²
-            reference rendered a 1208px-tall panel on the catalogue page, where
-            this card spans the full width with no sibling to take its height
-            from. Beside the entry panel on the event page it was fine, which is
-            exactly why it was invisible until this moved.
-
-            The ratio gives a definite height when nothing else does; `flex-1`
-            still stretches it to a taller neighbour, and `max-h` stops a wide
-            viewport turning the reference into a billboard.
-          */
-          className="relative aspect-[16/10] max-h-[600px] min-h-[240px] flex-1 overflow-hidden rounded-2xl border-[3px] border-ink bg-arcade-deep"
+          className="relative aspect-square overflow-hidden rounded-2xl border-[3px] border-ink bg-arcade-deep"
           style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
         >
           <div
@@ -226,6 +227,7 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
               <CarouselArrow side="right" onClick={() => go(current + 1)} />
             </>
           ) : null}
+        </div>
         </div>
 
         {count > 1 ? (

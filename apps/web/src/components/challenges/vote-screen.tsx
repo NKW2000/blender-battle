@@ -205,7 +205,10 @@ export function VoteScreen({ event }: { event: EventDetail }) {
 
         <div
           ref={wheelRef}
-          className="relative min-h-[clamp(340px,52vh,600px)] flex-1 overflow-hidden rounded-[26px] border-4 border-edge"
+          /* Square: every entry is 1024x1024, so a wheel of any other ratio
+             crops the work being judged. Capped so it cannot become a
+             viewport-tall square on a wide screen. */
+          className="relative mx-auto aspect-square w-full max-w-[600px] overflow-hidden rounded-[26px] border-4 border-ink"
           style={{ background: 'rgba(14,11,43,.42)', boxShadow: 'inset 0 0 70px rgba(0,0,0,.55)' }}
         >
           <div className="absolute inset-0">
@@ -436,7 +439,8 @@ export function VoteScreen({ event }: { event: EventDetail }) {
           className="flex min-h-0 flex-1 flex-col gap-3 rounded-[26px] p-3.5"
           style={{ background: '#FFF6E9', border: '4px solid #0E0B2B', boxShadow: '0 12px 0 #0E0B2B' }}
         >
-          <div className="relative min-h-[240px] flex-1 overflow-hidden rounded-2xl border-[3px] border-edge bg-void">
+          {/* Square, for the same reason as the ballot beside it. */}
+          <div className="relative aspect-square w-full overflow-hidden rounded-2xl border-[3px] border-ink bg-arcade-deep">
             {event.referenceImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- Cloudinary asset
               <img
