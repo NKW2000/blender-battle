@@ -122,6 +122,43 @@ password cannot recover their account. It is not a state to leave production in.
 The provider is [Resend](https://resend.com), reached with one HTTPS POST and no
 SDK. Nothing about the code is Resend-specific beyond that one call.
 
+#### No domain and no provider account? Use Gmail SMTP
+
+The option that cannot be refused: it uses a mailbox you already own, so there
+is no signup to be turned away from. Free, and roughly 500 messages a day.
+
+1. The Google account needs **2-Step Verification** on — App Passwords do not
+   exist without it. Google Account → **Security → 2-Step Verification**.
+2. **Security → 2-Step Verification → App passwords.** Create one named
+   anything; Google shows a 16-character password **once**.
+3. On Render set:
+
+   | Key | Value |
+   |---|---|
+   | `MAIL_DRIVER` | `smtp` |
+   | `SMTP_HOST` | `smtp.gmail.com` |
+   | `SMTP_PORT` | `465` |
+   | `SMTP_USER` | your full Gmail address |
+   | `SMTP_PASSWORD` | the App Password |
+   | `MAIL_FROM` | `Blender Battle <your-address@gmail.com>` |
+
+Your normal Google password will **not** work here and should not be put in.
+Only an App Password will authenticate, and it can be revoked on its own without
+touching the account.
+
+Google displays the App Password in four groups of four. Paste it either way —
+the spaces are stripped before use, because they are presentation and not part
+of the secret.
+
+`MAIL_FROM` must be the same address as `SMTP_USER`. Gmail rewrites a mismatched
+sender to the authenticated account anyway, so a different value is at best
+ignored and at worst confusing.
+
+The trade is the same as the other no-domain options, plus one more: mail is
+visibly from a gmail.com address, which is fine for a project and wrong for
+something presenting itself as a company. Any SMTP server works here — Fastmail,
+a work mailbox, a VPS — Gmail is simply the one most people already have.
+
 #### No domain? Use Brevo or SendGrid instead
 
 Resend cannot send to arbitrary recipients without a verified domain, and

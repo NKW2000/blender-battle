@@ -78,14 +78,38 @@ services:
       # is fine for a staging box and wrong for anything real, because a user
       # who forgets their password has no way to recover.
       #
-      # Set MAIL_DRIVER=resend with a key from resend.com and a MAIL_FROM on a
-      # domain verified there. The API refuses to boot with `resend` and no key,
-      # so a half-finished configuration fails loudly instead of dropping mail.
+      # Four ways to send, in descending order of how well the mail is trusted:
+      #
+      #   resend    — needs a domain you own and can add DNS records to. Best
+      #               deliverability; without a verified domain it reaches only
+      #               the account holder's own address.
+      #   brevo     — verifies a single sender address instead of a domain.
+      #   sendgrid  — same idea; signup refuses a fair share of new accounts.
+      #   smtp      — any mailbox you already own, Gmail included. Cannot be
+      #               refused by anyone, which is the point.
+      #
+      # `RESEND_API_KEY` holds whichever provider's key is in use: one driver
+      # runs at a time, and a second key is a second secret to rotate.
+      #
+      # The API refuses to boot on any non-`log` driver whose credentials are
+      # missing, so a half-finished configuration fails loudly at startup
+      # instead of silently dropping account-recovery mail.
       - key: MAIL_DRIVER
         value: log
       - key: RESEND_API_KEY
         sync: false
       - key: MAIL_FROM
+        sync: false
+
+      # Only for MAIL_DRIVER=smtp. For Gmail: smtp.gmail.com, port 465, the full
+      # address as the user, and an App Password — never the account password.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
         sync: false
 
       # Generated once by Render and never shown in the repo. The two must

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createTransport, type Transporter } from 'nodemailer';
 
 import { AppConfig } from '@/config/app.config';
 
@@ -16,12 +17,18 @@ export interface OutgoingMail {
  * which meant a forgotten password destroyed an account permanently. That is
  * the kind of thing a real user hits once and never comes back from.
  *
- * ## Why an HTTP API and not SMTP
+ * ## HTTP first, SMTP as the escape hatch
  *
- * No `nodemailer`, no SMTP socket. The only two things this needs to send are a
- * reset link and a verification link, and an HTTPS POST does that with a
- * dependency the runtime already has. It also keeps the API deployable to
- * environments with no outbound TCP, which an SMTP client would rule out.
+ * The hosted providers are one HTTPS POST and no SDK, which is the right shape
+ * for sending two links. SMTP was deliberately avoided at first for that
+ * reason, and because an SMTP socket rules out hosts with no outbound TCP.
+ *
+ * It is here anyway because every hosted provider gates sending behind a signup
+ * that can simply refuse you — Resend needs a verified domain to reach anyone
+ * but the account holder, and SendGrid turns away a good share of new accounts.
+ * A mail driver nobody can obtain credentials for is not a mail driver. An SMTP
+ * mailbox someone already owns has no such gate, so `smtp` is the option that
+ * cannot be taken away.
  *
  * ## Why plain text
  *
@@ -33,6 +40,17 @@ export interface OutgoingMail {
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
+
+  /**
+   * Built once, on first use.
+   *
+   * Nodemailer pools and reuses connections, so one transporter across the
+   * process is both faster and better mannered than opening a TLS session per
+   * message — Gmail in particular throttles connection churn. Lazy rather than
+   * constructed up front so a deployment on any other driver never opens a
+   * socket it will not use.
+   */
+  private transporter: Transporter | null = null;
 
   constructor(private readonly config: AppConfig) {}
 
@@ -71,6 +89,8 @@ export class MailService {
       return true;
     }
 
+    if (driver === 'smtp') return this.sendViaSmtp(mail, from);
+
     try {
       const response = await this.dispatch(mail, driver, apiKey, from);
 
@@ -90,6 +110,54 @@ export class MailService {
       return true;
     } catch (error) {
       this.logger.error(`Mail send threw: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Plain SMTP.
+   *
+   * Separate from `dispatch` because it is not an HTTP request at all — sharing
+   * a code path with the three fetch-based providers would mean a wrapper that
+   * exists only to make two unlike things look alike.
+   *
+   * Honours the same contract as everything else here: never throws, returns
+   * whether the message went, and logs the reason when it did not. Nodemailer's
+   * errors are unusually good — "Invalid login" for a normal password used
+   * where an App Password is required, and it says so.
+   */
+  private async sendViaSmtp(mail: OutgoingMail, from: string): Promise<boolean> {
+    const { host, port, user, password } = this.config.mail.smtp;
+
+    try {
+      this.transporter ??= createTransport({
+        host,
+        port,
+        // 465 is implicit TLS; 587 upgrades with STARTTLS after connecting.
+        // Deriving it from the port rather than adding a variable nobody would
+        // know how to set.
+        secure: port === 465,
+        auth: { user: user ?? '', pass: password ?? '' },
+      });
+
+      await this.transporter.sendMail({
+        from,
+        to: mail.to,
+        subject: mail.subject,
+        text: mail.text,
+      });
+
+      return true;
+    } catch (error) {
+      /*
+        The transporter is discarded on failure.
+
+        A pooled connection that has gone bad stays bad, and keeping it would
+        turn one network blip into every subsequent send failing. The next call
+        builds a fresh one.
+      */
+      this.transporter = null;
+      this.logger.error(`SMTP send failed: ${(error as Error).message}`);
       return false;
     }
   }

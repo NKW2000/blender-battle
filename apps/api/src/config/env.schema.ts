@@ -96,7 +96,7 @@ export const envSchema = z
      * misconfigured production deploy fails loudly at boot (see the refinement
      * below) rather than silently dropping recovery emails.
      */
-    MAIL_DRIVER: z.enum(['log', 'resend', 'sendgrid', 'brevo']).default('log'),
+    MAIL_DRIVER: z.enum(['log', 'resend', 'sendgrid', 'brevo', 'smtp']).default('log'),
     /**
      * The provider key, whichever provider is selected.
      *
@@ -108,6 +108,24 @@ export const envSchema = z
     RESEND_API_KEY: z.string().optional(),
     /** Must be an address on a domain verified with the provider. */
     MAIL_FROM: z.string().default('Blender Battle <onboarding@resend.dev>'),
+
+    /*
+      Plain SMTP, for `MAIL_DRIVER=smtp`.
+
+      Exists because every hosted provider gates sending behind a signup that
+      can refuse you, and a mail driver you cannot get credentials for is not a
+      mail driver. An SMTP account you already have — Gmail, Fastmail, a work
+      mailbox — has no such gate.
+
+      For Gmail: host `smtp.gmail.com`, port 465, user is the full address, and
+      the password is an App Password (Google account → Security → 2-Step
+      Verification → App passwords). Your normal password will not work, and
+      should not be put here.
+    */
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(465),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
 
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug', 'verbose']).default('info'),
     THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
@@ -135,9 +153,24 @@ export const envSchema = z
       }
     }
 
-    // A driver that cannot send is worse than no driver: password reset would
-    // appear to work and quietly deliver nothing.
-    if (env.MAIL_DRIVER !== 'log' && !env.RESEND_API_KEY) {
+    /*
+      A driver that cannot send is worse than no driver: password reset would
+      appear to work and quietly deliver nothing. Each driver is checked for
+      what it actually needs, so a half-finished configuration fails at boot
+      with the name of the missing variable rather than at 3am in a log nobody
+      is reading.
+    */
+    if (env.MAIL_DRIVER === 'smtp') {
+      for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: 'required when MAIL_DRIVER is "smtp"',
+          });
+        }
+      }
+    } else if (env.MAIL_DRIVER !== 'log' && !env.RESEND_API_KEY) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['RESEND_API_KEY'],

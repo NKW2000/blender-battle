@@ -125,6 +125,21 @@ export class AppConfig {
       from: this.get('MAIL_FROM'),
       /** Reset and verification links point back at the web app, not the API. */
       frontendUrl: this.get('FRONTEND_URL'),
+      smtp: {
+        host: this.get('SMTP_HOST'),
+        port: this.get('SMTP_PORT'),
+        user: this.get('SMTP_USER'),
+        /*
+          Whitespace stripped.
+
+          Google displays an App Password as four groups of four — "abcd efgh
+          ijkl mnop" — and it is copied that way far more often than not. The
+          spaces are presentation, not part of the secret, and leaving them in
+          produces an authentication failure whose message says nothing about
+          spaces.
+        */
+        password: this.get('SMTP_PASSWORD')?.replace(/\s+/g, ''),
+      },
     };
   }
 
