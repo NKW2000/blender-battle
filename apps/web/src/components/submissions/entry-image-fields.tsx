@@ -1,7 +1,7 @@
 'use client';
 
 import { SUBMISSION_IMAGE_SIZE } from '@bb/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * The pair of images every submission is made of: the final render and a shot
@@ -63,6 +63,18 @@ export function EntryImageFields({
       return;
     }
 
+    /*
+      Checked before the dimensions, because a drop accepts anything the OS will
+      hand over — a PDF, a .blend, a folder. `readImageSize` would reject those
+      too, but with "could not read that image", which describes the symptom
+      rather than the mistake.
+    */
+    if (!file.type.startsWith('image/')) {
+      setErrors((prev) => ({ ...prev, [slot]: 'That is not an image file.' }));
+      onChange({ ...value, [slot]: null });
+      return;
+    }
+
     try {
       const { width, height } = await readImageSize(file);
       if (width !== SUBMISSION_IMAGE_SIZE || height !== SUBMISSION_IMAGE_SIZE) {
@@ -86,62 +98,205 @@ export function EntryImageFields({
   return (
     <>
       <ImageField
-        label={`Final render — ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}`}
-        accentClass="file:bg-sun"
+        label="Final render"
+        accent="sun"
+        title="Drop your render"
+        hint="or browse · PNG or JPEG"
+        icon={
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="8.5" cy="9" r="1.6" />
+            <path d="M21 16l-5-5-6 6" />
+          </svg>
+        }
         file={value.image}
         error={errors.image}
         disabled={disabled}
         onPick={(file) => void pick('image', file)}
       />
       <ImageField
-        label={`Workspace photo — ${SUBMISSION_IMAGE_SIZE}×${SUBMISSION_IMAGE_SIZE}`}
-        accentClass="file:bg-aqua"
+        label="Workspace photo"
+        accent="aqua"
+        title="Drop your workspace"
+        hint="Your Blender window — proof it's yours"
+        icon={
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 8h3l1.5-2h7L17 8h3v11H4z" />
+            <circle cx="12" cy="13" r="3.4" />
+          </svg>
+        }
         file={value.workspace}
         error={errors.workspace}
         disabled={disabled}
         onPick={(file) => void pick('workspace', file)}
-        hint="Your Blender window while building — it is what shows the piece is yours."
       />
     </>
   );
 }
 
+/*
+  Written out per accent rather than interpolated.
+
+  Tailwind scans source text for whole class names, so `border-${accent}` would
+  compile to nothing and the field would lose its outline entirely — the kind of
+  break that only shows in a production build.
+*/
+const ACCENT = {
+  sun: {
+    label: 'text-sun',
+    idle: 'border-sun/50 bg-sun/5',
+    hover: 'hover:border-sun hover:bg-sun/10',
+    chip: 'bg-sun',
+    browse: 'text-sun',
+  },
+  aqua: {
+    label: 'text-aqua',
+    idle: 'border-aqua/50 bg-aqua/5',
+    hover: 'hover:border-aqua hover:bg-aqua/10',
+    chip: 'bg-aqua',
+    browse: 'text-aqua',
+  },
+} as const;
+
+/**
+ * One drop zone.
+ *
+ * A bare `<input type="file">` was doing this job, which said "no file chosen"
+ * where the design asks for a target you can drag onto. The input is still
+ * here — it is what makes the field keyboard-reachable and what opens the
+ * picker — but it is visually hidden behind the zone rather than replaced by it.
+ */
 function ImageField({
   label,
-  accentClass,
+  accent,
+  title,
+  hint,
+  icon,
   file,
   error,
-  hint,
   disabled,
   onPick,
 }: {
   label: string;
-  accentClass: string;
+  accent: keyof typeof ACCENT;
+  title: string;
+  hint: string;
+  icon: React.ReactNode;
   file: File | null;
   error: string | null;
-  hint?: string;
   disabled?: boolean;
   onPick: (file: File | null) => void;
 }) {
+  const tone = ACCENT[accent];
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  /*
+    One object URL at a time, revoked when it is replaced or the field unmounts.
+    Without the revoke the blob stays resident for the life of the document, and
+    these are 1024×1024 images that someone may swap several times.
+  */
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
   return (
-    <label className="block">
-      <span className="eyebrow text-aqua">{label}</span>
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        disabled={disabled}
-        onChange={(event) => onPick(event.target.files?.[0] ?? null)}
-        className={`mt-2 w-full text-sm font-bold text-bone-muted file:mr-3 file:rounded-lg file:border-[3px] file:border-edge ${accentClass} file:px-3 file:py-2 file:font-display file:font-bold file:text-edge disabled:opacity-50`}
-      />
+    <div className="flex flex-col">
+      <div className="mb-2.5 flex flex-wrap items-center gap-2">
+        <span className={`font-display text-[13px] font-bold uppercase tracking-[1.2px] ${tone.label}`}>
+          {label}
+        </span>
+        <span className="text-xs font-extrabold text-haze-5">
+          {SUBMISSION_IMAGE_SIZE}×{SUBMISSION_IMAGE_SIZE}
+        </span>
+      </div>
+
+      <div
+        /*
+          The zone is the label for the hidden input, so a click anywhere on it
+          opens the picker and the input stays the accessible control. `relative`
+          + `overflow-hidden` so a chosen image can fill it edge to edge.
+        */
+        onDragOver={(event) => {
+          if (disabled) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          if (disabled) return;
+          event.preventDefault();
+          setDragging(false);
+          onPick(event.dataTransfer.files?.[0] ?? null);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`relative flex min-h-[130px] flex-1 cursor-pointer flex-col items-center justify-center gap-2.5 overflow-hidden rounded-[18px] border-[3px] border-dashed p-5 text-center transition-colors ${
+          error ? 'border-punch/60 bg-punch/5' : dragging ? 'border-mint bg-mint/10' : `${tone.idle} ${tone.hover}`
+        } ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+      >
+        {preview ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+            <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-ink/85 px-3 py-2 text-left">
+              <span className="truncate text-xs font-extrabold text-mint">✓ {file?.name}</span>
+              <span className="shrink-0 text-xs font-extrabold text-haze">Replace</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <span
+              className={`flex h-13 w-13 items-center justify-center rounded-[14px] border-[2.5px] border-ink text-ink ${tone.chip}`}
+              style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
+            >
+              {icon}
+            </span>
+            <span>
+              <span className="block font-display text-base font-bold text-cream">{title}</span>
+              <span className="mt-0.5 block text-[12.5px] font-extrabold text-haze-5">
+                {hint === 'or browse · PNG or JPEG' ? (
+                  <>
+                    or <span className={tone.browse}>browse</span> · PNG or JPEG
+                  </>
+                ) : (
+                  hint
+                )}
+              </span>
+            </span>
+          </>
+        )}
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={disabled}
+          aria-label={label}
+          onChange={(event) => onPick(event.target.files?.[0] ?? null)}
+          onClick={(event) => {
+            // The wrapper already forwards the click; without this the event
+            // bubbles back up and reopens the picker a second time.
+            event.stopPropagation();
+            // Lets the same file be re-picked after it was rejected — otherwise
+            // `change` never fires again and the field looks frozen.
+            (event.target as HTMLInputElement).value = '';
+          }}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        />
+      </div>
+
       {error ? (
-        <p role="alert" className="mt-1.5 text-xs font-bold text-punch-soft">
+        <p role="alert" className="mt-2 text-xs font-extrabold text-punch-soft">
           {error}
         </p>
-      ) : file ? (
-        <p className="mt-1.5 text-xs font-bold text-mint">✓ {file.name}</p>
-      ) : hint ? (
-        <p className="mt-1.5 text-xs font-bold text-bone-faint">{hint}</p>
       ) : null}
-    </label>
+    </div>
   );
 }

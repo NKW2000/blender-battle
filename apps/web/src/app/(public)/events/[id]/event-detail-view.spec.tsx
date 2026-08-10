@@ -1,0 +1,241 @@
+import { ChallengeAssetType, Difficulty } from '@bb/shared';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { EventDetail } from '@/features/challenges/use-events';
+
+/**
+ * The challenge screen, against the parts of the design a static canvas cannot
+ * state.
+ *
+ * The handoff draws one challenge: three reference images, three judging
+ * criteria, no rules, no downloads, no tags. Read literally that is a fixed
+ * layout; read as a design it is a shape that has to survive whatever a manager
+ * actually filled in. These assert the second reading — that the reference
+ * carousel is driven by however many images exist rather than by three, and
+ * that the sections the sample happens not to have stay absent instead of
+ * rendering as empty furniture.
+ *
+ * Written as a component test rather than checked in a browser because the
+ * carousel is the one part of this screen with state, and its arrows and dots
+ * are exactly what a screenshot cannot verify.
+ */
+
+const noop = () => undefined;
+
+vi.mock('@/features/challenges/use-events', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useEvent: (_id: string, initial?: EventDetail) => ({
+    data: initial,
+    isLoading: false,
+    error: null,
+  }),
+  useEnterEvent: () => ({ mutate: noop, isPending: false, isError: false, error: null }),
+  useVoteEvent: () => ({ mutate: noop, isPending: false, isError: false, error: null }),
+}));
+
+// The button plays a click; jsdom has no AudioContext and the sound is not what
+// is under test.
+vi.mock('@/features/sound/use-sound', () => ({ useSound: () => noop }));
+
+const { EventDetailView } = await import('./event-detail-view');
+
+function asset(id: string, type = ChallengeAssetType.REFERENCE_IMAGE) {
+  return {
+    id,
+    type,
+    url: `https://cdn.test/${id}.jpg`,
+    filename: `${id}.jpg`,
+    bytes: 2048,
+    sortOrder: 0,
+  };
+}
+
+function makeEvent(overrides: Partial<EventDetail> = {}): EventDetail {
+  return {
+    id: 'e1',
+    slug: 'the-couch',
+    title: 'The couch',
+    difficulty: Difficulty.EASY,
+    category: { id: 'c1', name: 'Modeling' },
+    tags: [],
+    estimatedMinutes: 45,
+    rewardXp: 50,
+    coverImageUrl: null,
+    shortDescription: 'A couch',
+    startDate: new Date(Date.now() - 3_600_000).toISOString(),
+    endDate: new Date(Date.now() + 86_400_000).toISOString(),
+    votingEndsAt: null,
+    winnerEntryId: null,
+    phase: 'open',
+    serverNow: new Date().toISOString(),
+    referenceImageUrl: null,
+    objectives: ['Focus on the textures', 'Clean edges', 'Nice modeling'],
+    description: 'A couch with detailed texture on it',
+    rules: null,
+    allowedAssets: null,
+    forbiddenAssets: null,
+    blenderVersion: '5.0',
+    assets: [asset('ref-1'), asset('ref-2')],
+    myEntryId: null,
+    myVoteEntryId: null,
+    entries: [],
+    ...overrides,
+  };
+}
+
+const view = (event: EventDetail) => render(<EventDetailView id="e1" initialEvent={event} />);
+
+describe('the brief, on the page', () => {
+  it('shows the whole brief rather than a link to it', () => {
+    view(makeEvent());
+
+    expect(screen.getByText('A couch with detailed texture on it')).toBeInTheDocument();
+    expect(screen.getByText('45 min')).toBeInTheDocument();
+    expect(screen.getByText('50 XP')).toBeInTheDocument();
+    expect(screen.getByText('5.0')).toBeInTheDocument();
+    // The detour this screen used to send people on.
+    expect(screen.queryByText(/read the full brief/i)).not.toBeInTheDocument();
+  });
+
+  it('drops the Blender tile when no version is set', () => {
+    // The design has no state for a stat tile with no value, so the tile goes
+    // rather than rendering a label over an empty line.
+    view(makeEvent({ blenderVersion: null }));
+
+    expect(screen.getByText('Time')).toBeInTheDocument();
+    expect(screen.queryByText('Blender')).not.toBeInTheDocument();
+  });
+
+  it('numbers the judging criteria in order', () => {
+    view(makeEvent());
+    const items = screen.getAllByRole('listitem');
+
+    expect(items.map((item) => item.textContent)).toEqual([
+      '1Focus on the textures',
+      '2Clean edges',
+      '3Nice modeling',
+    ]);
+  });
+
+  it('renders nothing for rules, files and tags when the challenge has none', () => {
+    // The design's own sample: with all three empty the page must match it
+    // exactly, not carry three empty panels.
+    view(makeEvent());
+
+    expect(screen.queryByText('Rules')).not.toBeInTheDocument();
+    expect(screen.queryByText('Files')).not.toBeInTheDocument();
+  });
+
+  it('renders them when it does', async () => {
+    view(
+      makeEvent({
+        rules: 'No kitbashing.',
+        forbiddenAssets: 'Downloaded models',
+        tags: [{ id: 't1', slug: 'furniture', name: 'Furniture' }],
+        assets: [asset('ref-1'), asset('pack', ChallengeAssetType.REFERENCE_FILE)],
+      }),
+    );
+
+    expect(screen.getByText('Rules')).toBeInTheDocument();
+    expect(screen.getByText('No kitbashing.')).toBeInTheDocument();
+    expect(screen.getByText('Not allowed')).toBeInTheDocument();
+    expect(screen.getByText('Furniture')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /pack\.jpg/ })).toBeInTheDocument();
+  });
+});
+
+describe('the reference carousel', () => {
+  it('moves between references with the arrows, and wraps', async () => {
+    const user = userEvent.setup();
+    view(makeEvent());
+
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next reference' }));
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+
+    // Wraps rather than stopping — there is no disabled state in the design.
+    await user.click(screen.getByRole('button', { name: 'Next reference' }));
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Previous reference' }));
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+
+  it('marks the current dot, and jumps when one is clicked', async () => {
+    const user = userEvent.setup();
+    view(makeEvent());
+
+    const dots = screen.getAllByRole('button', { name: /^Reference \d$/ });
+    expect(dots).toHaveLength(2);
+    expect(dots[0]).toHaveAttribute('aria-current', 'true');
+
+    await user.click(dots[1]!);
+    expect(dots[1]).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+
+  it('drops the arrows and dots at a single reference', () => {
+    // Furniture with nothing to do: one image cannot be paged.
+    view(makeEvent({ assets: [asset('only')] }));
+
+    expect(screen.queryByRole('button', { name: 'Next reference' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Reference \d$/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+  });
+
+  it('says so when there are no references at all', () => {
+    view(makeEvent({ assets: [] }));
+
+    expect(screen.getByText(/no reference images/i)).toBeInTheDocument();
+  });
+
+  it('survives a reference being removed while the page is open', async () => {
+    /*
+      The page polls every 15 seconds. A manager deleting the third image while
+      someone is looking at it would otherwise leave the track translated to a
+      slide that no longer exists — a blank panel with no way back.
+    */
+    const user = userEvent.setup();
+    const { rerender } = view(
+      makeEvent({ assets: [asset('a'), asset('b'), asset('c')] }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reference 3' }));
+    expect(screen.getByText('3 / 3')).toBeInTheDocument();
+
+    rerender(
+      <EventDetailView id="e1" initialEvent={makeEvent({ assets: [asset('a'), asset('b')] })} />,
+    );
+
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+});
+
+describe('phases', () => {
+  it('offers the upload form while entries are open', () => {
+    view(makeEvent());
+
+    expect(screen.getByText('Enter the challenge')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit entry/i })).toBeInTheDocument();
+  });
+
+  it('replaces it with the deadline before the window opens', () => {
+    view(makeEvent({ phase: 'upcoming' }));
+
+    expect(screen.getByText('Not open yet')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /submit entry/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the brief on the page in every phase', () => {
+    // The reason this screen exists: the brief is not a thing you leave to read.
+    for (const phase of ['upcoming', 'open', 'finished'] as const) {
+      const { unmount } = view(makeEvent({ phase }));
+      expect(screen.getByText('A couch with detailed texture on it')).toBeInTheDocument();
+      expect(screen.getByText('Judged on')).toBeInTheDocument();
+      unmount();
+    }
+  });
+});

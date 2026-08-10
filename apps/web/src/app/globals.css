@@ -76,6 +76,19 @@
   --color-flame: #ffd23f;
   --color-flame-lift: #ffe580;
   --color-flame-warm: #ffdc5c;
+  /*
+    The orange the handoff calls the primary brand accent.
+
+    Added rather than folded into `flame`, which the note above deliberately
+    remapped from this colour to the logo's yellow. Both are wanted: yellow
+    carries the accent across the app, and the arcade language still uses this
+    orange as the warm end of the CTA gradient, the logo mark, and the icon
+    tiles that need to read as "action" beside a yellow one. Nothing that
+    carries text on it uses this as a background without ink on top.
+  */
+  --color-ember: #ff7a18;
+  --color-ember-lift: #ffb13c;
+
   --color-sun: #ffd23f;
   --color-aqua: #22d3ee;
   --color-mint: #5ef0de;
