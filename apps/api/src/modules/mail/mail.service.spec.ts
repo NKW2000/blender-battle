@@ -5,14 +5,17 @@ import type { AppConfig } from '@/config/app.config';
 import { MailService } from './mail.service';
 
 /**
- * Two providers, one message.
+ * Three providers, one message.
  *
  * The failure worth guarding is quiet: a wrong request body gets a 4xx that the
  * service logs and swallows — by design, because the callers are auth flows
  * whose response must not depend on delivery. So a malformed payload does not
  * throw, does not fail a request, and shows up only as mail nobody receives.
  */
-const config = (driver: 'log' | 'resend' | 'sendgrid', from = 'Blender Battle <no-reply@bb.test>') =>
+const config = (
+  driver: 'log' | 'resend' | 'sendgrid' | 'brevo',
+  from = 'Blender Battle <no-reply@bb.test>',
+) =>
   ({
     mail: { driver, apiKey: 'key-123', from, frontendUrl: 'https://app.test' },
   }) as AppConfig;
@@ -65,10 +68,10 @@ describe('MailService — resend', () => {
 describe('MailService — sendgrid', () => {
   it('posts SendGrid\'s nested shape, with the address split out', async () => {
     /*
-      The two providers disagree about `from`: Resend wants
-      `Name <a@b.co>`, SendGrid wants `{ name, email }`. `MAIL_FROM` keeps the
-      one format either way, so switching driver is an environment change and
-      not a re-education about what that variable means.
+      The providers disagree about `from`: Resend wants `Name <a@b.co>`,
+      SendGrid and Brevo want `{ name, email }`. `MAIL_FROM` keeps the one
+      format whichever driver is selected, so switching is an environment
+      change and not a re-education about what that variable means.
     */
     const calls = captureFetch();
     await new MailService(config('sendgrid')).send(mail);
@@ -96,6 +99,29 @@ describe('MailService — sendgrid', () => {
     await new MailService(config('sendgrid', '"Blender Battle" <no-reply@bb.test>')).send(mail);
 
     expect(calls[0]!.body.from).toEqual({ email: 'no-reply@bb.test', name: 'Blender Battle' });
+  });
+});
+
+describe('MailService — brevo', () => {
+  it("posts Brevo's shape and authenticates with its own header", async () => {
+    /*
+      Brevo is the one provider here that does not take a bearer token — it
+      wants `api-key`. Sending `Authorization` instead earns a 401 that the
+      service logs and swallows, so the symptom would be mail that silently
+      never arrives.
+    */
+    const calls = captureFetch();
+    await new MailService(config('brevo')).send(mail);
+
+    expect(calls[0]!.url).toBe('https://api.brevo.com/v3/smtp/email');
+    expect(calls[0]!.headers['api-key']).toBe('key-123');
+    expect(calls[0]!.headers.Authorization).toBeUndefined();
+    expect(calls[0]!.body).toMatchObject({
+      sender: { email: 'no-reply@bb.test', name: 'Blender Battle' },
+      to: [{ email: 'ada@example.com' }],
+      subject: 'Confirm',
+      textContent: mail.text,
+    });
   });
 });
 

@@ -96,7 +96,7 @@ export const envSchema = z
      * misconfigured production deploy fails loudly at boot (see the refinement
      * below) rather than silently dropping recovery emails.
      */
-    MAIL_DRIVER: z.enum(['log', 'resend', 'sendgrid']).default('log'),
+    MAIL_DRIVER: z.enum(['log', 'resend', 'sendgrid', 'brevo']).default('log'),
     /**
      * The provider key, whichever provider is selected.
      *

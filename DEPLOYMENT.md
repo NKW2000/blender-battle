@@ -122,28 +122,42 @@ password cannot recover their account. It is not a state to leave production in.
 The provider is [Resend](https://resend.com), reached with one HTTPS POST and no
 SDK. Nothing about the code is Resend-specific beyond that one call.
 
-#### No domain? Use the SendGrid driver instead
+#### No domain? Use Brevo or SendGrid instead
 
 Resend cannot send to arbitrary recipients without a verified domain, and
 `workers.dev`, `onrender.com` and `vercel.app` cannot be verified — they belong
 to their platforms, you cannot add DNS records to them, and they sit on the
 Public Suffix List precisely so nobody can borrow their reputation.
 
-SendGrid verifies a **single sender address** instead. Confirm one inbox you
-already own and you can email anyone.
+Both verify a **single sender address** instead. Confirm one inbox you already
+own and you can email anyone.
 
-1. [sendgrid.com](https://sendgrid.com) → sign up (free tier is 100/day).
-2. **Settings → Sender Authentication → Verify a Single Sender.** Fill in the
-   form with an address you can read; SendGrid emails it a confirmation link.
-3. **Settings → API Keys → Create API Key**, with **Restricted Access** and only
-   *Mail Send* enabled.
-4. On Render set:
+**Brevo is the easier door**, and worth trying first: SendGrid rejects a fair
+number of new signups outright, and a provider you cannot get credentials for is
+not an option however good its API is.
 
-   | Key | Value |
-   |---|---|
-   | `MAIL_DRIVER` | `sendgrid` |
-   | `RESEND_API_KEY` | the SendGrid key — the variable is named for the first provider and holds whichever key is in use |
-   | `MAIL_FROM` | `Blender Battle <the-address-you-verified>` |
+**Brevo** — free tier 300/day.
+
+1. [brevo.com](https://www.brevo.com) → sign up.
+2. **Senders, Domains & Dedicated IPs → Senders → Add a sender.** Use an address
+   you can read; Brevo emails it a confirmation link.
+3. **SMTP & API → API Keys → Generate a new API key.**
+4. On Render set `MAIL_DRIVER=brevo`.
+
+**SendGrid** — free tier 100/day.
+
+1. [sendgrid.com](https://sendgrid.com) → sign up.
+2. **Settings → Sender Authentication → Verify a Single Sender.**
+3. **Settings → API Keys → Create API Key**, **Restricted Access**, only
+   *Mail Send*.
+4. On Render set `MAIL_DRIVER=sendgrid`.
+
+Either way, the other two variables are the same:
+
+| Key | Value |
+|---|---|
+| `RESEND_API_KEY` | the key from whichever provider you chose — the variable is named for the first one supported and holds whichever key is in use |
+| `MAIL_FROM` | `Blender Battle <the-address-you-verified>` |
 
 `MAIL_FROM` keeps the same `Name <address>` format for both drivers, so
 switching provider is one variable and not a re-education about what the others

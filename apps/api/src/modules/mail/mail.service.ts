@@ -95,18 +95,23 @@ export class MailService {
   }
 
   /**
-   * The provider call. One request, two shapes.
+   * The provider call. One request, three shapes.
    *
-   * Both are a single authenticated POST of the same four values, so the split
-   * is a request body and a URL rather than an abstraction. Nothing above this
-   * method knows which provider is in use, which is what makes switching an
-   * environment variable instead of a deployment.
+   * Each is a single authenticated POST of the same four values, so the split
+   * is a URL, a header and a body rather than an abstraction. Nothing above
+   * this method knows which provider is in use, which is what makes switching
+   * an environment variable instead of a deployment.
    *
-   * SendGrid exists here for one reason: it verifies a *single sender address*
-   * rather than a domain, so a deployment with no domain of its own can still
-   * email arbitrary recipients. Resend cannot do that — without a verified
-   * domain it delivers only to the account holder's own address, which is
-   * correct of them and useless for a real signup flow.
+   * SendGrid and Brevo exist here for one reason: both verify a *single sender
+   * address* rather than a domain, so a deployment with no domain of its own
+   * can still email arbitrary recipients. Resend cannot do that — without a
+   * verified domain it delivers only to the account holder's own address, which
+   * is correct of them and useless for a real signup flow.
+   *
+   * Two of them rather than one because signing up is itself a failure mode:
+   * SendGrid rejects a good share of new accounts outright, and a mail driver
+   * nobody can obtain credentials for is not a mail driver. Brevo is the easier
+   * door, and having both costs a dozen lines.
    *
    * The trade is deliverability. Mail from a shared sender with no DKIM or SPF
    * on a domain you control is filtered harder, and some of it lands in spam.
@@ -115,24 +120,19 @@ export class MailService {
    */
   private dispatch(
     mail: OutgoingMail,
-    driver: 'resend' | 'sendgrid',
+    driver: 'resend' | 'sendgrid' | 'brevo',
     apiKey: string | undefined,
     from: string,
   ): Promise<Response> {
-    const headers = {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    };
+    const json = { 'Content-Type': 'application/json' };
+    const bearer = { ...json, Authorization: `Bearer ${apiKey}` };
 
     if (driver === 'sendgrid') {
       return fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
-        headers,
+        headers: bearer,
         body: JSON.stringify({
           personalizations: [{ to: [{ email: mail.to }] }],
-          // SendGrid wants the address and the display name apart, where
-          // Resend takes one RFC 5322 string. `MAIL_FROM` stays in the one
-          // format so the variable does not change meaning with the driver.
           from: parseAddress(from),
           subject: mail.subject,
           content: [{ type: 'text/plain', value: mail.text }],
@@ -140,9 +140,24 @@ export class MailService {
       });
     }
 
+    if (driver === 'brevo') {
+      return fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        // Brevo authenticates with its own header, not a bearer token. The one
+        // place the three providers differ beyond the body shape.
+        headers: { ...json, accept: 'application/json', 'api-key': apiKey ?? '' },
+        body: JSON.stringify({
+          sender: parseAddress(from),
+          to: [{ email: mail.to }],
+          subject: mail.subject,
+          textContent: mail.text,
+        }),
+      });
+    }
+
     return fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers,
+      headers: bearer,
       body: JSON.stringify({
         from,
         to: [mail.to],
@@ -161,10 +176,10 @@ export class MailService {
 /**
  * `Name <a@b.co>` into its parts, for providers that want them separately.
  *
- * A bare `a@b.co` is equally valid and yields no name, which SendGrid accepts —
- * it simply shows the address. Anything unparseable is passed through as the
- * address so the provider can reject it with a message worth reading, rather
- * than this throwing somewhere far from the cause.
+ * A bare `a@b.co` is equally valid and yields no name, which both SendGrid and
+ * Brevo accept — they simply show the address. Anything unparseable is passed
+ * through as the address so the provider can reject it with a message worth
+ * reading, rather than this throwing somewhere far from the cause.
  */
 function parseAddress(value: string): { email: string; name?: string } {
   const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value);
