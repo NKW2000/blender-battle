@@ -5,8 +5,6 @@ import {
   ApiErrorCode,
   Role,
   UserStatus,
-  type AuthSession,
-  type AuthTokens,
 } from '@bb/shared';
 import { Repository } from 'typeorm';
 
@@ -19,7 +17,9 @@ import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import { TokenFamilyRevokeReason } from './entities/refresh-token-family.entity';
 import { PasswordService } from './services/password.service';
+import { AccountRecoveryService } from './services/account-recovery.service';
 import { TokenService } from './services/token.service';
+import type { IssuedSession, IssuedTokens } from './auth.types';
 
 export interface RequestContext {
   ipAddress?: string | null;
@@ -33,9 +33,23 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly activity: ActivityLogService,
+    private readonly recovery: AccountRecoveryService,
   ) {}
 
-  async register(dto: RegisterDto, context: RequestContext): Promise<AuthSession> {
+  /**
+   * Send another verification link to a user's own address.
+   *
+   * Scoped to the caller's own id by the controller — an endpoint that took an
+   * arbitrary user id would let anyone make the service email anybody who has
+   * an account here.
+   */
+  async resendVerification(userId: string): Promise<void> {
+    const user = await this.users.findOne({ where: { id: userId } });
+    if (!user) return;
+    await this.recovery.requestEmailVerification(user);
+  }
+
+  async register(dto: RegisterDto, context: RequestContext): Promise<IssuedSession> {
     // Pre-check for a friendly field-level error. The unique constraints in the
     // database remain the real guarantee — this check races, and losing the race
     // surfaces as a 409 from the exception filter, which is correct.
@@ -65,6 +79,16 @@ export class AuthService {
       }),
     );
 
+    /*
+      Fire-and-forget, and deliberately not awaited into the response.
+
+      Registration must succeed even when the mail provider is down. The address
+      is unverified either way and can be confirmed later from settings, so
+      blocking a signup on an SMTP round trip trades a working account for a
+      spinner.
+    */
+    void this.recovery.requestEmailVerification(user);
+
     const tokens = await this.tokens.issueForNewSession(user, context);
 
     await this.activity.record({
@@ -78,7 +102,7 @@ export class AuthService {
     return { ...tokens, user: UserMapper.toSelf(user) };
   }
 
-  async login(dto: LoginDto, context: RequestContext): Promise<AuthSession> {
+  async login(dto: LoginDto, context: RequestContext): Promise<IssuedSession> {
     const user = await this.users.findOne({
       where: { email: dto.email },
       // passwordHash carries select:false on the entity, so it must be asked for.
@@ -147,7 +171,7 @@ export class AuthService {
     return { ...tokens, user: UserMapper.toSelf(full) };
   }
 
-  async refresh(refreshToken: string, context: RequestContext): Promise<AuthTokens> {
+  async refresh(refreshToken: string, context: RequestContext): Promise<IssuedTokens> {
     const { tokens } = await this.tokens.rotate(refreshToken, context);
     return tokens;
   }

@@ -122,6 +122,12 @@ export default function LoginPage() {
             </ChunkyButton>
           </form>
 
+          <p className="mt-4 text-center text-sm font-extrabold">
+            <Link href="/forgot-password" className="text-haze-4 hover:text-sun">
+              Forgot your password?
+            </Link>
+          </p>
+
           <p className="mt-6 text-center text-sm font-extrabold text-haze-4">
             New challenger?{' '}
             <Link href="/register" className="text-sun hover:text-flame-lift">

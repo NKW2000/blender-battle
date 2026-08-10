@@ -98,6 +98,15 @@ export class AppConfig {
       refreshSecret: this.get('JWT_REFRESH_SECRET'),
       accessTtl: this.get('JWT_ACCESS_TTL'),
       refreshTtl: this.get('JWT_REFRESH_TTL'),
+      /*
+        The refresh lifetime in seconds.
+
+        Parsed here as well as in TokenService so the cookie's `maxAge` and the
+        token's own expiry come from one string. A cookie that outlives its
+        token produces 401s on a credential the browser still believes in;
+        one that dies first signs people out early for no reason.
+      */
+      refreshTtlSeconds: parseDuration(this.get('JWT_REFRESH_TTL')),
     };
   }
 
@@ -106,6 +115,16 @@ export class AppConfig {
       cloudName: this.get('CLOUDINARY_CLOUD_NAME'),
       apiKey: this.get('CLOUDINARY_API_KEY'),
       apiSecret: this.get('CLOUDINARY_API_SECRET'),
+    };
+  }
+
+  get mail() {
+    return {
+      driver: this.get('MAIL_DRIVER'),
+      apiKey: this.get('RESEND_API_KEY'),
+      from: this.get('MAIL_FROM'),
+      /** Reset and verification links point back at the web app, not the API. */
+      frontendUrl: this.get('FRONTEND_URL'),
     };
   }
 
@@ -130,4 +149,18 @@ export class AppConfig {
       limit: this.get('THROTTLE_LIMIT'),
     };
   }
+}
+
+/**
+ * `15m`, `7d` and friends into seconds.
+ *
+ * Duplicated deliberately rather than imported from TokenService: config must
+ * not depend on a module that depends on config.
+ */
+function parseDuration(value: string): number {
+  const match = /^(\d+)([smhd])$/.exec(value);
+  if (!match) throw new Error(`Unparseable duration: ${value}`);
+
+  const multipliers: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+  return Number(match[1]) * (multipliers[match[2] as string] ?? 1);
 }

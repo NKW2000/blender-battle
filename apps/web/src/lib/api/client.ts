@@ -35,14 +35,23 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function performRefresh(): Promise<boolean> {
-  const refreshToken = tokenStore.getRefreshToken();
-  if (!refreshToken) return false;
-
   try {
+    /*
+      No body, and no token in it.
+
+      The credential is the httpOnly refresh cookie, which the browser attaches
+      because of `credentials: 'include'`. JavaScript cannot read it, so this
+      request cannot name it — which is exactly why there is nothing here for an
+      XSS payload to steal.
+
+      `x-bb-client` is the CSRF defence. A custom header forces a preflight, and
+      a preflight from an origin outside the API's allowlist is refused by the
+      browser before this request is ever sent. See `SameSiteGuard` on the API.
+    */
     const response = await fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'x-bb-client': '1' },
     });
 
     if (!response.ok) {
@@ -75,19 +84,41 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   const { body, skipRefresh, headers, ...rest } = options;
   const isFormData = body instanceof FormData;
 
-  // After a page load the access token is gone — it lives in memory only — while
-  // the refresh token persisted. Redeem it up front rather than spending a
-  // guaranteed 401 to discover the same thing.
-  if (!skipRefresh && !tokenStore.getAccessToken() && tokenStore.getRefreshToken()) {
+  /*
+    After a page load the access token is gone — it lives in memory only — and
+    whether a session exists at all is now something only the server knows,
+    because the refresh cookie is invisible to this code.
+
+    So the attempt is unconditional rather than guarded on a stored token. It
+    costs one request that returns 401 for a signed-out visitor, and it saves a
+    signed-in one a guaranteed failed request on every cold load.
+  */
+  if (!skipRefresh && !tokenStore.getAccessToken()) {
     await refreshOnce();
   }
 
   const response = await fetch(`${API_URL}${path}`, {
     ...rest,
+    // Sends the refresh cookie on the auth routes it is scoped to, and is
+    // required for the API to accept the `Set-Cookie` that creates it.
+    credentials: 'include',
     headers: {
       // The browser must set its own multipart boundary, so Content-Type is
       // omitted for FormData.
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      /*
+        Marks the request as coming from the app.
+
+        `SameSiteGuard` requires it on the endpoints that authenticate with the
+        refresh cookie. Sent on everything rather than only those two, so a new
+        cookie-authenticated endpoint cannot be added and then fail for the one
+        caller that forgot the header.
+
+        Its value carries no meaning and is not a secret — a custom header
+        forces a CORS preflight, and it is the preflight, checked against the
+        API's origin allowlist, that does the actual work.
+      */
+      'x-bb-client': '1',
       ...(tokenStore.getAccessToken()
         ? { Authorization: `Bearer ${tokenStore.getAccessToken()}` }
         : {}),
@@ -108,8 +139,7 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   if (
     (payload.error.code === ApiErrorCode.TOKEN_EXPIRED ||
       payload.error.code === ApiErrorCode.UNAUTHORIZED) &&
-    !skipRefresh &&
-    tokenStore.getRefreshToken()
+    !skipRefresh
   ) {
     const refreshed = await refreshOnce();
     if (refreshed) {

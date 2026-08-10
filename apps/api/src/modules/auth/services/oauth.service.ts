@@ -9,7 +9,6 @@ import {
   Role,
   UserStatus,
   USERNAME_MAX_LENGTH,
-  type AuthSession,
   type LinkedAccount,
 } from '@bb/shared';
 import { DataSource, Repository } from 'typeorm';
@@ -23,6 +22,7 @@ import { UserMapper } from '@/modules/users/users.mapper';
 
 import { OAuthIdentity } from '../entities/oauth-identity.entity';
 import { TokenService } from './token.service';
+import type { IssuedSession } from '../auth.types';
 
 interface ProviderProfile {
   providerAccountId: string;
@@ -145,7 +145,7 @@ export class OAuthService {
   }
 
   /** Trades the one-time code for the real session. Consumed on first use. */
-  async exchange(code: string): Promise<AuthSession> {
+  async exchange(code: string): Promise<IssuedSession> {
     const key = `oauth:exchange:${code}`;
     const raw = await this.redis.client.get(key);
 
@@ -158,7 +158,7 @@ export class OAuthService {
     }
 
     await this.redis.client.del(key);
-    return JSON.parse(raw) as AuthSession;
+    return JSON.parse(raw) as IssuedSession;
   }
 
   async listLinked(userId: string): Promise<LinkedAccount[]> {
@@ -201,7 +201,7 @@ export class OAuthService {
     profile: ProviderProfile,
     linkUserId: string | null,
     context: { ipAddress?: string | null; userAgent?: string | null },
-  ): Promise<AuthSession> {
+  ): Promise<IssuedSession> {
     const existing = await this.identities.findOne({
       where: { provider, providerAccountId: profile.providerAccountId },
     });
@@ -258,7 +258,7 @@ export class OAuthService {
     provider: OAuthProvider,
     profile: ProviderProfile,
     context: { ipAddress?: string | null; userAgent?: string | null },
-  ): Promise<AuthSession> {
+  ): Promise<IssuedSession> {
     if (!profile.email) {
       throw new AppException(
         ApiErrorCode.VALIDATION_FAILED,
@@ -333,7 +333,7 @@ export class OAuthService {
   private async issue(
     user: User,
     context: { ipAddress?: string | null; userAgent?: string | null },
-  ): Promise<AuthSession> {
+  ): Promise<IssuedSession> {
     // The same rotating refresh-token session a password login produces — OAuth
     // changes how identity is proven, not how sessions work afterwards.
     const tokens = await this.tokens.issueForNewSession(user, context);

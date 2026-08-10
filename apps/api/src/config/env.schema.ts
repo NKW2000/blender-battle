@@ -87,6 +87,21 @@ export const envSchema = z
     /** Where the API sends the browser after a successful sign-in. */
     FRONTEND_URL: z.string().url().default('http://localhost:3000'),
 
+    /**
+     * How transactional email leaves the process.
+     *
+     * `log` writes the whole message to the application log and sends nothing.
+     * That is the default deliberately: it makes password reset work end to end
+     * on a developer machine with no account anywhere, and it means a
+     * misconfigured production deploy fails loudly at boot (see the refinement
+     * below) rather than silently dropping recovery emails.
+     */
+    MAIL_DRIVER: z.enum(['log', 'resend']).default('log'),
+    /** https://resend.com — chosen because it is one HTTPS call and no SDK. */
+    RESEND_API_KEY: z.string().optional(),
+    /** Must be an address on a domain verified with the provider. */
+    MAIL_FROM: z.string().default('Blender Battle <onboarding@resend.dev>'),
+
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug', 'verbose']).default('info'),
     THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
@@ -111,6 +126,16 @@ export const envSchema = z
           });
         }
       }
+    }
+
+    // A driver that cannot send is worse than no driver: password reset would
+    // appear to work and quietly deliver nothing.
+    if (env.MAIL_DRIVER === 'resend' && !env.RESEND_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_API_KEY'],
+        message: 'required when MAIL_DRIVER is "resend"',
+      });
     }
 
     if (!env.REDIS_URL && !env.REDIS_HOST) {

@@ -27,9 +27,20 @@ export function useSession() {
   const query = useQuery({
     queryKey: sessionKeys.me,
     queryFn: () => api.get<SelfUserProfile>('/auth/me'),
-    // Only attempt if a refresh token exists — otherwise every anonymous visitor
-    // fires a guaranteed 401 on page load.
-    enabled: typeof window !== 'undefined' && Boolean(tokenStore.getRefreshToken()),
+    /*
+      Always attempted in the browser.
+
+      It used to be gated on a refresh token being present in localStorage,
+      which was a cheap way to avoid a guaranteed 401 for anonymous visitors.
+      That is no longer possible: the refresh token is an httpOnly cookie, so
+      this code cannot see whether one exists. Whether there is a session is a
+      question only the server can answer, and asking it is the only way.
+
+      The cost is one 401 per anonymous page load. The API client turns that
+      into a single silent refresh attempt, and `retry: false` stops it
+      becoming three.
+    */
+    enabled: typeof window !== 'undefined',
     retry: false,
     staleTime: 60_000,
   });
@@ -103,12 +114,16 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      const refreshToken = tokenStore.getRefreshToken();
-      if (refreshToken) {
-        // Best effort: if the call fails the local credentials are dropped anyway,
-        // so the user is signed out here regardless of the server's answer.
-        await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
-      }
+      /*
+        No token to send — the browser attaches the refresh cookie itself, and
+        the server clears it in the response.
+
+        Best effort: if the call fails, the in-memory access token is dropped
+        below anyway, so the user is signed out of this tab regardless of the
+        server's answer. The cookie would then survive until it expires, which
+        is why the server clears it before doing anything else that can fail.
+      */
+      await api.post('/auth/logout').catch(() => undefined);
     },
     onSettled: () => {
       tokenStore.clear();

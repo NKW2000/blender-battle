@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ActivityAction, ApiErrorCode, type AuthTokens } from '@bb/shared';
+import { ActivityAction, ApiErrorCode } from '@bb/shared';
 import { DataSource, LessThan, Repository } from 'typeorm';
 
 import { AppConfig } from '@/config/app.config';
@@ -21,6 +21,7 @@ import {
   TokenFamilyRevokeReason,
 } from '../entities/refresh-token-family.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import type { IssuedTokens } from '../auth.types';
 
 interface IssueContext {
   ipAddress?: string | null;
@@ -68,7 +69,7 @@ export class TokenService {
   ) {}
 
   /** Starts a new session: one family, one first-generation refresh token. */
-  async issueForNewSession(user: User, context: IssueContext): Promise<AuthTokens> {
+  async issueForNewSession(user: User, context: IssueContext): Promise<IssuedTokens> {
     const family = await this.families.save(
       this.families.create({
         userId: user.id,
@@ -90,7 +91,7 @@ export class TokenService {
   async rotate(
     presentedToken: string,
     context: IssueContext,
-  ): Promise<{ tokens: AuthTokens; userId: string }> {
+  ): Promise<{ tokens: IssuedTokens; userId: string }> {
     try {
       return await this.rotateInTransaction(presentedToken, context);
     } catch (error) {
@@ -137,7 +138,7 @@ export class TokenService {
   private async rotateInTransaction(
     presentedToken: string,
     context: IssueContext,
-  ): Promise<{ tokens: AuthTokens; userId: string }> {
+  ): Promise<{ tokens: IssuedTokens; userId: string }> {
     const payload = await this.verifyRefreshSignature(presentedToken);
     const tokenHash = this.hash(presentedToken);
 
@@ -269,7 +270,7 @@ export class TokenService {
     user: User,
     familyId: string,
     context: IssueContext,
-  ): Promise<AuthTokens> {
+  ): Promise<IssuedTokens> {
     const refresh = await this.persistRefreshToken(this.tokens, user, familyId, context);
     const accessToken = await this.signAccessToken(user);
 

@@ -23,6 +23,7 @@ import { RoomsModule } from '@/modules/rooms/rooms.module';
 import { ChallengesModule } from '@/modules/challenges/challenges.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { HealthModule } from '@/modules/health/health.module';
+import { MailModule } from '@/modules/mail/mail.module';
 import { RedisModule } from '@/modules/redis/redis.module';
 import { UploadsModule } from '@/modules/uploads/uploads.module';
 import { UsersModule } from '@/modules/users/users.module';
@@ -31,6 +32,7 @@ import { UsersModule } from '@/modules/users/users.module';
   imports: [
     ConfigModule,
     RedisModule,
+    MailModule,
     DatabaseModule,
     // The global LastSeenInterceptor writes to users directly.
     TypeOrmModule.forFeature([User]),
