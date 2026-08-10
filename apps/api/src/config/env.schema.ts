@@ -96,8 +96,15 @@ export const envSchema = z
      * misconfigured production deploy fails loudly at boot (see the refinement
      * below) rather than silently dropping recovery emails.
      */
-    MAIL_DRIVER: z.enum(['log', 'resend']).default('log'),
-    /** https://resend.com — chosen because it is one HTTPS call and no SDK. */
+    MAIL_DRIVER: z.enum(['log', 'resend', 'sendgrid']).default('log'),
+    /**
+     * The provider key, whichever provider is selected.
+     *
+     * One variable rather than one per provider: exactly one driver is ever
+     * active, and a second key sitting unused is a second secret to rotate and
+     * a second thing to get wrong. Named for Resend because it came first;
+     * renaming it now would break every existing deployment for no gain.
+     */
     RESEND_API_KEY: z.string().optional(),
     /** Must be an address on a domain verified with the provider. */
     MAIL_FROM: z.string().default('Blender Battle <onboarding@resend.dev>'),
@@ -130,11 +137,11 @@ export const envSchema = z
 
     // A driver that cannot send is worse than no driver: password reset would
     // appear to work and quietly deliver nothing.
-    if (env.MAIL_DRIVER === 'resend' && !env.RESEND_API_KEY) {
+    if (env.MAIL_DRIVER !== 'log' && !env.RESEND_API_KEY) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['RESEND_API_KEY'],
-        message: 'required when MAIL_DRIVER is "resend"',
+        message: `required when MAIL_DRIVER is "${env.MAIL_DRIVER}"`,
       });
     }
 

@@ -122,6 +122,39 @@ password cannot recover their account. It is not a state to leave production in.
 The provider is [Resend](https://resend.com), reached with one HTTPS POST and no
 SDK. Nothing about the code is Resend-specific beyond that one call.
 
+#### No domain? Use the SendGrid driver instead
+
+Resend cannot send to arbitrary recipients without a verified domain, and
+`workers.dev`, `onrender.com` and `vercel.app` cannot be verified — they belong
+to their platforms, you cannot add DNS records to them, and they sit on the
+Public Suffix List precisely so nobody can borrow their reputation.
+
+SendGrid verifies a **single sender address** instead. Confirm one inbox you
+already own and you can email anyone.
+
+1. [sendgrid.com](https://sendgrid.com) → sign up (free tier is 100/day).
+2. **Settings → Sender Authentication → Verify a Single Sender.** Fill in the
+   form with an address you can read; SendGrid emails it a confirmation link.
+3. **Settings → API Keys → Create API Key**, with **Restricted Access** and only
+   *Mail Send* enabled.
+4. On Render set:
+
+   | Key | Value |
+   |---|---|
+   | `MAIL_DRIVER` | `sendgrid` |
+   | `RESEND_API_KEY` | the SendGrid key — the variable is named for the first provider and holds whichever key is in use |
+   | `MAIL_FROM` | `Blender Battle <the-address-you-verified>` |
+
+`MAIL_FROM` keeps the same `Name <address>` format for both drivers, so
+switching provider is one variable and not a re-education about what the others
+mean.
+
+**The catch, stated plainly.** Mail sent this way carries no DKIM or SPF for a
+domain you control, so more of it lands in spam. That is an acceptable price for
+getting a signup flow working today, and a poor foundation for a product with
+users. Treat it as a stopgap and do the domain properly when you have one — at
+which point it is again one environment variable.
+
 #### 1. Decide whether you need a domain
 
 This is the step people get wrong, so it comes first.

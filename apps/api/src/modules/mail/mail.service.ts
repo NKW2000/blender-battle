@@ -72,23 +72,15 @@ export class MailService {
     }
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from,
-          to: [mail.to],
-          subject: mail.subject,
-          text: mail.text,
-        }),
-      });
+      const response = await this.dispatch(mail, driver, apiKey, from);
 
       if (!response.ok) {
-        // The body carries the provider's reason (unverified domain, bad key).
-        // Logged without the recipient's address, which is not needed to fix it.
+        /*
+          The body carries the provider's reason, and it is usually the actual
+          answer — an unverified domain, an unverified single sender, a bad key.
+          Logged without the recipient's address, which is not needed to fix any
+          of those and is the one part worth not writing down.
+        */
         this.logger.error(
           `Mail send failed (${response.status}): ${await response.text()}`,
         );
@@ -102,8 +94,82 @@ export class MailService {
     }
   }
 
+  /**
+   * The provider call. One request, two shapes.
+   *
+   * Both are a single authenticated POST of the same four values, so the split
+   * is a request body and a URL rather than an abstraction. Nothing above this
+   * method knows which provider is in use, which is what makes switching an
+   * environment variable instead of a deployment.
+   *
+   * SendGrid exists here for one reason: it verifies a *single sender address*
+   * rather than a domain, so a deployment with no domain of its own can still
+   * email arbitrary recipients. Resend cannot do that — without a verified
+   * domain it delivers only to the account holder's own address, which is
+   * correct of them and useless for a real signup flow.
+   *
+   * The trade is deliverability. Mail from a shared sender with no DKIM or SPF
+   * on a domain you control is filtered harder, and some of it lands in spam.
+   * That is a fair price for a stopgap and a bad basis for a product, so
+   * `resend` with a verified domain stays the recommended configuration.
+   */
+  private dispatch(
+    mail: OutgoingMail,
+    driver: 'resend' | 'sendgrid',
+    apiKey: string | undefined,
+    from: string,
+  ): Promise<Response> {
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    if (driver === 'sendgrid') {
+      return fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: mail.to }] }],
+          // SendGrid wants the address and the display name apart, where
+          // Resend takes one RFC 5322 string. `MAIL_FROM` stays in the one
+          // format so the variable does not change meaning with the driver.
+          from: parseAddress(from),
+          subject: mail.subject,
+          content: [{ type: 'text/plain', value: mail.text }],
+        }),
+      });
+    }
+
+    return fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        from,
+        to: [mail.to],
+        subject: mail.subject,
+        text: mail.text,
+      }),
+    });
+  }
+
   /** Absolute link into the web app, not the API. */
   link(path: string): string {
     return new URL(path, this.config.mail.frontendUrl).toString();
   }
+}
+
+/**
+ * `Name <a@b.co>` into its parts, for providers that want them separately.
+ *
+ * A bare `a@b.co` is equally valid and yields no name, which SendGrid accepts —
+ * it simply shows the address. Anything unparseable is passed through as the
+ * address so the provider can reject it with a message worth reading, rather
+ * than this throwing somewhere far from the cause.
+ */
+function parseAddress(value: string): { email: string; name?: string } {
+  const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value);
+  if (!match) return { email: value.trim() };
+
+  const name = match[1]?.replace(/^"|"$/g, '').trim();
+  return name ? { email: match[2]!.trim(), name } : { email: match[2]!.trim() };
 }
