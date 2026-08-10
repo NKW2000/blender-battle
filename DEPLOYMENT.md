@@ -14,7 +14,8 @@ Three services, because they have genuinely different runtime needs.
 finished challenge events, and metrics refresh every five minutes. Serverless
 functions only execute during a request, so on Vercel none of those ever fire —
 rooms would freeze in `drawing` and challenges would never resolve. The API also
-uploads models up to 50 MB, and Vercel caps a function request body at 4.5 MB.
+receives image uploads through its own process, and Vercel caps a function
+request body at 4.5 MB.
 
 ---
 
@@ -75,11 +76,60 @@ Chicken-and-egg: `CORS_ORIGINS`, `FRONTEND_URL` and `NEXT_PUBLIC_API_URL` each
 reference the other service's URL. Deploy both once, then fill in the real
 domains and redeploy.
 
-### Do not use Render's free instance here
+### The free instance is viable, with one caveat
 
-Free web services sleep after 15 minutes idle and take roughly a minute to wake.
-The schedulers sleep with them, so a room's deadline passes with nothing
-advancing it until the next visitor. `render.yaml` therefore specifies `starter`.
+`render.yaml` specifies `free`. Free web services sleep after 15 minutes idle
+and take roughly a minute to wake, and the schedulers sleep with them.
+
+That used to be fatal: a room's deadline would pass with nothing to advance it,
+and every player sat watching a timer at 0:00. It is no longer, because room
+phases are now **advanced on read** — `RoomsService.reconcile` brings a room up
+to the phase its stored timestamps imply, and it is called from the endpoints
+the clients poll. A sleeping API wakes on the first request and advances the
+room correctly, because a stored deadline does not care how late it is read.
+
+What remains is latency, not correctness: the first request after a sleep waits
+for the cold start. Pointing a free uptime pinger at `/health` every ten minutes
+removes that, and costs nothing.
+
+Move to `starter` when the cold start becomes the thing people complain about.
+
+### CORS_ORIGINS is now load-bearing
+
+The refresh token is an httpOnly cookie, not a value the front end stores, so
+sign-in depends on the browser being willing to send and accept it across
+origins. Three things have to line up or **sessions silently fail to persist** —
+the user signs in, the page reloads, and they are signed out again:
+
+- `CORS_ORIGINS` must contain the web app's exact origin (scheme + host, no
+  trailing slash). It can never be `*`: the CORS spec forbids a wildcard
+  alongside credentials, and browsers will refuse the response.
+- Both sides must be HTTPS in production. The cookie is issued
+  `SameSite=None; Secure`, which browsers only accept over TLS.
+- `FRONTEND_URL` must match too — it is what OAuth redirects and email links
+  are built from.
+
+In development everything is on `localhost`, which counts as the same site, so
+the cookie is issued `SameSite=Lax` without `Secure` and plain HTTP works.
+
+### Email (password reset and verification)
+
+`MAIL_DRIVER` defaults to `log`, which writes every message — reset links
+included — to the application log and sends nothing. The API runs fine that
+way, but a user who forgets their password cannot recover the account, so it is
+not a state to leave production in.
+
+To send for real:
+
+1. Create an account at [resend.com](https://resend.com) and verify a domain.
+2. On Render set `MAIL_DRIVER=resend`, `RESEND_API_KEY=<key>`, and `MAIL_FROM`
+   to an address on that domain (`Blender Battle <no-reply@yourdomain>`).
+3. `FRONTEND_URL` must already point at the deployed web app — the reset and
+   verification links are built from it.
+
+The environment schema refuses to boot with `MAIL_DRIVER=resend` and no key, so
+a half-finished configuration fails at startup rather than silently dropping
+recovery emails.
 
 ## 4. Web (Vercel **or** Cloudflare Workers)
 
@@ -93,10 +143,9 @@ configuration:
 
 | Blocker | Where |
 |---|---|
-| `@Interval(1000)` sweeps rooms every second; Cron Triggers floor at one minute | `room-scheduler.service.ts` |
+| `@Interval` schedulers run continuously; Cron Triggers floor at one minute | `room-scheduler.service.ts` |
 | `@node-rs/bcrypt` is a compiled `.node` binary the Workers runtime cannot load | `auth/services/password.service.ts` |
-| `ioredis` needs a raw TCP socket, which Workers does not provide | `common/adapters/redis-io.adapter.ts` |
-| `socket.io` needs a persistent server; Workers WebSockets require Durable Objects | `main.ts` |
+| `ioredis` needs a raw TCP socket, which Workers does not provide | `modules/redis/redis.service.ts` |
 
 Cloudflare also hosts no Postgres, and the schema uses `uuid[]`, `jsonb`,
 `timestamptz` and `inet`, none of which exist in D1/SQLite. Moving the API there
@@ -123,7 +172,14 @@ Runs through [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare),
 configured in [`apps/web/wrangler.jsonc`](apps/web/wrangler.jsonc) and
 [`apps/web/open-next.config.ts`](apps/web/open-next.config.ts).
 
-1. Set the API URL in `wrangler.jsonc` under `vars.NEXT_PUBLIC_API_URL`.
+1. Set the API URL in `apps/web/.env.production` (tracked in the repository),
+   **not** in `wrangler.jsonc` under `vars`.
+
+   This one has bitten before and shipped `localhost:4000` to production.
+   `NEXT_PUBLIC_*` values are inlined into the bundle by `next build`; a Worker
+   `vars` binding is applied at *runtime*, long after the string has already
+   been baked into the JavaScript. `wrangler.jsonc` says the same thing at the
+   point of temptation.
 2. Add the Worker's URL to the API's `CORS_ORIGINS` **and** `FRONTEND_URL` on
    Render. Skipping this leaves a site that loads and then fails every request.
 3. Deploy one of two ways.

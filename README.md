@@ -107,8 +107,8 @@ can't double‑process the same transition.
 | Frontend | Next.js 15 (App Router), React 19, Tailwind CSS 4, TanStack Query, React Hook Form + Zod, three.js |
 | Backend | NestJS 11, TypeORM, class-validator, Passport JWT |
 | Data | PostgreSQL 16, Redis 7 |
-| Storage | Cloudinary (images, 3D model files) |
-| Tooling | pnpm workspaces, Docker Compose, ESLint, Vitest |
+| Storage | Cloudinary (entry images and challenge reference assets) |
+| Tooling | pnpm workspaces, Docker Compose, ESLint, Vitest (unit tests for the API) |
 
 ## Architecture
 
@@ -197,10 +197,16 @@ pnpm infra:up         # postgres + redis only, no app processes
 
 ## Deployment
 
-Web on Vercel, API on a container host (schedulers need a real long‑running
-process — see why in [DEPLOYMENT.md](DEPLOYMENT.md)), Postgres on Supabase,
-Redis alongside the API. Full walkthrough, including exactly which environment
-variables go where: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+Web on **Cloudflare Workers** via OpenNext (this is what CI deploys — see
+[`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml)), API on
+**Render**, Postgres on **Neon**, Redis on Render Key Value. Vercel also works
+for the front end and is documented as an alternative, but nothing automated
+targets it.
+
+The API needs a real long-running process for its schedulers; room phases now
+also advance on read, so a sleeping free instance costs latency rather than
+correctness. Full walkthrough, including exactly which environment variables go
+where: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Security notes
 
