@@ -51,7 +51,11 @@ export class BallotService {
    *    first a systematic advantage across every ballot in the room.
    */
   async open(roomId: string, voterId: string) {
-    const room = await this.rooms.findOrFail(roomId);
+    // Reconcile first. A voter arriving the instant the deadline passes would
+    // otherwise be told "voting has not opened yet" about a room whose own
+    // timestamps say it has — and on a host that sleeps, would keep being told
+    // that until some background tick happened to wake up.
+    const room = await this.rooms.reconcile(roomId);
 
     if (room.status !== RoomStatus.VOTING && room.status !== RoomStatus.RUNOFF) {
       throw new AppException(
