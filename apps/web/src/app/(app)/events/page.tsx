@@ -4,6 +4,7 @@ import { Difficulty } from '@bb/shared';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
 import { UI_LOCALE } from '@/lib/utils';
 import { Select } from '@/components/ui/select';
@@ -44,12 +45,11 @@ export default function EventsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="font-display text-3xl font-bold text-bone">Public challenges</h1>
-        <p className="mt-1 text-sm font-extrabold text-bone-faint">
-          Open to everyone. Enter before the deadline, then vote for the winner.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Live"
+        title="Public challenges"
+        description="Open to everyone. Enter before the deadline, then vote for the winner."
+      />
 
       <div className="flex flex-wrap gap-3">
         <Select

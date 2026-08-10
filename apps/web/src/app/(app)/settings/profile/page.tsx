@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type UseFormRegister } from 'react-hook-form';
 import { z } from 'zod';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Field } from '@/components/ui/field';
@@ -175,14 +176,19 @@ export default function ProfileSettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8">
-      <header>
-        <p className="eyebrow">Settings</p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-          Your profile
-        </h1>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageHeader eyebrow="Settings" title="Your profile" />
 
+      {/*
+        Two columns rather than one narrow one.
+
+        This page used to be capped at `max-w-2xl` while every other screen
+        filled the chrome, so navigating into settings visibly narrowed the
+        application. Removing the cap alone would have stretched the text inputs
+        to the full width, which is worse; splitting it puts the avatar in a side
+        column and leaves the form at roughly the width it already had.
+      */}
+      <div className="grid items-start gap-8 lg:grid-cols-[1fr_1.6fr]">
       <Panel>
         <PanelHeader>
           <PanelTitle className="text-sun">Avatar</PanelTitle>
@@ -312,7 +318,10 @@ export default function ProfileSettingsPage() {
           </div>
         </Panel>
       </form>
+      </div>
 
+      {/* Full width on purpose: it is a gallery of finished work, and it was the
+          one thing the old narrow column actually hurt. */}
       <ShowcasePicker username={user.username} initial={user.showcaseEntryIds ?? []} />
     </div>
   );

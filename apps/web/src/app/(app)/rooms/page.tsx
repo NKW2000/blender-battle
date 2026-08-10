@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { ChunkyButton } from '@/components/arcade/chunky';
 import { DateTimeField, toLocalInputValue } from '@/components/ui/date-time-field';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
@@ -77,12 +78,11 @@ export default function RoomsPage() {
     <div className="flex flex-col gap-8">
       {creating ? <CreateRoomPanel onClose={() => setCreating(false)} /> : null}
 
-      <div>
-        <h1 className="font-display text-3xl font-bold text-bone">Rooms</h1>
-        <p className="mt-1 text-sm font-extrabold text-bone-faint">
-          Invite-only. Several artists, one brief, one deadline.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Battle"
+        title="Rooms"
+        description="Invite-only. Several artists, one brief, one deadline."
+      />
 
       {active ? (
         <Panel active>

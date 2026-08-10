@@ -18,6 +18,7 @@ const CategoryBarChart = dynamic(
   () => import('@/components/analytics/charts').then((m) => m.CategoryBarChart),
   { ssr: false, loading: () => <Skeleton className="h-56 w-full" /> },
 );
+import { PageHeader } from '@/components/layout/page-header';
 import { StatTile } from '@/components/profile/stat-tile';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
@@ -60,20 +61,17 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-            Overview
-          </h1>
-        </div>
-
-        {/* The numbers come from a snapshot refreshed every five minutes. Saying
-            so is more honest than implying they are live. */}
-        <p className="font-mono text-xs text-bone-faint">
-          Snapshot taken {new Date(metrics.generatedAt).toLocaleTimeString(UI_LOCALE)}
-        </p>
-      </header>
+      <PageHeader
+        eyebrow="Administration"
+        title="Overview"
+        // The numbers come from a snapshot refreshed every five minutes. Saying
+        // so is more honest than implying they are live.
+        action={
+          <p className="shrink-0 font-mono text-xs text-bone-faint">
+            Snapshot taken {new Date(metrics.generatedAt).toLocaleTimeString(UI_LOCALE)}
+          </p>
+        }
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Players" value={metrics.users.total} />

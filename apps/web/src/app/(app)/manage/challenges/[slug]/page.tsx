@@ -4,6 +4,7 @@ import { CHALLENGE_MAX_ASSETS, ChallengeAssetType, ChallengeStatus } from '@bb/s
 import Link from 'next/link';
 import { use, useRef } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { ChallengeForm } from '@/components/challenges/challenge-form';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
@@ -52,14 +53,11 @@ export default function EditChallengePage({
   const atAssetLimit = challenge.assets.length >= CHALLENGE_MAX_ASSETS;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Editing · {challenge.status}</p>
-          <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-            {challenge.title}
-          </h1>
-        </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        eyebrow={`Editing · ${challenge.status}`}
+        title={challenge.title}
+        action={
 
         <div className="flex gap-2">
           <Button asChild variant="ghost" size="sm">
@@ -84,8 +82,13 @@ export default function EditChallengePage({
             </Button>
           )}
         </div>
-      </header>
+        }
+      />
 
+      {/* The header spans the page like every other screen; the editor does not.
+          A brief is a column of text inputs, and stretching them to 1150px makes
+          them harder to read, not more consistent. */}
+      <div className="flex max-w-3xl flex-col gap-8">
       <Panel>
         <PanelHeader>
           <PanelTitle>Attachments</PanelTitle>
@@ -210,6 +213,7 @@ export default function EditChallengePage({
         isSubmitting={update.isPending}
         onSubmit={(payload) => update.mutate({ id: challenge.id, data: payload })}
       />
+      </div>
     </div>
   );
 }

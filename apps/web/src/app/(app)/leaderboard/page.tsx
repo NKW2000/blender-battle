@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
 import { useLeaderboard } from '@/features/leaderboard/use-leaderboard';
@@ -21,17 +22,11 @@ export default function LeaderboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <p className="eyebrow">Standings</p>
-        <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-          Leaderboard
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm font-extrabold leading-relaxed text-bone-muted">
-          Score moves on ranked rooms only — a room needs four artists who actually
-          submitted before it counts. Winning gains, losing costs, and entering a
-          room nobody finished does neither.
-        </p>
-      </header>
+      <PageHeader
+        eyebrow="Standings"
+        title="Leaderboard"
+        description="Score moves on ranked rooms only — a room needs four artists who actually submitted before it counts. Winning gains, losing costs, and entering a room nobody finished does neither."
+      />
 
       {isLoading ? (
         <div className="flex flex-col gap-2">

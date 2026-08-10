@@ -3,6 +3,7 @@
 import { Role, UserStatus } from '@bb/shared';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle, Skeleton } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
@@ -51,13 +52,10 @@ export default function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-            Users
-          </h1>
-        </div>
+      <PageHeader
+        eyebrow="Administration"
+        title="Users"
+        action={
 
         <div className="flex gap-3">
           <input
@@ -83,7 +81,8 @@ export default function AdminUsersPage() {
             ]}
           />
         </div>
-      </header>
+        }
+      />
 
       <Panel>
         <PanelHeader>

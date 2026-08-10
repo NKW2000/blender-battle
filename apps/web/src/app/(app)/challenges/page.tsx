@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { ChallengeCard } from '@/components/challenges/challenge-card';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
@@ -58,13 +59,10 @@ function ChallengeCatalogue() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Catalogue</p>
-          <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-            Challenges
-          </h1>
-        </div>
+      <PageHeader
+        eyebrow="Catalogue"
+        title="Challenges"
+        action={
 
         <div className="flex gap-3">
           <Button asChild variant="outline">
@@ -76,7 +74,8 @@ function ChallengeCatalogue() {
             </Button>
           ) : null}
         </div>
-      </header>
+        }
+      />
 
       <div className="flex flex-wrap gap-3">
         <input

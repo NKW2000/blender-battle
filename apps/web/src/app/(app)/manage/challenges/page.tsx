@@ -4,6 +4,7 @@ import { ChallengeStatus, Role } from '@bb/shared';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { DifficultyBadge, StatusBadge } from '@/components/challenges/challenge-card';
 import { StatTile } from '@/components/profile/stat-tile';
 import { Button } from '@/components/ui/button';
@@ -36,21 +37,17 @@ export default function ManageChallengesPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Authoring</p>
-          <h1 className="font-display text-2xl font-bold uppercase tracking-tight text-bone">
-            Your challenges
-          </h1>
-        </div>
-
-        {/*
+      <PageHeader
+        eyebrow="Authoring"
+        title="Your challenges"
+        /*
           Full width on a phone, where a fixed 192px filter beside the button
           left the button too narrow for "New challenge" and it broke onto two
           lines. The filter now takes whatever is left and the button keeps its
           natural width.
-        */}
-        <div className="flex w-full gap-3 sm:w-auto">
+        */
+        action={
+          <div className="flex w-full gap-3 sm:w-auto">
           <Select
             className="min-w-0 flex-1 sm:w-48 sm:flex-none"
             ariaLabel="Filter by status"
@@ -70,7 +67,8 @@ export default function ManageChallengesPage() {
             <Link href="/manage/challenges/new">New challenge</Link>
           </Button>
         </div>
-      </header>
+        }
+      />
 
       {/*
         The manager's own authoring stats.
