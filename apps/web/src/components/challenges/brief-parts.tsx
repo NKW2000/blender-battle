@@ -28,6 +28,31 @@ import {
  * which of the two payload shapes it was handed.
  */
 
+/**
+ * The one two-column row every brief-bearing screen uses.
+ *
+ * These screens stack two or three of these rows, and each had picked its own
+ * ratio — `1fr 1.15fr` for the room's upload-and-reference, `1fr 1fr` for the
+ * event's, `1.15fr .85fr` for brief-and-judging everywhere. Stacked, that puts
+ * the seam between the columns in a different place on each row: 119px apart on
+ * the room screen, 81px on the event screen. Nothing is broken and everything
+ * looks crooked, because the eye reads a vertical edge running down a page and
+ * notices when it steps sideways.
+ *
+ * One ratio for every row fixes it by construction rather than by three screens
+ * happening to agree. `1.15fr .85fr` because the left column always holds the
+ * thing you came to do — upload an entry, read the brief — and the right holds
+ * what supports it.
+ *
+ * The handoff draws its two rows at different ratios, which is the one place
+ * this deliberately departs from it: a canvas shows a single screen at a single
+ * width, where a seam that steps between rows is a detail. In a real layout,
+ * with rows appearing and disappearing by phase, it is the first thing that
+ * reads as unfinished.
+ */
+export const BRIEF_ROW =
+  'grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]';
+
 /** The subset of a challenge these panels read. Both detail shapes satisfy it. */
 export interface BriefLike {
   description: string;
@@ -256,7 +281,7 @@ export function Extras({ brief }: { brief: BriefLike }) {
 
   return (
     <div className="flex flex-col gap-[clamp(14px,1.8vw,24px)]">
-      <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
+      <div className={BRIEF_ROW}>
         {hasRules ? (
           <Panel>
             <PanelHeader tone="punch" icon={PANEL_ICON.lines}>

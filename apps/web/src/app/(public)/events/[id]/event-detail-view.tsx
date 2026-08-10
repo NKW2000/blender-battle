@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { ChunkyButton } from '@/components/arcade/chunky';
 import {
+  BRIEF_ROW,
   BriefCrumbs,
   BriefPanel,
   BriefTitle,
@@ -142,7 +143,7 @@ export function EventDetailView({
       {event.phase === 'voting' ? (
         <VoteScreen event={event} />
       ) : (
-        <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-2">
+        <div className={BRIEF_ROW}>
           {event.phase === 'upcoming' ? <UpcomingPanel event={event} /> : null}
           {event.phase === 'open' ? <EnterPanel event={event} /> : null}
           {event.phase === 'finished' ? <WinnerPanel event={event} /> : null}
@@ -150,7 +151,7 @@ export function EventDetailView({
         </div>
       )}
 
-      <div className="grid grid-cols-1 items-stretch gap-[clamp(14px,1.8vw,24px)] lg:grid-cols-[1.15fr_.85fr]">
+      <div className={BRIEF_ROW}>
         <BriefPanel brief={event} />
         {event.objectives.length > 0 ? <JudgedOnPanel objectives={event.objectives} /> : null}
       </div>

@@ -30,6 +30,7 @@ import {
   Skeleton,
 } from '@/components/ui/panel';
 import {
+  BRIEF_ROW,
   BriefPanel,
   Extras,
   JudgedOnPanel,
@@ -366,7 +367,7 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_1.15fr]">
+      <div className={BRIEF_ROW}>
         <Panel active={!submitted}>
           <PanelHeader tone="sun" icon={PANEL_ICON.upload}>
             <PanelTitle>{submitted ? 'Entry received' : 'Upload your entry'}</PanelTitle>
@@ -454,7 +455,7 @@ function ActivePhase({ room, submitted }: { room: RoomDetail; submitted: boolean
       </div>
 
       {room.challenge ? (
-        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[1.15fr_.85fr]">
+        <div className={BRIEF_ROW}>
           <BriefPanel brief={room.challenge} />
           {room.challenge.objectives.length > 0 ? (
             <JudgedOnPanel objectives={room.challenge.objectives} />
