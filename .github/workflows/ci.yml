@@ -1,0 +1,73 @@
+# Typecheck, lint and test every push and pull request.
+#
+# This exists because the repository had a full test toolchain — Vitest,
+# supertest, @nestjs/testing, Testing Library — installed, scripted, and wired
+# to nothing. There were no tests, and no job that would have noticed. A suite
+# that CI does not run is a suite that stops being true within a month, so the
+# tests and this file landed together.
+#
+# Deliberately separate from `deploy-web.yml`: that workflow only fires on
+# changes under `apps/web`, because a deploy is only needed when the built
+# output can change. Correctness checks have the opposite requirement — they
+# must run on everything, including the API and the shared package, neither of
+# which triggers a web deploy at all.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes an in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # `apps/web` and `apps/api` both resolve @bb/shared through its `dist`
+      # entry, so typecheck cannot run until it has been compiled. The tests
+      # resolve it to source and do not need this, but they run after.
+      - name: Build shared package
+        run: pnpm --filter @bb/shared build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      # Builds both apps. This is not redundant with typecheck: a stylesheet is
+      # never type-checked and never linted, and an unbalanced brace in
+      # `globals.css` failed only here — after typecheck, lint and the whole
+      # test suite had all passed. The web build is also the only step that
+      # exercises `generateMetadata` and the server components.
+      - name: Build
+        run: pnpm build
+
+      # Guards against the failure that produced ROOM_RANKED_MIN_SUBMISSIONS:
+      # a constant shared correctly, documented as enforcing an anti-collusion
+      # policy, and imported by nothing. A stale value shows up in a diff; a
+      # policy that is documented but unwired reads as implemented.
+      - name: Check every shared export is used
+        run: node scripts/check-shared-exports.mjs
