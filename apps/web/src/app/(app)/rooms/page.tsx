@@ -336,7 +336,16 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto px-4 py-8 sm:items-center"
+      /*
+        The backdrop centres and never scrolls.
+
+        It used to be the scroll container, with the panel free to grow past the
+        viewport — so on a short screen the dialog was taller than the window,
+        the header sat off the top edge, and reaching "Create room" meant
+        scrolling the page behind the form. The panel now bounds itself to the
+        viewport and scrolls its own body instead.
+      */
+      className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden p-4"
       style={{ background: 'rgba(14,11,43,.72)', backdropFilter: 'blur(3px)' }}
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
@@ -345,14 +354,17 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="bb-create-room-title"
-        className="w-full max-w-[620px] rounded-[24px] border-4 border-edge"
+        // `dvh`, not `vh`: mobile browsers shrink the visual viewport when the
+        // address bar is showing, and `vh` keeps measuring the taller one — which
+        // is precisely how a dialog ends up a browser-chrome's-worth too tall.
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[620px] flex-col rounded-[24px] border-4 border-edge"
         style={{
           background: 'linear-gradient(180deg,#2A2170,#1B1550)',
           boxShadow: '0 14px 0 var(--color-edge)',
           animation: 'bbPop .3s cubic-bezier(.2,1.3,.35,1) both',
         }}
       >
-        <header className="flex items-start gap-4 border-b-[3px] border-white/10 px-6 py-5">
+        <header className="flex shrink-0 items-start gap-4 border-b-[3px] border-white/10 px-6 py-5">
           <div
             aria-hidden="true"
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border-[3px] border-ink bg-linear-to-b from-flame-lift to-flame text-2xl leading-none"
@@ -383,7 +395,12 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        <div className="flex flex-col gap-5 px-6 py-5">
+        {/*
+          The only scrolling region. Header and footer stay put, so the title
+          says what this is and "Create room" stays reachable however short the
+          window is.
+        */}
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
           <FormSection
             label="Room name"
             hint={`${trimmedName.length} / ${ROOM_NAME_MAX_LENGTH}`}
@@ -519,7 +536,7 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
           </FormSection>
         </div>
 
-        <footer className="flex flex-wrap justify-end gap-3 border-t-[3px] border-white/10 px-6 py-5">
+        <footer className="flex shrink-0 flex-wrap justify-end gap-3 border-t-[3px] border-white/10 px-6 py-5">
           <button
             type="button"
             onClick={onClose}
