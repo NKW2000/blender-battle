@@ -197,11 +197,15 @@ point: Workers Builds runs commands from the repository root, and wrangler
 invoked there fails with *"application detection logic has been run in the root
 of a workspace"* because it cannot tell which project in the workspace is meant.
 
-**From CI (recommended).** [`deploy-web.yml`](.github/workflows/deploy-web.yml)
-builds and deploys on every push to `main` that touches the web app. It needs
-two repository secrets — `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers"
-template) and `CLOUDFLARE_ACCOUNT_ID` — plus a repository *variable*
-`NEXT_PUBLIC_API_URL`.
+Workers Builds watches the repository itself, so a push to `main` is all a
+deploy takes — there is no GitHub Action in the loop and no Cloudflare API token
+stored anywhere in this repo.
+
+There used to be a `deploy-web.yml` workflow doing the same job. It was removed:
+it duplicated a deploy Cloudflare was already performing, and it failed on every
+push because the `CLOUDFLARE_API_TOKEN` secret it needed was never set — a red
+cross on every commit for a step that was not doing anything. Fewer places
+holding a deploy credential is the better end state anyway.
 
 **From a machine.**
 

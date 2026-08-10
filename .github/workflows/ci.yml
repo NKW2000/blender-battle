@@ -6,11 +6,13 @@
 # that CI does not run is a suite that stops being true within a month, so the
 # tests and this file landed together.
 #
-# Deliberately separate from `deploy-web.yml`: that workflow only fires on
-# changes under `apps/web`, because a deploy is only needed when the built
-# output can change. Correctness checks have the opposite requirement — they
-# must run on everything, including the API and the shared package, neither of
-# which triggers a web deploy at all.
+# This is the only workflow in the repository, and it deploys nothing.
+# Cloudflare Workers Builds and Render both watch the repository directly and
+# redeploy on push, so CI's job is purely to say whether a commit is sound.
+#
+# It therefore runs on everything rather than on paths: a change to the API or
+# to `packages/shared` can break the web build, and a workflow scoped to
+# `apps/web` would not notice.
 
 name: CI
 

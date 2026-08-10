@@ -197,11 +197,14 @@ pnpm infra:up         # postgres + redis only, no app processes
 
 ## Deployment
 
-Web on **Cloudflare Workers** via OpenNext (this is what CI deploys — see
-[`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml)), API on
-**Render**, Postgres on **Neon**, Redis on Render Key Value. Vercel also works
-for the front end and is documented as an alternative, but nothing automated
-targets it.
+Web on **Cloudflare Workers** via OpenNext, deployed by Cloudflare Workers
+Builds watching this repository; API on **Render**, which redeploys on push the
+same way. Postgres on **Neon**, Redis on Render Key Value. Vercel also works for
+the front end and is documented as an alternative, but nothing automated targets
+it.
+
+GitHub Actions runs [CI](.github/workflows/ci.yml) — typecheck, lint, tests,
+builds — and deploys nothing.
 
 The API needs a real long-running process for its schedulers; room phases now
 also advance on read, so a sleeping free instance costs latency rather than
