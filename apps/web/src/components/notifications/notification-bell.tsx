@@ -6,6 +6,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { BellIcon } from '@/components/ui/icons';
+import { PANEL_ICON, PanelIcon } from '@/components/ui/panel';
+import { ChunkyButton } from '@/components/arcade/chunky';
+import {
+  osNotificationPermission,
+  requestOsNotifications,
+  type OsNotificationPermission,
+} from '@/features/notifications/os-notifications';
 import {
   useMarkAllRead,
   useMarkRead,
@@ -94,14 +101,21 @@ export function NotificationBell() {
             screen with a margin either side.
           */
           className={cn(
-            'z-50 max-h-[28rem] overflow-y-auto rounded-[16px] border-4 border-edge bg-panel-raised',
+            // The block, like every other surface: 22px radius, 3px ink
+            // outline, 0 8px 0. It was a 16px radius and a 4px outline on the
+            // opaque indigo, which is the one panel language the application no
+            // longer speaks anywhere else.
+            'z-50 max-h-[28rem] overflow-y-auto rounded-[22px] border-[3px] border-ink bg-arcade-panel',
             'fixed left-1/2 top-[4.25rem] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2',
             'md:absolute md:left-auto md:right-0 md:top-full md:mt-2.5 md:w-80 md:max-w-none md:translate-x-0',
           )}
-          style={{ boxShadow: '0 8px 0 var(--color-edge)', animation: 'bbPop .16s ease both' }}
+          style={{ boxShadow: '0 8px 0 var(--color-ink)', animation: 'bbPop .16s ease both' }}
         >
-          <div className="flex items-center justify-between border-b-[3px] border-edge px-4 py-2.5">
-            <span className="eyebrow text-aqua">Notifications</span>
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-[19px] border-b-[3px] border-ink bg-arcade-panel px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <PanelIcon tone="punch">{PANEL_ICON.clock}</PanelIcon>
+              <span className="font-display text-base font-bold text-cream">Notifications</span>
+            </div>
             {count > 0 ? (
               <Button
                 variant="ghost"
@@ -114,12 +128,14 @@ export function NotificationBell() {
             ) : null}
           </div>
 
+          <DesktopAlertsRow />
+
           {items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-bone-muted">
+            <p className="px-4 py-10 text-center text-sm font-extrabold text-haze-5">
               Nothing yet. Room results and challenge news land here.
             </p>
           ) : (
-            <ul className="divide-y divide-edge/60">
+            <ul className="flex flex-col gap-2 p-2.5">
               {items.map((item) => (
                 <NotificationRow
                   key={item.id}
@@ -134,7 +150,7 @@ export function NotificationBell() {
           )}
 
           {notifications.hasNextPage ? (
-            <div className="border-t-[3px] border-edge p-2">
+            <div className="border-t-[3px] border-ink p-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -152,25 +168,73 @@ export function NotificationBell() {
   );
 }
 
+/**
+ * Opt in to the OS notification tray.
+ *
+ * A button rather than an effect on mount: every browser refuses a permission
+ * request that did not come from a click, and asking on load is how a site
+ * teaches someone to hit Block for everything it will ever send. It appears
+ * only while the answer is still "not asked" — once granted it has nothing to
+ * say, and once denied the browser will not ask again, so a button that cannot
+ * work would be worse than none.
+ */
+function DesktopAlertsRow() {
+  const [permission, setPermission] = useState<OsNotificationPermission>('unsupported');
+
+  // Read after mount: `Notification.permission` does not exist on the server,
+  // and reading it during render would make the markup differ between the two.
+  useEffect(() => setPermission(osNotificationPermission()), []);
+
+  if (permission !== 'default') return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b-[3px] border-ink px-3.5 py-3">
+      <p className="min-w-0 text-xs font-extrabold leading-relaxed text-haze">
+        Get these in your desktop notifications, even with the tab in the background.
+      </p>
+      <ChunkyButton
+        size="sm"
+        tone="cream"
+        className="shrink-0"
+        onClick={() => {
+          void requestOsNotifications().then(setPermission);
+        }}
+      >
+        Turn on
+      </ChunkyButton>
+    </div>
+  );
+}
+
 function NotificationRow({ item, onOpen }: { item: NotificationItem; onOpen: () => void }) {
   const body = (
-    <div className="flex gap-3 px-4 py-3">
+    <div className="flex min-w-0 gap-3 px-3.5 py-3">
       {/* Unread is marked by a dot AND by weight, never by colour alone. */}
       <span
         aria-hidden="true"
         className={cn(
-          'mt-1.5 h-1.5 w-1.5 shrink-0',
-          item.readAt ? 'bg-transparent' : 'bg-select',
+          'mt-[7px] h-2 w-2 shrink-0 rounded-[3px] border-[1.5px]',
+          item.readAt ? 'border-transparent bg-transparent' : 'border-ink bg-sun',
         )}
       />
       <div className="min-w-0">
-        <p className={cn('text-sm', item.readAt ? 'text-bone-muted' : 'text-bone')}>
+        <p
+          className={cn(
+            'font-display text-sm font-bold',
+            item.readAt ? 'text-haze' : 'text-cream',
+          )}
+        >
           {item.title}
         </p>
+        {/* Wraps to two lines rather than truncating to one. A notification body
+            is the sentence that says what happened; a single clipped line of it
+            was rarely enough to know whether the row was worth opening. */}
         {item.body ? (
-          <p className="mt-0.5 truncate font-mono text-xs text-bone-faint">{item.body}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs font-extrabold leading-relaxed text-haze-5">
+            {item.body}
+          </p>
         ) : null}
-        <p className="mt-1 font-mono text-[0.625rem] text-bone-faint">
+        <p className="mt-1.5 text-[11px] font-extrabold text-haze-6">
           {new Date(item.createdAt).toLocaleString(UI_LOCALE)}
         </p>
       </div>
@@ -178,7 +242,13 @@ function NotificationRow({ item, onOpen }: { item: NotificationItem; onOpen: () 
   );
 
   return (
-    <li className="hover:bg-panel-raised">
+    <li
+      className={cn(
+        'min-w-0 overflow-hidden rounded-[14px] border-[2.5px] border-ink transition-colors',
+        item.readAt ? 'bg-white/4 hover:bg-white/8' : 'bg-sun/8 hover:bg-sun/14',
+      )}
+      style={{ boxShadow: '0 3px 0 var(--color-ink)' }}
+    >
       {item.link ? (
         <Link href={item.link} onClick={onOpen} className="block">
           {body}

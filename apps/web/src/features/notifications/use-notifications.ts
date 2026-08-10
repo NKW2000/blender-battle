@@ -5,6 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect, useRef } from 'react';
 import { notify } from '@/lib/notify';
 
+import { showOsNotification } from '@/features/notifications/os-notifications';
 import { api } from '@/lib/api/client';
 
 export const notificationKeys = {
@@ -94,7 +95,29 @@ export function useNotificationListener(enabled: boolean) {
       })
       .then((page) => {
         const latest = page.items[0];
-        if (latest && !latest.readAt) {
+        if (!latest || latest.readAt) return;
+
+        /*
+          One notification, in whichever place the reader can actually see.
+
+          A toast is right when the tab is in front and useless when it is not —
+          which is the whole case this feature exists for, since the reader has
+          switched to Blender. The OS tray is right when the page is hidden and
+          noisy when it is not: a tray entry for something already on screen is
+          the duplicate every desktop app is criticised for.
+
+          `document.hidden` covers a background tab, a minimised window and
+          another window in front, which is exactly the distinction wanted.
+        */
+        if (document.hidden) {
+          showOsNotification({
+            title: latest.title,
+            body: latest.body ?? undefined,
+            link: latest.link,
+            // Collapses repeats in the tray rather than stacking one per poll.
+            tag: latest.id,
+          });
+        } else {
           notify.info(latest.title, latest.body ?? undefined);
         }
       })

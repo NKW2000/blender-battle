@@ -29,7 +29,6 @@ export default function EditChallengePage({
   const { publish, archive } = useChallengeLifecycle();
 
   const imageInput = useRef<HTMLInputElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
 
@@ -171,24 +170,19 @@ export default function EditChallengePage({
                 event.target.value = '';
               }}
             />
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".zip,.blend,application/zip"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  upload.mutate({
-                    id: challenge.id,
-                    file,
-                    type: ChallengeAssetType.REFERENCE_FILE,
-                  });
-                }
-                event.target.value = '';
-              }}
-            />
+            {/*
+              Images only.
 
+              A brief attached a .blend or a .zip as a "reference file", which
+              is a starter scene by another name — and a contest where some
+              entrants began from the author's geometry and others from a cube
+              is not measuring the same thing for both. Reference *images* say
+              what to build; a reference file hands over part of the building.
+
+              The asset type still exists and existing files still render and
+              download, so nothing already attached is orphaned. What is gone is
+              the way to add more.
+            */}
             <Button
               type="button"
               variant="outline"
@@ -197,15 +191,6 @@ export default function EditChallengePage({
               disabled={upload.isPending || atAssetLimit}
             >
               {upload.isPending ? 'Uploading…' : 'Add image'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileInput.current?.click()}
-              disabled={upload.isPending || atAssetLimit}
-            >
-              Add file
             </Button>
           </div>
 

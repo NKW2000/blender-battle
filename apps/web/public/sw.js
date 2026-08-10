@@ -64,3 +64,30 @@ self.addEventListener('fetch', (event) => {
     })(),
   );
 });
+
+/*
+  Clicking a notification in the OS tray.
+
+  Without this the click does nothing at all — a worker-owned notification has
+  no default action. Focusing an existing tab rather than opening a new one is
+  what every native app does, and it matters more here than usual: a second tab
+  on a live room means a second poller and a second countdown.
+*/
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const link = event.notification.data?.link || '/';
+  const target = new URL(link, self.location.origin);
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        // Same origin only; `navigate` on a foreign client is rejected anyway.
+        if (new URL(client.url).origin === target.origin) {
+          return client.focus().then((focused) => focused.navigate(target.href));
+        }
+      }
+      return self.clients.openWindow(target.href);
+    }),
+  );
+});
