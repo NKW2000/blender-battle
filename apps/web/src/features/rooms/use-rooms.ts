@@ -11,7 +11,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BriefLike } from '@/components/challenges/brief-parts';
 
 import { api, type ApiError } from '@/lib/api/client';
-import { tokenStore } from '@/lib/api/token-store';
 
 export interface RoomSummary {
   id: string;
@@ -212,28 +211,31 @@ export function useSubmitEntry(roomId: string) {
     ApiError,
     { image: File; workspace: File; notes?: string }
   >({
-    mutationFn: async ({ image, workspace, notes }) => {
+    /*
+      Through `api.upload`, not a hand-rolled fetch.
+
+      This posted the form itself with a bare Authorization header, which meant
+      it was the one request in the application with no refresh-and-retry. The
+      access token lives fifteen minutes and a modelling window runs forty-five,
+      so an entry submitted late in a room was sent with a token that had
+      already aged out: 401, nothing stored, and — before the error branch
+      existed — nothing on screen either. Refreshing the page then showed no
+      entry, because there was none.
+
+      `api.upload` omits Content-Type for FormData exactly as this did, and adds
+      what this was missing: the CSRF header, credentials, and a single refresh
+      followed by a replay of the original request.
+    */
+    mutationFn: ({ image, workspace, notes }) => {
       const form = new FormData();
       form.append('image', image);
       form.append('workspace', workspace);
       if (notes) form.append('notes', notes);
 
-      // Bypasses the JSON client: fetch must set the multipart boundary itself,
-      // so no Content-Type header is provided here.
-      const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-      const response = await fetch(`${base}/rooms/${roomId}/submit`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${tokenStore.getAccessToken() ?? ''}` },
-        body: form,
-      });
-
-      const payload = await response.json();
-      if (!response.ok || !payload.success) {
-        throw Object.assign(new Error(payload.message ?? 'Upload failed'), {
-          status: response.status,
-        });
-      }
-      return payload.data;
+      return api.upload<{ id: string; imageUrl: string; workspacePhotoUrl: string | null }>(
+        `/rooms/${roomId}/submit`,
+        form,
+      );
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: roomKeys.detail(roomId) });

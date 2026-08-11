@@ -4,7 +4,6 @@ import type { ChallengeAsset, Difficulty, TagSummary } from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type ApiError } from '@/lib/api/client';
-import { tokenStore } from '@/lib/api/token-store';
 
 export type EventPhase = 'upcoming' | 'open' | 'voting' | 'finished' | 'not-an-event';
 
@@ -118,26 +117,19 @@ export function useEnterEvent(challengeId: string) {
     ApiError,
     { image: File; workspace: File; notes?: string }
   >({
-    mutationFn: async ({ image, workspace, notes }) => {
+    /*
+      Through `api.upload`, for the same reason as the room's submit: a
+      hand-rolled fetch has no refresh-and-retry, so an entry sent more than
+      fifteen minutes after the last token refresh was rejected as unauthorised
+      and silently lost.
+    */
+    mutationFn: ({ image, workspace, notes }) => {
       const form = new FormData();
       form.append('image', image);
       form.append('workspace', workspace);
       if (notes) form.append('notes', notes);
 
-      const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-      const response = await fetch(`${base}/challenge-events/${challengeId}/entries`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${tokenStore.getAccessToken() ?? ''}` },
-        body: form,
-      });
-
-      const payload = await response.json();
-      if (!response.ok || !payload.success) {
-        throw Object.assign(new Error(payload.message ?? 'Upload failed'), {
-          status: response.status,
-        });
-      }
-      return payload.data;
+      return api.upload<EventEntry>(`/challenge-events/${challengeId}/entries`, form);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.detail(challengeId) });
