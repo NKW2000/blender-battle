@@ -293,15 +293,33 @@ export class AuthController {
    * with tokens, which would be written into browser history and the Referer
    * header of the next request.
    */
+  /*
+    Both verbs, because Apple uses the other one.
+
+    Google returns here as a GET with query parameters. Apple, once any personal
+    scope is requested, insists on `response_mode=form_post` and POSTs a form
+    body instead — so a GET-only callback silently 404s the entire Apple flow,
+    with the failure landing on Apple's side of the redirect where nothing in
+    this application can report it.
+
+    The `user` field Apple form-posts alongside the code is deliberately not
+    read: it comes from the browser, so it is attacker-supplied, and everything
+    trusted about the account is taken from the id_token instead.
+  */
   @Public()
   @Get('oauth/:provider/callback')
+  @Post('oauth/:provider/callback')
+  @HttpCode(HttpStatus.FOUND)
   async oauthCallback(
     @Param('provider', new ParseEnumPipe(OAuthProvider)) provider: OAuthProvider,
-    @Query('code') code: string,
-    @Query('state') state: string,
+    @Query('code') queryCode: string,
+    @Query('state') queryState: string,
+    @Body() body: { code?: string; state?: string } | undefined,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const code = queryCode ?? body?.code;
+    const state = queryState ?? body?.state;
     const frontend = this.config.oauth.frontendUrl;
 
     if (!code || !state) {

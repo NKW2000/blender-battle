@@ -152,9 +152,28 @@ export class AppConfig {
     return {
       callbackBase: this.get('OAUTH_CALLBACK_BASE'),
       frontendUrl: this.get('FRONTEND_URL'),
-      discord: {
-        clientId: this.get('DISCORD_CLIENT_ID'),
-        clientSecret: this.get('DISCORD_CLIENT_SECRET'),
+      /*
+        Apple has no client secret to paste.
+
+        It wants a short-lived ES256 JWT, signed with a private key downloaded
+        once from the developer portal, naming the team that owns the key and
+        the key itself. So four values rather than two, and the "secret" is
+        computed per request rather than configured.
+      */
+      apple: {
+        /** The Services ID, not the app's bundle id. */
+        clientId: this.get('APPLE_CLIENT_ID'),
+        teamId: this.get('APPLE_TEAM_ID'),
+        keyId: this.get('APPLE_KEY_ID'),
+        /*
+          The .p8 file's contents.
+
+          Real newlines rarely survive a dashboard environment field, so a
+          two-character backslash-n is accepted and turned back into one. PEM is
+          line-sensitive: without this the key parses as malformed and Apple
+          reports only `invalid_client`, which says nothing about why.
+        */
+        privateKey: this.get('APPLE_PRIVATE_KEY')?.replace(/\\n/g, '\n'),
       },
       google: {
         clientId: this.get('GOOGLE_CLIENT_ID'),

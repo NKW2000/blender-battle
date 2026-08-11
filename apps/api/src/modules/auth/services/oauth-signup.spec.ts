@@ -9,7 +9,7 @@ import { OAuthService } from './oauth.service';
  * Signing in with a provider whose email already belongs to an account.
  *
  * The most likely way a real person meets this: they register with a password,
- * then press "Continue with Discord" using the same address. Discord reports
+ * then press "Continue with Apple" using the same address. A provider reports
  * the address but not always as verified, and an *unverified* provider email is
  * deliberately not allowed to match an existing account — anyone who can set
  * that address on a third-party service could otherwise take over the account
@@ -57,7 +57,7 @@ function makeService(existingEmails: string[]) {
 }
 
 const profile = (overrides: Partial<Record<string, unknown>> = {}) => ({
-  providerAccountId: 'discord-123',
+  providerAccountId: 'apple-123',
   email: 'taken@example.com',
   emailVerified: false,
   handle: 'blenkawa',
@@ -75,7 +75,7 @@ const resolve = (service: OAuthService, p: ReturnType<typeof profile>) =>
         context: Record<string, unknown>,
       ) => Promise<unknown>;
     }
-  ).resolveSession(OAuthProvider.DISCORD, p, null, {});
+  ).resolveSession(OAuthProvider.APPLE, p, null, {});
 
 describe('provider sign-up onto a taken email', () => {
   it('refuses with a conflict rather than failing at the unique index', async () => {

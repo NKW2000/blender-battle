@@ -64,8 +64,9 @@ export const ArcadeField = React.forwardRef<
  * Provider sign-in buttons.
  *
  * The design mocked Google and GitHub. These render whatever the server reports
- * as actually configured — currently Google and Discord — because a button that
- * cannot complete a sign-in is worse than no button at all.
+ * as actually configured, because a button that cannot complete a sign-in is
+ * worse than no button at all — which is also why Apple appears only once its
+ * four credentials are set, and simply does not render until then.
  */
 export function ProviderButtons() {
   const { data } = useQuery({
@@ -83,9 +84,9 @@ export function ProviderButtons() {
         `basis-0` beside `flex-1`.
 
         `flex-1` alone still lets each button start from its own content width,
-        so "Google" and "Discord" — different word lengths, different glyph
-        widths — settled at different sizes. Zeroing the basis makes the split
-        purely even, which is what a row of equal-rank choices should look like.
+        so two providers with different word lengths and glyph widths settle at
+        different sizes. Zeroing the basis makes the split purely even, which is
+        what a row of equal-rank choices should look like.
 
         A fixed height for the same reason: the two marks have different aspect
         ratios, and without it the taller glyph makes its button taller.
@@ -102,24 +103,19 @@ export function ProviderButtons() {
                 window.location.href = `${API_URL}/auth/oauth/${provider}`;
               }}
               className={`arcade-press arcade-focus flex h-12 flex-1 basis-0 cursor-pointer items-center justify-center gap-2.5 rounded-2xl border-[3px] border-ink text-sm font-extrabold [--press-depth:5px] ${
-                isGoogle ? 'bg-cream text-ink' : 'text-white'
+                isGoogle ? 'bg-cream text-ink' : 'bg-ink text-white'
               }`}
               /*
-                Discord's own blurple rather than the near-black it had.
-
-                Two dark buttons side by side read as one control split in half,
-                and the ink surface made the white Discord glyph the only thing
-                distinguishing them. Each provider now wears its own colour,
-                which is both what their brand guidelines ask for and the thing
-                that makes the pair legible at a glance.
+                Each provider in its own colour, which is what their brand
+                guidelines ask for and what stops a row of buttons reading as one
+                control split in half. Apple's is black on white or white on
+                black; black is the one that separates it from the cream Google
+                button beside it.
               */
-              style={{
-                boxShadow: '0 5px 0 var(--color-ink)',
-                ...(isGoogle ? {} : { background: '#5865F2' }),
-              }}
+              style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
             >
-              {isGoogle ? <GoogleMark /> : <DiscordMark />}
-              {isGoogle ? 'Google' : 'Discord'}
+              {isGoogle ? <GoogleMark /> : <AppleMark />}
+              {isGoogle ? 'Google' : 'Apple'}
             </button>
           );
         })}
@@ -142,7 +138,7 @@ export function ProviderButtons() {
  * a broken icon rather than as Google, and Google's brand terms do not allow a
  * recoloured or partial mark on a sign-in button anyway.
  *
- * Sized in a fixed square slot alongside the Discord mark: the two logos have
+ * Sized in a fixed square slot alongside the Apple mark: the two logos have
  * very different aspect ratios, so identical `width` attributes produce two
  * visibly different sizes. The slot equalises them.
  */
@@ -176,17 +172,19 @@ export function GoogleMark() {
 }
 
 /**
- * The Discord mark.
+ * The Apple logo.
  *
- * `currentColor`, not a hard-coded white: the button sets the colour, so the
- * glyph cannot end up white on a light surface if the button is ever restyled.
+ * One path, drawn at 20px against Google's 18. The marks have very different
+ * ink-to-viewBox ratios — Apple's is tall and narrow, the G nearly fills its
+ * square — so equal `width` attributes would render at visibly different
+ * optical sizes. The numbers differ so the glyphs look the same size, which is
+ * the thing being matched.
  *
- * Wider than it is tall — inherent to the logo — which is why it is 20 across
- * to the Google mark's 18. Matching the numbers would make this one look
- * smaller, since optical size follows the ink on the page and not the width
- * attribute.
+ * `currentColor` rather than black: Apple's guidelines allow the mark in black
+ * or white and require it to sit on sufficient contrast, so it takes the
+ * button's own text colour and cannot end up black on black.
  */
-export function DiscordMark() {
+export function AppleMark() {
   return (
     <svg
       width="20"
@@ -197,7 +195,7 @@ export function DiscordMark() {
     >
       <path
         fill="currentColor"
-        d="M20.32 4.37A19.8 19.8 0 0 0 15.43 3a13.9 13.9 0 0 0-.63 1.28 18.3 18.3 0 0 0-5.6 0A13.9 13.9 0 0 0 8.57 3 19.7 19.7 0 0 0 3.68 4.37 20.3 20.3 0 0 0 .2 18.06a19.9 19.9 0 0 0 6 3.03c.49-.66.92-1.36 1.29-2.1a13 13 0 0 1-2.03-.98c.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.1 0c.16.14.33.26.5.38-.65.39-1.33.72-2.04.98.37.74.8 1.44 1.29 2.1a19.9 19.9 0 0 0 6-3.03 20.3 20.3 0 0 0-3.48-13.7ZM8.02 15.33c-1.18 0-2.16-1.09-2.16-2.42s.95-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.95 2.42-2.16 2.42Zm7.96 0c-1.18 0-2.16-1.09-2.16-2.42s.95-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.94 2.42-2.16 2.42Z"
+        d="M17.05 12.94c-.03-2.65 2.17-3.92 2.27-3.98-1.24-1.81-3.16-2.06-3.84-2.09-1.63-.17-3.19.96-4.02.96-.83 0-2.11-.94-3.47-.91-1.78.03-3.43 1.04-4.35 2.63-1.85 3.22-.47 7.98 1.33 10.59.88 1.28 1.93 2.71 3.31 2.66 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.06.86 3.46.83 1.43-.02 2.34-1.3 3.21-2.59 1.01-1.48 1.43-2.92 1.45-3-.03-.01-2.78-1.07-2.81-4.24ZM14.4 5.15c.73-.89 1.23-2.12 1.09-3.35-1.06.04-2.34.7-3.1 1.59-.68.78-1.27 2.03-1.11 3.23 1.18.09 2.39-.6 3.12-1.47Z"
       />
     </svg>
   );

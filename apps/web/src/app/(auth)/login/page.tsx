@@ -160,7 +160,10 @@ const OAUTH_ERROR_MESSAGE: Record<string, string> = {
     'An account already uses that email address. Sign in with your password below, then connect the provider from settings.',
   VALIDATION_FAILED:
     'That provider did not share an email address, which this app needs. Sign up with an email and password instead.',
-  UNAUTHORIZED: 'That sign-in link expired before it was used. Start again.',
+  OAUTH_STATE_INVALID: 'That sign-in link expired before it was used. Start again.',
+  OAUTH_PROVIDER_FAILED:
+    'The provider refused that sign-in. That is a configuration problem on our side, not yours — email and password still work.',
+  UNAUTHORIZED: 'That sign-in did not complete. Try again, or use your email and password.',
   ACCOUNT_BANNED: 'That account is banned.',
   ACCOUNT_SUSPENDED: 'That account is suspended.',
 };

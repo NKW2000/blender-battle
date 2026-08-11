@@ -521,7 +521,7 @@ function AccountPanel() {
  * Which providers this account can be signed in with.
  *
  * `/auth/oauth/linked` has been served the whole time with nothing calling it,
- * so an account could be connected to Google or Discord and no screen would say
+ * so an account could be connected to a provider and no screen would say
  * so. Connecting is a redirect to the same endpoint the sign-in buttons use,
  * with the caller's id taken from their token rather than the query string.
  */
@@ -531,7 +531,7 @@ function ConnectedAccountsPanel() {
 
   const providers: Array<{ id: OAuthProvider; label: string }> = [
     { id: OAuthProvider.GOOGLE, label: 'Google' },
-    { id: OAuthProvider.DISCORD, label: 'Discord' },
+    { id: OAuthProvider.APPLE, label: 'Apple' },
   ];
 
   return (

@@ -96,13 +96,15 @@ export const envSchema = z
 
     /**
      * OAuth providers are optional. Each is enabled only when both of its
-     * credentials are present, so an instance that has not registered a Discord
+     * credentials are present, so an instance that has not registered an Apple
      * application still boots — it simply does not offer that button. Making
      * these required would mean nobody can run the platform without first
      * creating accounts at two third parties.
      */
-    DISCORD_CLIENT_ID: z.string().optional(),
-    DISCORD_CLIENT_SECRET: z.string().optional(),
+    APPLE_CLIENT_ID: z.string().optional(),
+    APPLE_TEAM_ID: z.string().optional(),
+    APPLE_KEY_ID: z.string().optional(),
+    APPLE_PRIVATE_KEY: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     /** Where providers send the browser back. Must match the app's own origin. */

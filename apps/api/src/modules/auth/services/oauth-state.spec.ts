@@ -45,10 +45,10 @@ function makeService(): StateInternals {
 describe('signed OAuth state', () => {
   it('round-trips the provider and the account being linked', () => {
     const service = makeService();
-    const state = service.signState(OAuthProvider.DISCORD, 'user-1');
+    const state = service.signState(OAuthProvider.APPLE, 'user-1');
 
     expect(service.verifyState(state)).toEqual({
-      provider: OAuthProvider.DISCORD,
+      provider: OAuthProvider.APPLE,
       linkUserId: 'user-1',
     });
   });
@@ -65,8 +65,8 @@ describe('signed OAuth state', () => {
     // Two sign-ins in the same second must not collide, or the replay guard
     // would refuse the second one as a repeat of the first.
     const service = makeService();
-    const a = service.signState(OAuthProvider.DISCORD, null);
-    const b = service.signState(OAuthProvider.DISCORD, null);
+    const a = service.signState(OAuthProvider.APPLE, null);
+    const b = service.signState(OAuthProvider.APPLE, null);
     expect(a).not.toBe(b);
   });
 
@@ -77,12 +77,12 @@ describe('signed OAuth state', () => {
       login attaches to it.
     */
     const service = makeService();
-    const state = service.signState(OAuthProvider.DISCORD, null);
+    const state = service.signState(OAuthProvider.APPLE, null);
     const [, signature] = state.split('.');
 
     const forgedBody = Buffer.from(
       JSON.stringify({
-        p: OAuthProvider.DISCORD,
+        p: OAuthProvider.APPLE,
         l: 'attacker-account',
         n: 'x',
         e: Date.now() + 60_000,
@@ -97,7 +97,7 @@ describe('signed OAuth state', () => {
     const theirs = makeService();
     Object.assign(theirs, { config: { jwt: { refreshSecret: 'a-different-secret' } } });
 
-    const state = theirs.signState(OAuthProvider.DISCORD, null);
+    const state = theirs.signState(OAuthProvider.APPLE, null);
     expect(() => mine.verifyState(state)).toThrow(/expired/i);
   });
 
@@ -107,7 +107,7 @@ describe('signed OAuth state', () => {
     // an unhandled error — and not by a different code path an attacker could
     // time.
     const service = makeService();
-    const [body] = service.signState(OAuthProvider.DISCORD, null).split('.');
+    const [body] = service.signState(OAuthProvider.APPLE, null).split('.');
     expect(() => service.verifyState(`${body}.short`)).toThrow(/expired/i);
   });
 
@@ -119,7 +119,7 @@ describe('signed OAuth state', () => {
 
   it('refuses one that has aged out', () => {
     const service = makeService();
-    const state = service.signState(OAuthProvider.DISCORD, null);
+    const state = service.signState(OAuthProvider.APPLE, null);
 
     // Eleven minutes on, against a ten-minute window.
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);

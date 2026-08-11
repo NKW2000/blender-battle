@@ -56,6 +56,16 @@ export enum ApiErrorCode {
   ACCOUNT_BANNED = 'ACCOUNT_BANNED',
   ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
   UPLOAD_FAILED = 'UPLOAD_FAILED',
+  /*
+    Two OAuth failures that used to share `UNAUTHORIZED`, and therefore shared a
+    message. A state that does not verify and a provider that refuses the token
+    exchange have nothing in common except the status code: the first is fixed
+    by starting again, the second by fixing credentials, and telling someone to
+    start again when the client secret is wrong is an instruction to repeat a
+    failure indefinitely.
+  */
+  OAUTH_STATE_INVALID = 'OAUTH_STATE_INVALID',
+  OAUTH_PROVIDER_FAILED = 'OAUTH_PROVIDER_FAILED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
 
@@ -182,9 +192,18 @@ export enum NotificationType {
 }
 
 /** Third-party identity providers. */
+/**
+ * The sign-in providers this application offers.
+ *
+ * `discord` is gone from here but still exists in the database's enum type:
+ * Postgres cannot drop an enum value without rewriting the type, and any
+ * identity row already recorded as `discord` is how its owner signs in. The
+ * value staying in the type is what makes those rows safe while the application
+ * stops offering it.
+ */
 export enum OAuthProvider {
-  DISCORD = 'discord',
   GOOGLE = 'google',
+  APPLE = 'apple',
 }
 
 /** Audit trail actions. Append new members; never renumber or reuse. */

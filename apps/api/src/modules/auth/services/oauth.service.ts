@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, createSign, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -52,12 +52,19 @@ export class OAuthService {
   ) {}
 
   isEnabled(provider: OAuthProvider): boolean {
-    const credentials =
-      provider === OAuthProvider.DISCORD
-        ? this.config.oauth.discord
-        : this.config.oauth.google;
+    /*
+      Apple is configured when it can *build* a secret, not when one was pasted:
+      its client secret is a JWT this server signs per request from the team id,
+      key id and private key. Checking for `clientSecret` would report Apple as
+      unavailable however carefully it had been set up.
+    */
+    if (provider === OAuthProvider.APPLE) {
+      const apple = this.config.oauth.apple;
+      return Boolean(apple.clientId && apple.teamId && apple.keyId && apple.privateKey);
+    }
 
-    return Boolean(credentials.clientId && credentials.clientSecret);
+    const google = this.config.oauth.google;
+    return Boolean(google.clientId && google.clientSecret);
   }
 
   /**
@@ -74,15 +81,21 @@ export class OAuthService {
 
     const redirectUri = this.redirectUri(provider);
 
-    if (provider === OAuthProvider.DISCORD) {
+    if (provider === OAuthProvider.APPLE) {
       const params = new URLSearchParams({
-        client_id: this.config.oauth.discord.clientId as string,
+        client_id: this.config.oauth.apple.clientId as string,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: 'identify email',
+        scope: 'name email',
+        /*
+          Apple insists on this once any personal scope is requested, and it
+          changes the callback from a GET with query parameters into a POST with
+          a form body. The controller accepts both for that reason.
+        */
+        response_mode: 'form_post',
         state,
       });
-      return `https://discord.com/api/oauth2/authorize?${params.toString()}`;
+      return `https://appleid.apple.com/auth/authorize?${params.toString()}`;
     }
 
     const params = new URLSearchParams({
@@ -133,7 +146,7 @@ export class OAuthService {
 
       if (fresh === null) {
         throw new AppException(
-          ApiErrorCode.UNAUTHORIZED,
+          ApiErrorCode.OAUTH_STATE_INVALID,
           'That sign-in link has already been used. Start again.',
           HttpStatus.UNAUTHORIZED,
         );
@@ -470,7 +483,7 @@ export class OAuthService {
   private verifyState(state: string): { provider: OAuthProvider; linkUserId: string | null } {
     const expired = () =>
       new AppException(
-        ApiErrorCode.UNAUTHORIZED,
+        ApiErrorCode.OAUTH_STATE_INVALID,
         'That sign-in link has expired. Start again.',
         HttpStatus.UNAUTHORIZED,
       );
@@ -517,54 +530,110 @@ export class OAuthService {
     this.assertEnabled(provider);
 
     try {
-      return provider === OAuthProvider.DISCORD
-        ? await this.fetchDiscord(code)
+      return provider === OAuthProvider.APPLE
+        ? await this.fetchApple(code)
         : await this.fetchGoogle(code);
     } catch (error) {
       if (error instanceof AppException) throw error;
 
       this.logger.error(`${provider} OAuth exchange failed: ${(error as Error).message}`);
       throw new AppException(
-        ApiErrorCode.UNAUTHORIZED,
-        `Could not complete ${provider} sign-in. Try again.`,
+        ApiErrorCode.OAUTH_PROVIDER_FAILED,
+        `${provider} refused the sign-in. This is usually a credential or redirect-URI mismatch on the provider's application, not something you did.`,
         HttpStatus.UNAUTHORIZED,
       );
     }
   }
 
-  private async fetchDiscord(code: string): Promise<ProviderProfile> {
-    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+  /**
+   * Apple's client secret: an ES256 JWT this server signs, not a stored string.
+   *
+   * Six months is Apple's maximum and the usual choice, but it is minted per
+   * request anyway — there is nothing to store, nothing to rotate, and no
+   * expiry to be surprised by later.
+   */
+  private appleClientSecret(): string {
+    const { clientId, teamId, keyId, privateKey } = this.config.oauth.apple;
+
+    const header = { alg: 'ES256', kid: keyId };
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      iss: teamId,
+      iat: now,
+      exp: now + 300,
+      aud: 'https://appleid.apple.com',
+      sub: clientId,
+    };
+
+    const encode = (value: object) =>
+      Buffer.from(JSON.stringify(value)).toString('base64url');
+    const signingInput = `${encode(header)}.${encode(payload)}`;
+
+    /*
+      Node signs ECDSA as DER by default; JWS requires the raw r||s pair, which
+      is what `dsaEncoding: 'ieee-p1363'` produces. Without it Apple rejects
+      every secret as malformed, and the error says only "invalid_client".
+    */
+    const signature = createSign('SHA256')
+      .update(signingInput)
+      .sign(
+        { key: privateKey as string, dsaEncoding: 'ieee-p1363' },
+        'base64url',
+      );
+
+    return `${signingInput}.${signature}`;
+  }
+
+  /**
+   * Apple returns the profile inside the `id_token`, not from a userinfo call.
+   *
+   * There is no endpoint to ask for the user's details afterwards, and the name
+   * is supplied *only* on the very first authorization and never again — so an
+   * account created here is named from its email, which is the part Apple does
+   * keep sending.
+   */
+  private async fetchApple(code: string): Promise<ProviderProfile> {
+    const tokenResponse = await fetch('https://appleid.apple.com/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: this.config.oauth.discord.clientId as string,
-        client_secret: this.config.oauth.discord.clientSecret as string,
+        client_id: this.config.oauth.apple.clientId as string,
+        client_secret: this.appleClientSecret(),
         grant_type: 'authorization_code',
         code,
-        redirect_uri: this.redirectUri(OAuthProvider.DISCORD),
+        redirect_uri: this.redirectUri(OAuthProvider.APPLE),
       }),
     });
 
-    if (!tokenResponse.ok) throw new Error(`token endpoint ${tokenResponse.status}`);
-    const { access_token } = (await tokenResponse.json()) as { access_token: string };
+    if (!tokenResponse.ok) {
+      throw new Error(`token endpoint ${tokenResponse.status}: ${await tokenResponse.text()}`);
+    }
 
-    const userResponse = await fetch('https://discord.com/api/users/@me', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    });
-    if (!userResponse.ok) throw new Error(`userinfo ${userResponse.status}`);
+    const { id_token: idToken } = (await tokenResponse.json()) as { id_token?: string };
+    if (!idToken) throw new Error('no id_token in the token response');
 
-    const profile = (await userResponse.json()) as {
-      id: string;
-      username: string;
-      email?: string;
-      verified?: boolean;
-    };
+    /*
+      The claims are read, not verified.
+
+      Normally an id_token must be checked against the issuer's public keys —
+      here it arrived over TLS as the direct response to a request carrying our
+      own signed secret, so its origin is already established by the channel.
+      Nothing from the browser is trusted: the `user` field Apple form-posts
+      alongside the code is deliberately ignored, because that one *is*
+      attacker-supplied.
+    */
+    const claims = JSON.parse(
+      Buffer.from(idToken.split('.')[1] ?? '', 'base64url').toString(),
+    ) as { sub?: string; email?: string; email_verified?: string | boolean };
+
+    if (!claims.sub) throw new Error('id_token carried no subject');
 
     return {
-      providerAccountId: profile.id,
-      email: profile.email ?? null,
-      emailVerified: profile.verified === true,
-      handle: profile.username ?? null,
+      providerAccountId: claims.sub,
+      email: claims.email ?? null,
+      // Apple sends this as the string "true" as often as the boolean.
+      emailVerified: claims.email_verified === true || claims.email_verified === 'true',
+      handle: claims.email?.split('@')[0] ?? null,
     };
   }
 
