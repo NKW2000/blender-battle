@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -70,12 +70,7 @@ export class OAuthService {
   async authorizeUrl(provider: OAuthProvider, linkUserId?: string): Promise<string> {
     this.assertEnabled(provider);
 
-    const state = randomBytes(24).toString('base64url');
-    await this.redis.setWithTtl(
-      `oauth:state:${state}`,
-      JSON.stringify({ provider, linkUserId: linkUserId ?? null }),
-      OAuthService.STATE_TTL_SECONDS,
-    );
+    const state = this.signState(provider, linkUserId ?? null);
 
     const redirectUri = this.redirectUri(provider);
 
@@ -115,21 +110,40 @@ export class OAuthService {
     state: string,
     context: { ipAddress?: string | null; userAgent?: string | null },
   ): Promise<string> {
-    const raw = await this.redis.client.get(`oauth:state:${state}`);
-    if (!raw) {
-      throw new AppException(
-        ApiErrorCode.UNAUTHORIZED,
-        'This sign-in link has expired. Start again.',
-        HttpStatus.UNAUTHORIZED,
+    const { provider, linkUserId } = this.verifyState(state);
+
+    /*
+      Replay protection, best effort.
+
+      The state is already unforgeable and time-limited on its own, and the
+      provider's authorization code is single-use at the provider — so a replay
+      has to win a race against Discord or Google refusing the code a second
+      time. This closes that race when Redis is available and does not fail the
+      sign-in when it is not, which is the whole reason the state stopped living
+      there.
+    */
+    try {
+      const fresh = await this.redis.client.set(
+        `oauth:state:used:${state.slice(-32)}`,
+        '1',
+        'EX',
+        OAuthService.STATE_TTL_SECONDS,
+        'NX',
+      );
+
+      if (fresh === null) {
+        throw new AppException(
+          ApiErrorCode.UNAUTHORIZED,
+          'That sign-in link has already been used. Start again.',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+    } catch (error) {
+      if (error instanceof AppException) throw error;
+      this.logger.warn(
+        `OAuth replay guard unavailable, continuing on the signed state alone: ${(error as Error).message}`,
       );
     }
-    // Single use — a replayed state must not be accepted.
-    await this.redis.client.del(`oauth:state:${state}`);
-
-    const { provider, linkUserId } = JSON.parse(raw) as {
-      provider: OAuthProvider;
-      linkUserId: string | null;
-    };
 
     const profile = await this.fetchProfile(provider, code);
     const session = await this.resolveSession(provider, profile, linkUserId, context);
@@ -416,6 +430,86 @@ export class OAuthService {
   }
 
   /** Exchanges the authorization code and reads the provider's profile. */
+  /**
+   * The CSRF state, carried in the URL rather than held on the server.
+   *
+   * It used to be a random value written to Redis and looked up on the way
+   * back, which makes a successful sign-in depend on that row still being there
+   * several seconds later. When it was not — an eviction, a reconnect, a
+   * restart, a Redis that was never reachable in the first place — the flow
+   * failed with "this sign-in link has expired", which is true of a missing key
+   * and says nothing about why it was missing.
+   *
+   * A signed state needs no storage. The payload carries what the callback has
+   * to know, an HMAC over it proves this server issued it, and an expiry bounds
+   * how long it is good for. Nothing can lose it, so the only ways it fails are
+   * the ones that should: tampered, or too old.
+   *
+   * Keyed on the refresh secret rather than a new variable, so an existing
+   * deployment gains this without another environment change to get wrong.
+   */
+  private signState(provider: OAuthProvider, linkUserId: string | null): string {
+    const payload = JSON.stringify({
+      p: provider,
+      l: linkUserId,
+      // Distinguishes two states issued in the same second, so the replay guard
+      // has something unique to key on.
+      n: randomBytes(9).toString('base64url'),
+      e: Date.now() + OAuthService.STATE_TTL_SECONDS * 1000,
+    });
+
+    const body = Buffer.from(payload).toString('base64url');
+    return `${body}.${this.stateSignature(body)}`;
+  }
+
+  private stateSignature(body: string): string {
+    return createHmac('sha256', this.config.jwt.refreshSecret).update(body).digest('base64url');
+  }
+
+  /** Rejects anything this server did not issue, or issued too long ago. */
+  private verifyState(state: string): { provider: OAuthProvider; linkUserId: string | null } {
+    const expired = () =>
+      new AppException(
+        ApiErrorCode.UNAUTHORIZED,
+        'That sign-in link has expired. Start again.',
+        HttpStatus.UNAUTHORIZED,
+      );
+
+    const [body, signature] = state.split('.');
+    if (!body || !signature) throw expired();
+
+    /*
+      Constant-time, and length-checked first.
+
+      `timingSafeEqual` throws on a length mismatch rather than returning false,
+      so an attacker could otherwise tell a wrong-length signature from a
+      wrong-value one by the shape of the failure.
+    */
+    const expectedSignature = Buffer.from(this.stateSignature(body));
+    const received = Buffer.from(signature);
+    if (
+      received.length !== expectedSignature.length ||
+      !timingSafeEqual(received, expectedSignature)
+    ) {
+      this.logger.warn('OAuth state failed signature check');
+      throw expired();
+    }
+
+    try {
+      const { p, l, e } = JSON.parse(Buffer.from(body, 'base64url').toString()) as {
+        p: OAuthProvider;
+        l: string | null;
+        e: number;
+      };
+
+      if (typeof e !== 'number' || Date.now() > e) throw expired();
+      return { provider: p, linkUserId: l ?? null };
+    } catch (error) {
+      if (error instanceof AppException) throw error;
+      throw expired();
+    }
+  }
+
   private async fetchProfile(
     provider: OAuthProvider,
     code: string,

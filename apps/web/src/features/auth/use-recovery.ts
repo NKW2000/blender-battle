@@ -1,6 +1,6 @@
 'use client';
 
-import type { LinkedAccount } from '@bb/shared';
+import type { LinkedAccount, OAuthProvider } from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { sessionKeys } from '@/features/auth/use-session';
@@ -74,5 +74,22 @@ export function useLinkedAccounts() {
     queryKey: ['auth', 'oauth', 'linked'] as const,
     queryFn: () => api.get<LinkedAccount[]>('/auth/oauth/linked'),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Starts a provider link for the signed-in user.
+ *
+ * A fetch rather than a plain `window.location` to the redirect endpoint:
+ * linking has to know who is linking, the API takes that from the caller's
+ * token, and a top-level navigation carries no Authorization header. So the URL
+ * is asked for with credentials and the browser is sent to the result.
+ */
+export function useLinkProvider() {
+  return useMutation<{ url: string }, ApiError, OAuthProvider>({
+    mutationFn: (provider) => api.get<{ url: string }>(`/auth/oauth/${provider}/url`),
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
   });
 }

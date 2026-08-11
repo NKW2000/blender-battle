@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/panel';
 import {
   useForgotPassword,
+  useLinkProvider,
   useLinkedAccounts,
   useResendVerification,
 } from '@/features/auth/use-recovery';
@@ -526,6 +527,7 @@ function AccountPanel() {
  */
 function ConnectedAccountsPanel() {
   const { data: linked, isLoading } = useLinkedAccounts();
+  const link = useLinkProvider();
 
   const providers: Array<{ id: OAuthProvider; label: string }> = [
     { id: OAuthProvider.GOOGLE, label: 'Google' },
@@ -570,13 +572,10 @@ function ConnectedAccountsPanel() {
                     size="sm"
                     tone="cream"
                     className="shrink-0"
-                    onClick={() => {
-                      const base =
-                        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-                      window.location.href = `${base}/auth/oauth/${provider.id}?link=1`;
-                    }}
+                    onClick={() => link.mutate(provider.id)}
+                    disabled={link.isPending}
                   >
-                    Connect
+                    {link.isPending ? 'Opening…' : 'Connect'}
                   </ChunkyButton>
                 )}
               </div>

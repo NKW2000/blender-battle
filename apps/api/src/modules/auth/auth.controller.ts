@@ -251,6 +251,29 @@ export class AuthController {
    * `link` is set when a signed-in user is connecting an additional provider;
    * the caller's id is taken from their token, never from the query string.
    */
+  /**
+   * The consent URL, for a signed-in user connecting an extra provider.
+   *
+   * The redirect endpoint below cannot serve this. Linking has to know *who* is
+   * linking, it takes that from the caller's token, and a top-level browser
+   * navigation carries no Authorization header — so "connect" from settings
+   * arrived unauthenticated and was treated as an ordinary sign-in, which at
+   * best creates a second account and at worst collides with the first one's
+   * email.
+   *
+   * Returning the URL instead of redirecting lets the page fetch it with
+   * credentials and then navigate. The account id is sealed into the signed
+   * state, never the query string, so it cannot be edited on the way to the
+   * provider and back.
+   */
+  @Get('oauth/:provider/url')
+  async oauthUrl(
+    @Param('provider', new ParseEnumPipe(OAuthProvider)) provider: OAuthProvider,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ url: string }> {
+    return { url: await this.oauth.authorizeUrl(provider, userId) };
+  }
+
   @OptionalAuth()
   @Get('oauth/:provider')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
