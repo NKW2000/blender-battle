@@ -19,6 +19,7 @@ import {
 } from '@/components/submissions/entry-image-fields';
 import { UI_LOCALE } from '@/lib/utils';
 import { BallotView } from '@/components/rooms/ballot-view';
+import { ChallengeReel } from '@/components/rooms/challenge-reel';
 import { CountdownGate } from '@/components/rooms/countdown-gate';
 import {
   EmptyState,
@@ -342,10 +343,28 @@ function LeaveControl({ room, seated }: { room: RoomDetail; seated: number }) {
   );
 }
 
+/**
+ * The draw window: the reel, then the countdown.
+ *
+ * Both halves are driven by the same server-derived deadline, so every client
+ * in the room sees the same thing at the same moment however skewed their
+ * clocks are. The reel takes the first stretch and the 3-2-1 takes the last
+ * three seconds — the countdown's job is to say when the clock starts, and it
+ * cannot do that while the brief is still being revealed.
+ */
 function Drawing({ room }: { room: RoomDetail }) {
   const remaining = useDeadline(room.startsAt, room.serverNow);
-  return <CountdownGate seconds={remaining ?? 0} />;
+  const seconds = remaining ?? 0;
+
+  return seconds > COUNTDOWN_SECONDS ? (
+    <ChallengeReel room={room} />
+  ) : (
+    <CountdownGate seconds={seconds} />
+  );
 }
+
+/** How much of the draw window the 3-2-1 keeps for itself. */
+const COUNTDOWN_SECONDS = 3;
 
 /**
  * Modelling window: the brief, the clock, and the upload.
