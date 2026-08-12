@@ -4,6 +4,7 @@ import { ApiErrorCode, ChallengeStatus, NotificationType } from '@bb/shared';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
 
 import { AppException } from '@/common/exceptions/app.exception';
+import { AppConfig } from '@/config/app.config';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 
 import { User } from '@/modules/users/entities/user.entity';
@@ -24,6 +25,7 @@ export class ChallengeEventsService {
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly config: AppConfig,
   ) {}
 
   /**
@@ -213,18 +215,27 @@ export class ChallengeEventsService {
 
       An account can still browse, enter, and be judged while unverified. It
       just cannot decide who wins.
-    */
-    const voter = await this.users.findOne({
-      where: { id: voterId },
-      select: { id: true, emailVerifiedAt: true },
-    });
 
-    if (!voter?.emailVerifiedAt) {
-      throw new AppException(
-        ApiErrorCode.FORBIDDEN,
-        'Confirm your email address before voting. Check your inbox, or send a new link from Settings.',
-        403,
-      );
+      Behind `REQUIRE_VERIFIED_EMAIL_TO_VOTE`, which is currently off. The gate
+      is only a gate if the confirmation email can arrive; with no working mail
+      driver it stops being an anti-sockpuppet measure and becomes "nobody may
+      vote" — worse than the abuse it prevents, and harder to recognise from
+      outside, because the account looks normal and the ballot simply refuses.
+      Turn it back on in the same change that makes mail work.
+    */
+    if (this.config.requireVerifiedEmailToVote) {
+      const voter = await this.users.findOne({
+        where: { id: voterId },
+        select: { id: true, emailVerifiedAt: true },
+      });
+
+      if (!voter?.emailVerifiedAt) {
+        throw new AppException(
+          ApiErrorCode.FORBIDDEN,
+          'Confirm your email address before voting. Check your inbox, or send a new link from Settings.',
+          403,
+        );
+      }
     }
 
     /*

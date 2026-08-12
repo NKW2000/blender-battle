@@ -101,6 +101,24 @@ export const envSchema = z
      * these required would mean nobody can run the platform without first
      * creating accounts at two third parties.
      */
+    /**
+     * Whether voting requires a confirmed email address.
+     *
+     * Off by default, which is a deliberate reversal. The gate is a good one —
+     * voting is the point at which an anonymous inbox becomes influence over
+     * someone else's result — but it is only a gate if the confirmation email
+     * can actually arrive. With no working mail driver it stops being an
+     * anti-sockpuppet measure and becomes "nobody may vote", which is worse
+     * than the abuse it was written to prevent and much harder to diagnose from
+     * the outside.
+     *
+     * Turn it on in the same change that makes mail work, not before.
+     */
+    REQUIRE_VERIFIED_EMAIL_TO_VOTE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+
     APPLE_CLIENT_ID: z.string().optional(),
     APPLE_TEAM_ID: z.string().optional(),
     APPLE_KEY_ID: z.string().optional(),

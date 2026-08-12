@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ChevronIcon } from '@/components/ui/icons';
-import { useSession } from '@/features/auth/use-session';
 import { useSound } from '@/features/sound/use-sound';
 import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/challenges/use-events';
 
@@ -32,7 +31,6 @@ import { useVoteEvent, type EventDetail, type EventEntry } from '@/features/chal
  * loops — stepping past the last entry wraps to the first, and vice versa.
  */
 export function VoteScreen({ event }: { event: EventDetail }) {
-  const { user } = useSession();
   const vote = useVoteEvent(event.id);
   const play = useSound();
   const [active, setActive] = useState(0);
@@ -65,8 +63,18 @@ export function VoteScreen({ event }: { event: EventDetail }) {
     broken site, and the remedy (check your inbox) is not something anyone
     guesses from an error toast.
   */
-  const isVerified = Boolean(user?.emailVerifiedAt);
-  const canVote = didEnter && isVerified && !hasVoted;
+  /*
+    No email gate here any more.
+
+    The server's is behind `REQUIRE_VERIFIED_EMAIL_TO_VOTE`, currently off,
+    because a gate is only a gate if the confirmation email can arrive — with no
+    working mail driver it stopped everybody rather than the sockpuppets it was
+    written for. The client must not enforce what the server does not, or an
+    entrant sees a locked ballot the API would happily have accepted.
+
+    Entrants-only is untouched and is the rule doing the real work.
+  */
+  const canVote = didEnter && !hasVoted;
 
   const step = useCallback(
     (dir: number) => {
@@ -171,25 +179,14 @@ export function VoteScreen({ event }: { event: EventDetail }) {
         {!didEnter ? (
           <div
             role="note"
-            className="mb-3 rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3"
+            className="mb-3 rounded-[18px] border-[3px] border-ink bg-white/5 px-4 py-3"
+            style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
           >
-            <p className="font-display text-sm font-bold text-bone">Voting is for entrants</p>
-            <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
+            <p className="font-display text-sm font-bold text-cream">Voting is for entrants</p>
+            <p className="mt-1 text-xs font-extrabold leading-relaxed text-haze">
               Only artists who entered this challenge can vote on it — it is what keeps a
               handful of new accounts from deciding the result. You can still look through
               every entry.
-            </p>
-          </div>
-        ) : !isVerified ? (
-          <div
-            role="note"
-            className="mb-3 rounded-2xl border-[3px] border-edge bg-panel-raised px-4 py-3"
-          >
-            <p className="font-display text-sm font-bold text-bone">Confirm your email to vote</p>
-            <p className="mt-1 text-xs font-extrabold leading-relaxed text-bone-muted">
-              Your entry is in and will be judged either way. Voting is the one thing that
-              needs a confirmed address — check your inbox, or send a new link from the
-              banner at the top of the page.
             </p>
           </div>
         ) : null}
@@ -349,9 +346,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
                               ? 'Locked'
                               : !didEnter
                                 ? 'Entrants only'
-                                : !isVerified
-                                  ? 'Confirm email'
-                                  : 'Vote'}
+                                : 'Vote'}
                       </button>
                     </div>
                   </div>
@@ -370,8 +365,18 @@ export function VoteScreen({ event }: { event: EventDetail }) {
             style={{ background: 'linear-gradient(rgba(23,17,73,0),#171149)' }}
           />
 
-          {/* Prev / dots / next rail. */}
-          <div className="absolute right-3.5 top-1/2 z-[4] flex -translate-y-1/2 flex-col items-center gap-2.5">
+          {/*
+            The rail, inset further on a phone.
+
+            It floats over the artwork, which is the point — the wheel is the
+            whole square and the controls ride on top of it. At 390px that square
+            is the entire screen width, so a rail sitting 14px from the edge sat
+            squarely on the entry being judged. Two pixels of inset does nothing;
+            what helps is making the controls smaller and tighter there, so they
+            occupy a corner rather than a stripe down the middle of someone's
+            render.
+          */}
+          <div className="absolute right-2 top-1/2 z-[4] flex -translate-y-1/2 flex-col items-center gap-2 sm:right-3.5 sm:gap-2.5">
             <WheelArrow direction="up" onClick={() => step(-1)} />
             {entries.map((entry, index) => (
               <button
@@ -435,9 +440,18 @@ export function VoteScreen({ event }: { event: EventDetail }) {
           <span className="text-sm font-extrabold text-bone-faint">The brief</span>
         </div>
 
+        {/*
+          The block, not a cream card.
+
+          This was the one surface on the screen still painted `#FFF6E9` with a
+          hard-coded outline, so on a page of translucent indigo panels it read
+          as a sheet of paper someone had dropped on the design. The ballot below
+          keeps cream for the *selected* entry, where it is doing real work —
+          marking one card out of several — rather than describing a container.
+        */}
         <div
-          className="flex min-h-0 flex-1 flex-col gap-3 rounded-[26px] p-3.5"
-          style={{ background: '#FFF6E9', border: '4px solid #0E0B2B', boxShadow: '0 12px 0 #0E0B2B' }}
+          className="flex min-h-0 flex-1 flex-col gap-3 rounded-[22px] border-[3px] border-ink bg-white/4 p-3.5"
+          style={{ boxShadow: '0 8px 0 var(--color-ink)' }}
         >
           {/* Square, for the same reason as the ballot beside it. */}
           <div className="relative aspect-square w-full overflow-hidden rounded-2xl border-[3px] border-ink bg-arcade-deep">
@@ -468,9 +482,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
           </div>
 
           <div>
-            <div className="mb-1.5 font-display text-lg font-bold" style={{ color: '#0E0B2B' }}>
-              What to judge
-            </div>
+            <div className="mb-1.5 font-display text-lg font-bold text-cream">What to judge</div>
             <div className="flex flex-col gap-1.5">
               {(event.objectives.length > 0
                 ? event.objectives.slice(0, 4)
@@ -478,8 +490,7 @@ export function VoteScreen({ event }: { event: EventDetail }) {
               ).map((objective, index) => (
                 <div
                   key={objective}
-                  className="flex items-center gap-2.5 text-[13px] font-extrabold"
-                  style={{ color: '#4A4470' }}
+                  className="flex items-center gap-2.5 text-[13px] font-extrabold text-haze"
                 >
                   <span
                     className="h-2.5 w-2.5 flex-none rounded-[3px]"
@@ -519,7 +530,10 @@ function WheelArrow({ direction, onClick }: { direction: 'up' | 'down'; onClick:
       type="button"
       onClick={onClick}
       aria-label={direction === 'up' ? 'Previous entry' : 'Next entry'}
-      className="arcade-press flex h-[42px] w-[42px] items-center justify-center rounded-xl font-display text-base font-bold [--press-depth:4px]"
+      // 34px on a phone, 42 from `sm` up. The rail rides on top of the entry,
+      // so on the narrowest screens the controls have to give the artwork back
+      // as much room as they can while staying comfortably tappable.
+      className="arcade-press flex h-[34px] w-[34px] items-center justify-center rounded-xl font-display text-base font-bold [--press-depth:4px] sm:h-[42px] sm:w-[42px]"
       style={{
         background: '#FFF6E9',
         border: '3px solid #0E0B2B',

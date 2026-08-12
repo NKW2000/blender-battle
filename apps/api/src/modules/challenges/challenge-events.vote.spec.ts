@@ -27,6 +27,8 @@ function createService(options: {
   targetOwnerId?: string;
   alreadyVoted?: boolean;
   voterVerified?: boolean;
+  /** Lets a case exercise the flag being off, not just its enforcement. */
+  requireVerified?: boolean;
 } = {}) {
   const challenge = {
     id: 'challenge-1',
@@ -77,6 +79,14 @@ function createService(options: {
         }),
     } as never,
     { createMany: async () => undefined } as never,
+    /*
+      The verification gate is behind `REQUIRE_VERIFIED_EMAIL_TO_VOTE`, and this
+      spec is what documents its behaviour — so it is asserted here with the
+      flag deliberately on, whatever the deployment currently runs with. A test
+      that only checked the default would go quiet the moment the default
+      changed, which is the opposite of what it is for.
+    */
+    { requireVerifiedEmailToVote: options.requireVerified ?? true } as never,
   );
 
   return { service, challenge, inserted };
@@ -109,6 +119,41 @@ describe('vote — who may cast one', () => {
       into influence over somebody else's result.
     */
     const { service, inserted } = createService({ voterHasEntry: true, voterVerified: false });
+
+    await expect(service.vote('challenge-1', 'voter-1', 'entry-2')).rejects.toMatchObject({
+      code: ApiErrorCode.FORBIDDEN,
+    });
+    expect(inserted).toHaveLength(0);
+  });
+
+  it('lets an unverified entrant vote when the gate is switched off', async () => {
+    /*
+      The state this deployment currently runs in.
+
+      A gate is only a gate if the confirmation email can arrive. With no
+      working mail driver, enforcing it does not stop sockpuppets — nobody can
+      verify, so it stops everybody, and the ballot refuses an account that
+      looks perfectly normal. Entrants-only remains the defence that is actually
+      load-bearing, and it is unaffected.
+    */
+    const { service, inserted } = createService({
+      voterHasEntry: true,
+      voterVerified: false,
+      requireVerified: false,
+    });
+
+    await expect(service.vote('challenge-1', 'voter-1', 'entry-2')).resolves.toBeDefined();
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('still refuses a vote from someone who did not enter, gate or no gate', async () => {
+    // The one that matters most: turning the email gate off must not weaken the
+    // rule that only entrants decide the result.
+    const { service, inserted } = createService({
+      voterHasEntry: false,
+      voterVerified: false,
+      requireVerified: false,
+    });
 
     await expect(service.vote('challenge-1', 'voter-1', 'entry-2')).rejects.toMatchObject({
       code: ApiErrorCode.FORBIDDEN,

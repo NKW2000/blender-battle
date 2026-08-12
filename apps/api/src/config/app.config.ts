@@ -123,6 +123,11 @@ export class AppConfig {
     return this.get('RUN_MIGRATIONS_ON_BOOT');
   }
 
+  /** Whether voting requires a confirmed email. See the env schema. */
+  get requireVerifiedEmailToVote(): boolean {
+    return this.get('REQUIRE_VERIFIED_EMAIL_TO_VOTE');
+  }
+
   get mail() {
     return {
       driver: this.get('MAIL_DRIVER'),

@@ -22,7 +22,8 @@ const service = new ChallengeEventsService(
   null as never,
   null as never,
   null as never,
-);
+    { requireVerifiedEmailToVote: false } as never,
+  );
 
 const OPENS = new Date('2026-03-01T12:00:00.000Z');
 const CLOSES = new Date('2026-03-08T12:00:00.000Z');
