@@ -93,11 +93,33 @@ export class ChallengeEventsController {
     const challenge = await this.events.findEventOrFail(id);
     const phase = this.events.phaseOf(challenge);
     const entries = await this.events.listEntries(id);
+    const mine = user ? entries.find((entry) => entry.userId === user.id) : undefined;
 
     return {
       ...this.toEvent(challenge),
       ...this.toBrief(challenge),
-      myEntryId: user ? (entries.find((entry) => entry.userId === user.id)?.id ?? null) : null,
+      myEntryId: mine?.id ?? null,
+      /*
+        Your own entry, in full.
+
+        `myEntryId` alone told the page an entry existed and nothing about what
+        was in it, so after a reload the upload panel looked exactly as it had
+        before submitting — which reads as the submission having been lost.
+        Rooms already return this; events did not.
+
+        Not subject to `entriesForPhase`: that decides what a viewer may see of
+        *other* people's work, and this is the viewer's own. Nobody else's
+        images are added by it.
+      */
+      myEntry: mine
+        ? {
+            id: mine.id,
+            imageUrl: mine.imageUrl,
+            workspacePhotoUrl: mine.workspacePhotoUrl,
+            notes: mine.notes,
+            submittedAt: mine.submittedAt.toISOString(),
+          }
+        : null,
       myVoteEntryId: user ? await this.events.myVote(id, user.id) : null,
       // Enforced here rather than trusted to the UI. See the mapper for what
       // each phase is allowed to reveal and why.

@@ -4,6 +4,7 @@ import type { ChallengeAsset, Difficulty, TagSummary } from '@bb/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type ApiError } from '@/lib/api/client';
+import { notify } from '@/lib/notify';
 
 export type EventPhase = 'upcoming' | 'open' | 'voting' | 'finished' | 'not-an-event';
 
@@ -56,6 +57,20 @@ export interface EventDetail extends EventSummary {
   blenderVersion: string | null;
   assets: ChallengeAsset[];
   myEntryId: string | null;
+  /*
+    Your own entry, in full.
+
+    `myEntryId` said one existed and nothing about what was in it, so after a
+    reload the upload panel looked exactly as it had before submitting — which
+    reads as the entry having been lost. Rooms already returned this.
+  */
+  myEntry: {
+    id: string;
+    imageUrl: string;
+    workspacePhotoUrl: string | null;
+    notes: string | null;
+    submittedAt: string;
+  } | null;
   myVoteEntryId: string | null;
   entries: EventEntry[];
 }
@@ -131,7 +146,15 @@ export function useEnterEvent(challengeId: string) {
 
       return api.upload<EventEntry>(`/challenge-events/${challengeId}/entries`, form);
     },
+    /*
+      Say so.
+
+      Every other mutation in the application confirms itself and this one did
+      not, so a submission that worked perfectly was indistinguishable from a
+      button that did nothing — which is exactly how it was reported.
+    */
     onSuccess: () => {
+      notify.success('Entry submitted');
       void queryClient.invalidateQueries({ queryKey: eventKeys.detail(challengeId) });
     },
   });

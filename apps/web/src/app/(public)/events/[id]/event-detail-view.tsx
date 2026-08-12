@@ -264,9 +264,34 @@ function EnterPanel({ event }: { event: EventDetail }) {
       </div>
 
       <div className="flex flex-1 flex-col px-5 pb-7 pt-6 sm:px-7">
+        {/*
+          Your entry, shown back to you.
+
+          Submitting used to change nothing visible: no confirmation, and a
+          reload rendered the same empty upload panel, so a successful entry and
+          a broken button looked identical. This is the evidence that it worked.
+        */}
+        {event.myEntry ? (
+          <div className="mb-5 flex flex-col gap-2.5">
+            <p className="text-[15px] font-extrabold text-mint">
+              You are in. Replace it any time before the deadline.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <SubmittedImage label="Your render" url={event.myEntry.imageUrl} tone="sun" />
+              {event.myEntry.workspacePhotoUrl ? (
+                <SubmittedImage
+                  label="Your workspace"
+                  url={event.myEntry.workspacePhotoUrl}
+                  tone="aqua"
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <p className="mb-6 max-w-[820px] text-[15px] font-extrabold leading-[1.55] text-haze">
           {alreadyEntered ? (
-            <>You are in. You can replace your entry until the deadline.</>
+            <>Upload a new pair to replace what is on the ballot.</>
           ) : (
             <>
               Upload both images before the deadline — each must be exactly{' '}
@@ -400,5 +425,35 @@ function OtherEntries({ event }: { event: EventDetail }) {
         ))}
       </div>
     </section>
+  );
+}
+
+/** One image from the entry already on the ballot. */
+function SubmittedImage({
+  label,
+  url,
+  tone,
+}: {
+  label: string;
+  url: string;
+  tone: 'sun' | 'aqua';
+}) {
+  return (
+    <figure className="flex min-w-0 flex-col gap-1.5">
+      <figcaption
+        className={`text-[11px] font-black uppercase tracking-[1.2px] ${
+          tone === 'sun' ? 'text-sun' : 'text-aqua'
+        }`}
+      >
+        {label}
+      </figcaption>
+      {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary asset */}
+      <img
+        src={url}
+        alt={label}
+        className="aspect-square w-full rounded-[14px] border-[2.5px] border-ink object-cover"
+        style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
+      />
+    </figure>
   );
 }

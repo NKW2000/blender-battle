@@ -1,4 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ActivityAction,
   Role,
@@ -15,6 +16,7 @@ import { CursorQueryDto } from '@/common/dto/cursor-query.dto';
 import { CurrentUser, Public, Roles } from '@/common/decorators';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
 import { ActivityLogService } from '@/modules/activity-log/activity-log.service';
+import { MailService } from '@/modules/mail/mail.service';
 
 import { LeaderboardService } from './leaderboard.service';
 import { MetricsService } from './metrics.service';
@@ -50,6 +52,7 @@ export class AnalyticsController {
     private readonly metrics: MetricsService,
     private readonly activity: ActivityLogService,
     private readonly leaderboard: LeaderboardService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -64,6 +67,22 @@ export class AnalyticsController {
     return this.leaderboard.top(query.limit ?? 50, query.offset ?? 0);
   }
 
+
+  /**
+   * Does mail actually work.
+   *
+   * A live handshake, not a reading of the configuration — separate from the
+   * cached metrics because it opens a socket, and cached for five minutes it
+   * would answer for a state that has since been fixed or broken. Admin-only
+   * and rate limited: it authenticates against a third party, so it is not
+   * something to let anyone run in a loop.
+   */
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  @Get('admin/mail/check')
+  async mailCheck(): Promise<{ ok: boolean; detail: string }> {
+    return this.mail.verify();
+  }
 
   @Roles(Role.ADMIN)
   @Get('admin/metrics')

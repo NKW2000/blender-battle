@@ -6,9 +6,9 @@ import type {
   CursorPage,
   ManagerMetrics,
 } from '@bb/shared';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 
-import { api } from '@/lib/api/client';
+import { api, type ApiError } from '@/lib/api/client';
 
 // The leaderboard hooks were removed with the ranking system — the endpoints
 // they called no longer exist on the API.
@@ -46,5 +46,18 @@ export function useActivityLog(action?: string) {
       return api.get<CursorPage<ActivityLogEntry>>(`/admin/activity?${params.toString()}`);
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+}
+
+/**
+ * Asks the API to open the mail connection and authenticate.
+ *
+ * A mutation rather than a query because it is an action with a side effect on
+ * a third party — it should run when an admin presses the button, not whenever
+ * React decides to refetch.
+ */
+export function useMailCheck() {
+  return useMutation<{ ok: boolean; detail: string }, ApiError, void>({
+    mutationFn: () => api.get<{ ok: boolean; detail: string }>('/admin/mail/check'),
   });
 }

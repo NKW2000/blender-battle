@@ -235,6 +235,85 @@ export class MailService {
     });
   }
 
+  /**
+   * Opens the connection and authenticates, without sending anything.
+   *
+   * "Is mail working" could not be answered from inside the application. The
+   * send path swallows every failure on purpose — `forgot password` must answer
+   * the same way for a registered address and an unknown one, so a provider
+   * refusing us cannot be allowed to change the response — which means a
+   * misconfigured deployment looks exactly like a working one from every
+   * screen, and the only evidence is a line in a server log nobody is reading.
+   *
+   * `verify()` is nodemailer's handshake-and-authenticate with no message: it
+   * proves the host resolves, the port is right, TLS negotiates and the
+   * credentials are accepted. That is the whole of what usually breaks.
+   *
+   * The returned detail is the provider's own words. Nodemailer's are unusually
+   * good here — "Invalid login: 535-5.7.8 Username and Password not accepted"
+   * is exactly the Gmail-without-an-App-Password case, and it says so. Nothing
+   * echoes the password: the failure names the symptom, never the secret.
+   */
+  async verify(): Promise<{ ok: boolean; detail: string }> {
+    const { driver, apiKey, from, smtp } = this.config.mail;
+
+    if (!from) {
+      return { ok: false, detail: 'MAIL_FROM is not set, so nothing can address a message.' };
+    }
+
+    if (driver === 'log') {
+      return {
+        ok: false,
+        detail:
+          'MAIL_DRIVER is `log`: messages are written to the server log and never sent. Set a real driver to deliver them.',
+      };
+    }
+
+    if (driver !== 'smtp') {
+      /*
+        The HTTP providers are not probed.
+
+        Each would need its own authenticated no-op call, and the ones that
+        exist either send a message or cost quota. Reporting what is configured
+        is honest; claiming a reachability that was not tested would not be.
+      */
+      return apiKey
+        ? { ok: true, detail: `Driver \`${driver}\` has an API key set. Delivery is not probed for HTTP providers — send a test to confirm.` }
+        : { ok: false, detail: `Driver \`${driver}\` has no API key set, so every send is refused.` };
+    }
+
+    if (!smtp.host || !smtp.user || !smtp.password) {
+      const missing = [
+        !smtp.host && 'SMTP_HOST',
+        !smtp.user && 'SMTP_USER',
+        !smtp.password && 'SMTP_PASSWORD',
+      ].filter(Boolean);
+      return { ok: false, detail: `Missing ${missing.join(', ')}.` };
+    }
+
+    try {
+      this.transporter ??= createTransport({
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.port === 465,
+        auth: { user: smtp.user, pass: smtp.password },
+      });
+
+      await this.transporter.verify();
+      return {
+        ok: true,
+        detail: `Connected to ${smtp.host}:${smtp.port} as ${smtp.user} and authenticated.`,
+      };
+    } catch (error) {
+      // Discarded on failure for the same reason a failed send discards it: a
+      // pooled connection that has gone bad stays bad.
+      this.transporter = null;
+      const detail = (error as Error).message;
+      this.logger.error(`SMTP verify failed: ${detail}`);
+      return { ok: false, detail };
+    }
+  }
+
   /** Absolute link into the web app, not the API. */
   link(path: string): string {
     return new URL(path, this.config.mail.frontendUrl).toString();

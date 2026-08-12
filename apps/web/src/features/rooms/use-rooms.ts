@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BriefLike } from '@/components/challenges/brief-parts';
 
 import { api, type ApiError } from '@/lib/api/client';
+import { notify } from '@/lib/notify';
 
 export interface RoomSummary {
   id: string;
@@ -237,7 +238,15 @@ export function useSubmitEntry(roomId: string) {
         form,
       );
     },
+    /*
+      Say so.
+
+      Every other mutation in the application confirms itself and this one did
+      not, so a submission that worked perfectly was indistinguishable from a
+      button that did nothing — which is exactly how it was reported.
+    */
     onSuccess: () => {
+      notify.success('Entry submitted');
       void queryClient.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
     },
   });

@@ -79,6 +79,7 @@ function makeEvent(overrides: Partial<EventDetail> = {}): EventDetail {
     blenderVersion: '5.0',
     assets: [asset('ref-1'), asset('ref-2')],
     myEntryId: null,
+    myEntry: null,
     myVoteEntryId: null,
     entries: [],
     ...overrides,
@@ -237,5 +238,75 @@ describe('phases', () => {
       expect(screen.getByText('Judged on')).toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe('after submitting an entry', () => {
+  /*
+    "I upload both, press submit, nothing happens, and after a refresh my photos
+    are gone."
+
+    Two faults produced that sentence and neither was the upload. Nothing
+    confirmed a success — the mutation was the only one in the application that
+    did not announce itself — and the payload carried `myEntryId` but not the
+    entry, so a reload re-rendered an empty upload panel. A submission that
+    worked looked exactly like a button that did nothing.
+  */
+  const entered = () =>
+    makeEvent({
+      myEntryId: 'entry-1',
+      myEntry: {
+        id: 'entry-1',
+        imageUrl: 'https://cdn.test/mine-render.jpg',
+        workspacePhotoUrl: 'https://cdn.test/mine-workspace.jpg',
+        notes: null,
+        submittedAt: new Date().toISOString(),
+      },
+    });
+
+  it('shows both of your images back to you', () => {
+    view(entered());
+
+    expect(screen.getByAltText('Your render')).toHaveAttribute(
+      'src',
+      'https://cdn.test/mine-render.jpg',
+    );
+    expect(screen.getByAltText('Your workspace')).toHaveAttribute(
+      'src',
+      'https://cdn.test/mine-workspace.jpg',
+    );
+  });
+
+  it('says you are on the ballot, and that it can still be replaced', () => {
+    view(entered());
+    expect(screen.getByText(/you are in/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /replace entry/i })).toBeInTheDocument();
+  });
+
+  it('shows nothing of the sort before entering', () => {
+    view(makeEvent());
+
+    expect(screen.queryByAltText('Your render')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit entry/i })).toBeInTheDocument();
+  });
+
+  it('copes with an entry whose workspace shot is missing', () => {
+    // Legacy rows predate the workspace requirement; one image is still worth
+    // showing, and reaching into a null would blank the whole page.
+    view(
+      makeEvent({
+        myEntryId: 'entry-1',
+        myEntry: {
+          id: 'entry-1',
+          imageUrl: 'https://cdn.test/mine-render.jpg',
+          workspacePhotoUrl: null,
+          notes: null,
+          submittedAt: new Date().toISOString(),
+        },
+      }),
+    );
+
+    expect(screen.getByAltText('Your render')).toBeInTheDocument();
+    expect(screen.queryByAltText('Your workspace')).not.toBeInTheDocument();
   });
 });
