@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @bb/shared build && pnpm --filter @bb/api build",
+  "buildCommand": "pnpm --filter @bb/shared build && pnpm --filter @bb/api build && node scripts/write-build-id.mjs",
   "framework": null,
   "outputDirectory": "public",
   "functions": {
@@ -11,6 +11,16 @@
       "includeFiles": "dist/**"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "crons": [{ "path": "/api/v1/maintenance/sweep", "schedule": "0 3 * * *" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/maintenance/sweep",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

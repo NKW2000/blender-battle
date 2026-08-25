@@ -1,30 +1,33 @@
 /**
- * Proves the serverless entry point can be bundled and loaded.
+ * Proves the serverless entry point can be bundled, loaded, and wired.
  *
- * Four deployments failed on faults this catches, and none of them were visible
- * to typecheck, lint, tests or the build — every one of those passed while the
- * deployed function died before running a line of application code. The symptom
- * at the other end is `FUNCTION_INVOCATION_FAILED`: a generic crash page naming
- * nothing, because a function that fails to *load* has no chance to answer.
+ * Several deployments failed on faults nothing else in this repository could
+ * see. Typecheck, lint, the tests and both builds all passed while the deployed
+ * API answered every route with `FUNCTION_INVOCATION_FAILED` — a crash page
+ * naming nothing, because a function that dies during startup has no chance to
+ * describe what went wrong.
  *
- * Two distinct causes, both reproduced here:
+ * Three distinct causes, all reproduced here:
  *
- *   1. A native `.node` binary anywhere in the dependency graph. esbuild has no
- *      loader for one, so the bundle cannot even be produced. `@node-rs/bcrypt`
- *      was the offender; `bcryptjs` replaced it.
+ *   1. A native `.node` binary in the dependency graph. esbuild has no loader
+ *      for one, so the bundle cannot be produced at all. `@node-rs/bcrypt` was
+ *      the offender; `bcryptjs` replaced it.
  *
  *   2. A module-scope throw. Nest validates the environment while `AppModule`
  *      is being defined, so a missing variable throws during evaluation — and a
- *      static import in the entry point put that throw before any handler code.
- *      The import is deferred now, which is what makes the difference between a
- *      crash page and a 500 that names the variable.
+ *      static import in the entry point put that throw before any handler code
+ *      existed to catch it.
  *
- * So this asserts both: the bundle builds, and requiring it does not throw. It
- * deliberately runs with no environment set, since that is the state a
- * half-configured deployment is in and the one that has to stay diagnosable.
+ *   3. A package resolved by runtime name. `@nestjs/terminus` looked up
+ *      `typeorm` through `checkPackages([...])`, which a bundler cannot follow,
+ *      and answered the miss by exiting the process.
+ *
+ * The first two are visible when the bundle is built and required. The third is
+ * not: it only happens once Nest starts constructing providers. So this runs in
+ * stages, and the last one is what makes the check worth its runtime.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -32,8 +35,8 @@ import { fileURLToPath } from 'node:url';
 
 import * as esbuild from 'esbuild';
 
-// This lives in the API package rather than the repository's `scripts/`, because
-// esbuild is the API's devDependency and pnpm does not hoist it to the root.
+// This lives in the API package rather than the repository's `scripts/`,
+// because esbuild is the API's devDependency and pnpm does not hoist it.
 const api = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 /*
@@ -55,6 +58,7 @@ const optionalPeers = [
 
 const out = join(mkdtempSync(join(tmpdir(), 'bb-serverless-')), 'index.js');
 
+// ---------------------------------------------------------------- the bundle
 
 try {
   await esbuild.build({
@@ -85,7 +89,7 @@ try {
 }
 
 /*
-  Loaded in a child process, from a real file rather than `node -e`.
+  Run from a real file rather than `node -e`.
 
   `app-root-path` — which TypeORM pulls in — reads `require.main.filename`, and
   under `node -e` there is no main module, so it throws a confusing path error
@@ -94,14 +98,27 @@ try {
 */
 const launchDir = mkdtempSync(join(tmpdir(), 'bb-launch-'));
 const launcher = join(launchDir, 'launch.cjs');
+
 writeFileSync(
   launcher,
-  `const mod = require(${JSON.stringify(out)});\n` +
-    `if (typeof mod.default !== 'function') {\n` +
-    `  console.error('The entry point does not export a handler.');\n` +
-    `  process.exit(1);\n` +
-    `}\n`,
+  [
+    'const mod = require(' + JSON.stringify(out) + ');',
+    "if (typeof mod.default !== 'function') {",
+    "  console.error('The entry point does not export a handler.');",
+    '  process.exit(1);',
+    '}',
+    // Loading stops here, which is all that is needed to prove the module is
+    // sound. WIRE=1 goes further and actually builds the application, because
+    // that is when a provider resolving a package by name discovers it cannot.
+    "if (process.env.WIRE === '1') {",
+    '  const response = { statusCode: 200, setHeader() {}, end() {} };',
+    "  mod.default({ url: '/health', method: 'GET', headers: {} }, response)",
+    '    .catch((error) => { console.error(String(error && error.message)); });',
+    '}',
+  ].join('\n'),
 );
+
+// ----------------------------------------------------------- loading it cold
 
 try {
   execFileSync(process.execPath, [launcher], {
@@ -130,4 +147,64 @@ try {
   process.exit(1);
 }
 
-console.log('Serverless entry point: bundles clean, loads without throwing.');
+// ------------------------------------------------------------- wiring it up
+
+/*
+  Instantiate the application, not just load it.
+
+  Loading proves the module graph is sound. It does not prove the graph can be
+  *built*, and the difference is where a whole class of bundling failure lives:
+  a library that resolves a package by name only does so when the provider that
+  needs it is constructed, long after `require` has returned.
+
+  Detecting that statically is not workable — the bundle is full of dynamic
+  `require` calls in library internals that never execute, and failing on those
+  would make this check noise. So it is detected by running it.
+
+  The environment below is complete but fake, and the database deliberately
+  points nowhere. That is fine: this failure happens while Nest is constructing
+  providers, before any connection is attempted, so the child is given a few
+  seconds and judged on what it printed rather than on whether it finished.
+*/
+const wiring = spawnSync(process.execPath, [launcher], {
+  env: {
+    PATH: process.env.PATH ?? '',
+    WIRE: '1',
+    NODE_ENV: 'production',
+    // Nowhere, on purpose. A reachable database is not needed to construct the
+    // providers, and this check must not depend on one existing.
+    DATABASE_URL: 'postgresql://check:check@127.0.0.1:1/check',
+    REDIS_URL: 'redis://127.0.0.1:1',
+    JWT_ACCESS_SECRET: 'serverless-check-access-secret-not-a-real-one',
+    JWT_REFRESH_SECRET: 'serverless-check-refresh-secret-not-a-real-one',
+    CLOUDINARY_CLOUD_NAME: 'check',
+    CLOUDINARY_API_KEY: 'check',
+    CLOUDINARY_API_SECRET: 'check',
+  },
+  cwd: launchDir,
+  timeout: 20_000,
+  encoding: 'utf8',
+});
+
+const printed = `${wiring.stdout ?? ''}${wiring.stderr ?? ''}`;
+
+/*
+  Singular and plural both, because Nest phrases the two cases differently —
+  `The "typeorm" package is missing` against `The "@nestjs/typeorm", "typeorm"
+  packages are missing`. Matching only the singular form made this check pass on
+  a build that failed in exactly the way it exists to catch.
+*/
+const missing = /The ((?:"[^"]+"(?:, )?)+) packages? (?:is|are) missing/.exec(printed);
+
+if (missing) {
+  console.error(`Wiring the application cannot resolve ${missing[1]} at runtime.\n`);
+  console.error(
+    'A bundler cannot follow a package name held in a variable, and the lookup' +
+      '\nfailing exits the process — so the deployed function is killed during' +
+      '\nstartup and answers every route with an unexplained crash.\n' +
+      '\nInject the dependency instead of letting a library look it up by name.',
+  );
+  process.exit(1);
+}
+
+console.log('Serverless entry point: bundles clean, loads, and wires without exiting.');
