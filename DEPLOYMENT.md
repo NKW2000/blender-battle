@@ -250,6 +250,8 @@ every few minutes.
 | Site loads, every request fails | `NEXT_PUBLIC_API_URL` missing its `/api/v1`, or `CORS_ORIGINS` does not exactly match `<WEB-URL>`. |
 | Sign-in works, then drops you on refresh | `CORS_ORIGINS` wrong. The refresh cookie is only sent to a named origin. |
 | Google sign-in fails | Redirect URI does not match `OAUTH_CALLBACK_BASE` exactly. |
+| Logs show `WRONGPASS invalid username-password pair` | `REDIS_URL` has the wrong password. Copy it again from Upstash — the whole `rediss://` string, not just the host. The site keeps working without it, but nothing is rate limited until it is fixed. |
+| Logs show `Rate limiting is disabled` | Same cause as above: the API reached Redis and could not use it. It fails open on purpose — a limiter whose store is down must not take the service with it. |
 | `too many connections` | You used Neon's direct string. Switch to the pooled one and redeploy. |
 | `FUNCTION_INVOCATION_FAILED` / "This Serverless Function has crashed" | The API could not start. Load `<API-URL>/health` again — it now answers with the real reason under `error.detail`, most often a missing variable or a database URL it cannot reach. Passwords are stripped from that message before it is sent. |
 | API 500s right after deploying | Check **Logs**. A missing variable is named there. |

@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import Redis from 'ioredis';
 import { WinstonModule } from 'nest-winston';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 
@@ -12,6 +13,7 @@ import { RolesGuard } from '@/common/guards/roles.guard';
 import { LastSeenInterceptor } from '@/common/interceptors/last-seen.interceptor';
 import { ResponseInterceptor } from '@/common/interceptors/response.interceptor';
 import { buildWinstonOptions } from '@/common/logger/winston.config';
+import { ResilientThrottlerStorage } from '@/common/throttler/resilient-throttler-storage';
 import { AppConfig } from '@/config/app.config';
 import { ConfigModule } from '@/config/config.module';
 import { DatabaseModule } from '@/database/database.module';
@@ -61,10 +63,17 @@ import { UsersModule } from '@/modules/users/users.module';
               limit: config.throttle.limit,
             },
   ],
-          storage:
-            'url' in redis
-              ? new ThrottlerStorageRedisService(redis.url)
-              : new ThrottlerStorageRedisService({ ...redis }),
+          /*
+            Wrapped so an unreachable Redis costs rate limiting, not the site.
+
+            The guard runs first on every request, so an error here is a 500 on
+            every route — including `/health`, whose whole purpose is to answer
+            without touching a dependency. See ResilientThrottlerStorage for
+            what failing open does and does not give up.
+          */
+          storage: new ResilientThrottlerStorage(
+            new ThrottlerStorageRedisService(throttlerRedis(redis)),
+          ),
         };
       },
     }),
@@ -96,3 +105,29 @@ import { UsersModule } from '@/modules/users/users.module';
   ],
 })
 export class AppModule {}
+
+/**
+ * The Redis client the rate limiter counts in.
+ *
+ * Built here rather than letting the storage service construct its own, for one
+ * setting: `maxRetriesPerRequest`. The default is 20, so when Redis is
+ * unreachable every single request spends about three seconds retrying before
+ * the wrapper can fail it open — a broken `REDIS_URL` becomes a three-second tax
+ * on the whole site rather than a missing rate limit. One attempt is enough to
+ * distinguish "up" from "down".
+ *
+ * An `error` listener is attached because ioredis treats an unhandled one as an
+ * unhandled exception. The wrapper already logs the reason when a lookup fails,
+ * so this only needs to keep the event from killing the process.
+ */
+function throttlerRedis(redis: { url: string } | { host: string; port: number; password?: string }) {
+  const options = { maxRetriesPerRequest: 1, enableOfflineQueue: false };
+  const client = 'url' in redis ? new Redis(redis.url, options) : new Redis({ ...redis, ...options });
+
+  client.on('error', () => {
+    // Deliberately empty. ResilientThrottlerStorage reports the failure once per
+    // thirty seconds; logging every reconnection attempt here would drown it.
+  });
+
+  return client;
+}

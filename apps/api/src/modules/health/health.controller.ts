@@ -5,6 +5,7 @@ import {
   VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, type HealthIndicatorResult } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -31,6 +32,15 @@ const POSTGRES_PING_TIMEOUT_MS = 3000;
  * the entry point's own error reporting never ran. A static import of the type we
  * already depend on cannot fail that way.
  */
+/*
+  Not rate limited.
+
+  The throttler counts in Redis, so leaving these probes inside it makes a
+  liveness check depend on the very infrastructure it is meant to report on —
+  and an unreachable Redis then answers "unhealthy" for a process that is
+  perfectly fine. Both routes are cheap and neither reads a request body.
+*/
+@SkipThrottle()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
