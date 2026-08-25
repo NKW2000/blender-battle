@@ -1,0 +1,10 @@
+{
+  "//": "The Vercel entry point, checked against the compiled output it imports. Separate from the main config because `api/index.ts` imports `dist`, which does not exist until `nest build` has run — so this runs as part of the build rather than before it. `rootDir` is widened to the package because this file sits outside `src`, and emit is off, so nothing about the shipped build changes.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["api/**/*"],
+  "exclude": ["node_modules"]
+}

@@ -2,7 +2,16 @@ import 'reflect-metadata';
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { createApp } from '../src/bootstrap';
+/*
+  The compiled output, not the source.
+
+  Vercel builds this file with esbuild, which does not read `tsconfig` `paths`
+  — so importing `../src/bootstrap` would pull in a tree where every `@/…`
+  import fails to resolve, and the failure arrives at deploy time rather than
+  here. `nest build` plus `tsc-alias` has already rewritten those to relative
+  paths, so `dist` is self-contained and needs nothing but a `require`.
+*/
+import { createApp } from '../dist/bootstrap';
 
 /**
  * The serverless entry point.

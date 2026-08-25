@@ -1,3 +1,22 @@
+/*
+  A production build must know where the API is.
+
+  `NEXT_PUBLIC_*` is inlined by `next build`, so an unset variable does not fail
+  loudly — it falls through to the localhost default and ships a bundle that
+  every visitor's browser tries to call on their own machine. That failure looks
+  like the API being down, and it has happened here before.
+
+  Scoped to Vercel deliberately. CI builds the app on every push without any
+  deployment configuration, and there is nothing for it to point at; the guard
+  belongs where a wrong answer reaches real users, not where it would only break
+  a test run.
+*/
+if (process.env.VERCEL === '1' && !process.env.NEXT_PUBLIC_API_URL) {
+  throw new Error(
+    "NEXT_PUBLIC_API_URL is not set. Add it to this project's Environment Variables in Vercel and redeploy — it is compiled into the bundle at build time, so a restart is not enough.",
+  );
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,

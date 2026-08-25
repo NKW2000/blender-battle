@@ -9,11 +9,6 @@ coverage/
 .env
 .env.*
 !.env.example
-# Tracked on purpose. It holds only NEXT_PUBLIC_* values, which `next build`
-# compiles into the browser bundle and are therefore public already — and the
-# build needs them from the repository, since a value set in a hosting
-# dashboard is bound after the bundle has been compiled and cannot be inlined.
-!apps/web/.env.production
 
 .DS_Store
 Thumbs.db

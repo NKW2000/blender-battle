@@ -1,174 +1,268 @@
-# Deployment
+# Deploying
 
-Everything runs on **Vercel**: two projects from this one repository, plus two
-managed data services.
+Follow this top to bottom. Every step says what to click, what to paste, and how
+to know it worked before moving on.
 
-| Piece | Host |
+You need a GitHub account with this repository pushed, and free accounts on
+[Neon](https://neon.tech), [Upstash](https://upstash.com) and
+[Vercel](https://vercel.com).
+
+Two Vercel projects come out of it — one for the API, one for the web app.
+
+---
+
+## Step 1 — Postgres, on Neon
+
+1. Neon → **New Project**. Name it `blender-battle`. Any region; pick the nearest.
+2. When it finishes, find the connection string. **Choose the pooled one** — the
+   toggle is labelled *Connection pooling*, and the host will contain `-pooler`.
+3. Keep it somewhere. It looks like:
+
+       postgresql://user:pass@ep-something-pooler.region.aws.neon.tech/neondb?sslmode=require
+
+**Why pooled matters here:** every serverless instance opens its own
+connections, and Vercel starts instances freely under load. The direct endpoint
+runs out of Postgres slots long before your traffic would justify it.
+
+✅ **Check:** the string contains `-pooler` and ends with `?sslmode=require`.
+
+---
+
+## Step 2 — Redis, on Upstash
+
+1. Upstash → **Create Database**. Name it `blender-battle`, region near Neon's.
+2. Copy the **`rediss://`** URL — two S's, the TLS one.
+
+Nothing in Redis is precious: rate-limit counters, scheduler locks, one-time
+sign-in codes. All short-lived, all re-derivable.
+
+✅ **Check:** your URL starts with `rediss://`, not `redis://`.
+
+---
+
+## Step 3 — Generate three secrets
+
+Run this three times and keep each output:
+
+    node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+
+They become `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `CRON_SECRET`. **The
+first two must be different from each other.**
+
+---
+
+## Step 4 — Deploy the API
+
+1. Vercel → **Add New** → **Project** → import this repository.
+2. **Root Directory**: click *Edit* and choose **`apps/api`**. Everything else
+   depends on this — Vercel will not find the right config without it.
+3. Leave Framework Preset as **Other**. `apps/api/vercel.json` supplies the build.
+4. Open **Environment Variables** and add:
+
+   | Name | Value |
+   | --- | --- |
+   | `DATABASE_URL` | the pooled Neon string from step 1 |
+   | `REDIS_URL` | the `rediss://` URL from step 2 |
+   | `JWT_ACCESS_SECRET` | first secret from step 3 |
+   | `JWT_REFRESH_SECRET` | second secret from step 3 |
+   | `CRON_SECRET` | third secret from step 3 |
+   | `CLOUDINARY_CLOUD_NAME` | from your Cloudinary dashboard |
+   | `CLOUDINARY_API_KEY` | from Cloudinary |
+   | `CLOUDINARY_API_SECRET` | from Cloudinary |
+   | `RUN_MIGRATIONS_ON_BOOT` | `true` |
+   | `NODE_ENV` | `production` |
+
+   Leave `CORS_ORIGINS`, `FRONTEND_URL` and `OAUTH_CALLBACK_BASE` out for now —
+   you do not know those URLs yet. Step 6 comes back for them.
+
+5. **Deploy.** A couple of minutes.
+6. Copy the URL it gives you, e.g. `https://blender-battle-api.vercel.app`.
+   Call it **`<API-URL>`** from here on.
+
+✅ **Check:**
+
+    curl <API-URL>/health
+
+Expect `{"success":true,...,"data":{"status":"ok","uptime":...}}`.
+
+If it fails, open the deployment → **Logs**. A missing environment variable is
+named explicitly there — the app refuses to start rather than running
+half-configured.
+
+---
+
+## Step 5 — Deploy the web app
+
+1. Vercel → **Add New** → **Project** → import **the same repository again**.
+   Yes, again: two projects, one repo.
+2. **Root Directory**: `apps/web`.
+3. Framework Preset should detect **Next.js**. Leave it.
+4. **Environment Variables** — one entry:
+
+   | Name | Value |
+   | --- | --- |
+   | `NEXT_PUBLIC_API_URL` | `<API-URL>/api/v1` |
+
+   Mind the `/api/v1` on the end.
+
+5. **Deploy.**
+6. Copy the URL, e.g. `https://blender-battle.vercel.app`. Call it **`<WEB-URL>`**.
+
+**If the build fails with `NEXT_PUBLIC_API_URL is not set`** — that is a guard
+doing its job. Add the variable and redeploy. It is compiled into the JavaScript
+your visitors download, so it has to be there *at build time*; setting it
+afterwards and restarting does nothing.
+
+✅ **Check:** open `<WEB-URL>`. The landing page renders. Signing in will not
+work yet — that is the next step.
+
+---
+
+## Step 6 — Introduce them to each other
+
+Back in the **API** project → **Settings** → **Environment Variables**:
+
+| Name | Value |
 | --- | --- |
-| `apps/web` (Next.js) | Vercel |
-| `apps/api` (NestJS) | Vercel |
-| Postgres | Neon |
-| Redis | Upstash (or any Redis reachable over TLS) |
+| `CORS_ORIGINS` | `<WEB-URL>` |
+| `FRONTEND_URL` | `<WEB-URL>` |
+| `OAUTH_CALLBACK_BASE` | `<API-URL>` |
 
-Both projects build from the repository root, because `@bb/shared` is a
-workspace package that has to be compiled before either app can import it.
+No trailing slashes. Then **Deployments** → the newest → **⋯** → **Redeploy**.
+Environment changes do not apply until you do.
 
----
+**Why this is separate:** the browser will not send the login cookie to an origin
+the API has not named, and the API could not name an origin that did not exist
+when you configured it. `CORS_ORIGINS` is an explicit list and never `*` — a
+wildcard paired with credentials would let any site on the internet act as your
+users.
 
-## The one thing to understand first
-
-Vercel runs a function per request. Nothing is alive between requests, so
-`@Interval` and `@Cron` never fire.
-
-Most of this application does not care, and that is by design rather than by
-luck: a room's phase advances when it is *read*, and a challenge's phase is
-derived from its two stored dates. Neither needs a process watching a clock.
-
-What is left is the work that is not read-driven — freezing a challenge's winner
-once voting closes, and pruning expired refresh tokens. Those are triggered over
-HTTP instead, by cron, at `/api/v1/maintenance/sweep`.
+✅ **Check:** register an account on `<WEB-URL>`. Success means Postgres, Redis,
+CORS and the cookie are all working at once.
 
 ---
 
-## 1. Postgres — Neon
+## Step 7 — Google sign-in *(optional)*
 
-Create a project and take the **pooled** connection string; the host has
-`-pooler` in it.
+1. [Google Cloud console](https://console.cloud.google.com) → **APIs & Services**
+   → **Credentials** → **Create OAuth client ID** → *Web application*.
+2. **Authorised redirect URI**, exactly:
 
-This matters more here than on a long-running host. Every cold start opens its
-own connection pool and serverless multiplies instances under load, so the
-direct endpoint runs out of Postgres connection slots long before the traffic
-would justify it.
+       <API-URL>/api/v1/auth/oauth/google/callback
 
-## 2. Redis — Upstash
+3. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to the **API** project and
+   redeploy.
 
-Any Redis reachable over TLS works. It carries rate-limit counters, the
-scheduler locks, and the one-time OAuth exchange codes.
+It must match `OAUTH_CALLBACK_BASE` character for character. Google refuses a
+mismatch before the request reaches this application, so nothing here can give
+you a useful error about it.
 
-Take the `rediss://` URL. Nothing here needs Redis to be durable — every value
-in it is short-lived and re-derivable.
+✅ **Check:** a **Google** button appears on the sign-in page. It only renders
+when the server confirms the credentials exist.
 
-## 3. API — Vercel project
+---
 
-**New Project** → this repository → **Root Directory: `apps/api`**.
+## Step 8 — Email *(optional — reset and verification need it)*
 
-`apps/api/vercel.json` does the rest: it routes every path to `api/index.ts`,
-which boots Nest once per warm instance and hands the request to the same
-Express application the local server uses.
+Simplest working option is a Gmail account with an **App Password**, not your
+normal password; Google rejects those for SMTP.
 
-### Environment variables
+On the **API** project:
 
-    DATABASE_URL              the pooled Neon string
-    REDIS_URL                 rediss://…
-    JWT_ACCESS_SECRET         32+ random characters
-    JWT_REFRESH_SECRET        32+ random characters, different from the above
-    CLOUDINARY_CLOUD_NAME     CLOUDINARY_API_KEY      CLOUDINARY_API_SECRET
-    CORS_ORIGINS              https://<web-project>.vercel.app
-    FRONTEND_URL              https://<web-project>.vercel.app
-    OAUTH_CALLBACK_BASE       https://<api-project>.vercel.app
-    CRON_SECRET               a long random string
-    GOOGLE_CLIENT_ID          GOOGLE_CLIENT_SECRET
-    MAIL_DRIVER               MAIL_FROM               (+ that driver's own keys)
+    MAIL_DRIVER=smtp
+    SMTP_HOST=smtp.gmail.com
+    SMTP_PORT=465
+    SMTP_USER=you@gmail.com
+    SMTP_PASSWORD=your-16-character-app-password
+    MAIL_FROM=Blender Battle <you@gmail.com>
 
-`CORS_ORIGINS` is an explicit list and never a wildcard. The refresh token is an
-httpOnly cookie and the two apps are on different subdomains, so the API sends
-`Access-Control-Allow-Credentials: true` — which the CORS specification forbids
-pairing with `*`, because it would let any site on the internet make
-authenticated requests as your users.
+Redeploy.
 
-### Migrations
+✅ **Check:** sign in as an admin and open `/admin`. It states plainly whether
+mail is configured. Without it, password resets and verification fail
+**silently** — by design, since a reset has to answer identically for a
+registered and an unknown address.
 
-Set `RUN_MIGRATIONS_ON_BOOT=true` and the API applies pending migrations when it
-starts. On a serverless host "starts" means the first cold start after a deploy,
-which is the behaviour you want.
+---
 
-The alternative is running `pnpm --filter @bb/api migration:run` against
-`DATABASE_URL` from a machine that can reach Postgres on 5432 — which not every
-network allows.
+## Step 9 — Make yourself an admin
 
-## 4. Web — Vercel project
+The first account is an ordinary player. In Neon's **SQL Editor**:
 
-**New Project** → the same repository → **Root Directory: `apps/web`**.
+```sql
+UPDATE users SET role = 'admin' WHERE username = 'your-username';
+```
 
-### Environment variables
+Sign out and back in.
 
-| Variable | Value |
+✅ **Check:** **Manage** and **Admin** appear in the navigation.
+
+---
+
+## Step 10 — The scheduled job
+
+Already configured in `apps/api/vercel.json`. Confirm it under the API project →
+**Settings** → **Cron Jobs**.
+
+Test it now rather than waiting:
+
+    curl -H "Authorization: Bearer YOUR_CRON_SECRET" <API-URL>/api/v1/maintenance/sweep
+
+Expect `{"rooms":"ok","challengeEvents":"ok","tokens":"ok"}`.
+
+**What it is for.** Vercel runs a function per request, so the app's timers never
+fire. Most of it does not care — a room's phase advances when someone reads it,
+and a challenge's is worked out from its dates. This covers the rest: freezing a
+winner when voting closes, and clearing expired tokens.
+
+**Daily is the free plan's limit,** which is coarse: a challenge whose voting
+closed at noon keeps its winner unfrozen until the job runs. Either go Pro and
+change the schedule in `apps/api/vercel.json` to `*/5 * * * *`, or point a free
+pinger (cron-job.org, a GitHub Action) at that same URL with the same header
+every few minutes.
+
+---
+
+## Done
+
+`git push` redeploys both projects. Environment variable changes need a
+**redeploy**, not a restart.
+
+---
+
+## When something is wrong
+
+| Symptom | Cause |
 | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `https://<api-project>.vercel.app/api/v1` |
-
-That is the only one. `NEXT_PUBLIC_*` values are compiled into the browser
-bundle by `next build`, so **changing this needs a redeploy, not a restart** —
-setting it and restarting is the mistake that looks like the variable being
-ignored.
-
-## 5. Google sign-in
-
-In the Google Cloud console, the authorised redirect URI is:
-
-    https://<api-project>.vercel.app/api/v1/auth/oauth/google/callback
-
-It must match `OAUTH_CALLBACK_BASE` exactly. A mismatch is refused by Google
-before the request ever reaches this application, so nothing here can report it
-usefully.
-
-## 6. The cron
-
-`apps/api/vercel.json` registers a daily job against `/api/v1/maintenance/sweep`,
-authenticated with `CRON_SECRET`.
-
-**Daily is the Hobby plan's limit, and it is coarse for this.** A challenge whose
-voting closed at noon keeps its winner unfrozen until the job runs. Two ways to
-close that gap:
-
-- Pro plan: change the schedule in `apps/api/vercel.json` to `*/5 * * * *`.
-- Any external pinger — cron-job.org, a GitHub Action, an uptime monitor —
-  calling the same URL with the same `Authorization: Bearer` header. It is an
-  ordinary authenticated request; nothing about it is Vercel-specific.
+| Build fails: `NEXT_PUBLIC_API_URL is not set` | Add it to the **web** project, redeploy. |
+| Site loads, every request fails | `NEXT_PUBLIC_API_URL` missing its `/api/v1`, or `CORS_ORIGINS` does not exactly match `<WEB-URL>`. |
+| Sign-in works, then drops you on refresh | `CORS_ORIGINS` wrong. The refresh cookie is only sent to a named origin. |
+| Google sign-in fails | Redirect URI does not match `OAUTH_CALLBACK_BASE` exactly. |
+| `too many connections` | You used Neon's direct string. Switch to the pooled one and redeploy. |
+| API 500s right after deploying | Check **Logs**. A missing variable is named there. |
 
 ---
 
-## Verify, in this order
+## Known limits of this setup
 
-    curl https://<api>.vercel.app/health
-    curl https://<api>.vercel.app/api/v1/challenges/categories
+**Uploads cap at 4.5MB per request.** An entry is two 2MB images, so about 4MB —
+inside the limit, but not by much. Raising `SUBMISSION_IMAGE_MAX_BYTES` above 2MB
+would break uploads here before it broke anything else.
 
-The first returns `{"status":"ok"}`; the second the discipline list. Then open
-the web app and sign in — that exercises CORS, the refresh cookie and the origin
-allowlist together, which is where a misconfigured deployment actually shows up
-rather than in either curl.
+**Cold starts.** The first request after an idle spell pays for booting the API.
+Nothing in the product minds — deadlines are stored instants and do not care how
+late they are read — but you will notice it.
 
-The cron path, without waiting for it:
-
-    curl -H "Authorization: Bearer $CRON_SECRET"       https://<api>.vercel.app/api/v1/maintenance/sweep
-
-It reports each sweep separately, so a partial failure names itself.
+**No process between requests.** Anything added later that assumes one — a
+WebSocket gateway, an in-memory cache shared across requests, a queue consumer —
+needs somewhere else to live.
 
 ---
 
-## Known limits of this shape
-
-**Request bodies cap at 4.5MB.** An entry is two images at 2MB each, so a
-submission is about 4MB plus multipart overhead — inside the limit, but not by
-much. Raising `SUBMISSION_IMAGE_MAX_BYTES` past 2MB would break uploads on
-Vercel before it broke anything else.
-
-**Cold starts.** The first request after an idle period pays for booting Nest,
-opening a database pool and connecting to Redis. Nothing in the product is
-sensitive to that — the deadlines are stored instants and do not care how late
-they are read — but it is visible.
-
-**No process between requests.** Covered above, and worth remembering before
-adding anything that assumes one: a WebSocket gateway, an in-memory cache shared
-across requests, or a queue consumer would each need somewhere else to live.
-
----
-
-## Local development
-
-Unchanged, and unrelated to any of the above.
+## Local development is unaffected
 
     pnpm infra:up      # postgres + redis in Docker
     pnpm dev           # both apps, watching
 
-Locally the API runs as a long-running process, so the schedulers *do* fire and
-the maintenance endpoint is not needed.
+Locally the API is a long-running process, so its timers *do* fire and the cron
+endpoint is unnecessary.
