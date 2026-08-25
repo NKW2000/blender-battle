@@ -40,6 +40,10 @@ import { Tag } from './entities/tag.entity';
     ChallengeEventSchedulerService,
   ],
   // Rooms resolve their drawn brief through this service, and count the play.
-  exports: [ChallengesService, ChallengeEventsService],
+  exports: [ChallengesService, ChallengeEventsService,
+    // Exported for `MaintenanceController`, which triggers the same sweep over
+    // HTTP on hosts where `@Interval` never fires.
+    ChallengeEventSchedulerService,
+  ],
 })
 export class ChallengesModule {}

@@ -43,6 +43,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     OAuthService,
     JwtStrategy,
   ],
-  exports: [TokenService, OAuthService],
+  exports: [TokenService, OAuthService,
+    // Exported for `MaintenanceController`, which triggers the same sweep over
+    // HTTP on hosts where `@Interval` never fires.
+    TokenCleanupService,
+  ],
 })
 export class AuthModule {}

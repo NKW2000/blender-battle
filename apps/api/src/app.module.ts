@@ -16,6 +16,7 @@ import { AppConfig } from '@/config/app.config';
 import { ConfigModule } from '@/config/config.module';
 import { DatabaseModule } from '@/database/database.module';
 import { User } from '@/modules/users/entities/user.entity';
+import { MaintenanceModule } from '@/modules/maintenance/maintenance.module';
 import { ActivityLogModule } from '@/modules/activity-log/activity-log.module';
 import { AnalyticsModule } from '@/modules/analytics/analytics.module';
 import { AuthModule } from '@/modules/auth/auth.module';
@@ -59,7 +60,7 @@ import { UsersModule } from '@/modules/users/users.module';
               ttl: config.throttle.ttlSeconds * 1000,
               limit: config.throttle.limit,
             },
-          ],
+  ],
           storage:
             'url' in redis
               ? new ThrottlerStorageRedisService(redis.url)
@@ -71,12 +72,14 @@ import { UsersModule } from '@/modules/users/users.module';
     AuthModule,
     UsersModule,
     ChallengesModule,
-
     RoomsModule,
     AnalyticsModule,
     NotificationsModule,
     UploadsModule,
     HealthModule,
+    // Exposes the scheduled sweeps over HTTP, for hosts with no process to run
+    // `@Interval` in. See `MaintenanceController`.
+    MaintenanceModule,
   ],
   providers: [
     // Guard order matters: throttle before authentication so an unauthenticated

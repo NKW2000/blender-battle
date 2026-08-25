@@ -24,6 +24,10 @@ import { RoomsService } from './rooms.service';
   ],
   controllers: [RoomsController],
   providers: [RoomsService, RoomSchedulerService, BallotService],
-  exports: [RoomsService],
+  exports: [RoomsService,
+    // Exported for `MaintenanceController`, which triggers the same sweep over
+    // HTTP on hosts where `@Interval` never fires.
+    RoomSchedulerService,
+  ],
 })
 export class RoomsModule {}

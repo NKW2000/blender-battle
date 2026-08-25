@@ -64,6 +64,16 @@ export const envSchema = z
      * takes a lock, but the loser waits on it rather than skipping, and a slow
      * migration would hold up every replica's startup.
      */
+    /**
+     * The shared secret for triggering scheduled maintenance over HTTP.
+     *
+     * Only needed on a host with no long-running process, where `@Interval` and
+     * `@Cron` never fire and the sweeps have to be driven from outside. Unset on
+     * a host that runs a process, where the endpoint refuses every caller and
+     * the intervals do the work.
+     */
+    CRON_SECRET: z.string().optional(),
+
     RUN_MIGRATIONS_ON_BOOT: z
       .enum(['true', 'false'])
       .default('false')

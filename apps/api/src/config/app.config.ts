@@ -118,6 +118,11 @@ export class AppConfig {
     };
   }
 
+  /** Shared secret for the HTTP maintenance trigger. See the env schema. */
+  get cronSecret(): string | undefined {
+    return this.get('CRON_SECRET');
+  }
+
   /** Whether to apply pending migrations at boot. See the env schema. */
   get runMigrationsOnBoot(): boolean {
     return this.get('RUN_MIGRATIONS_ON_BOOT');
