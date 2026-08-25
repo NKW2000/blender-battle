@@ -30,8 +30,22 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(4000),
-    /** Comma-separated list of allowed browser origins. */
-    CORS_ORIGINS: z.string().min(1),
+    /*
+      Comma-separated list of allowed browser origins.
+
+      Defaulted rather than required, because there is a real window during a
+      first deployment where the value cannot be known: the API has to exist
+      before it has a URL, and the web app has to exist before it has one to
+      name. Requiring it made that window unbootable — the API refused to start,
+      and the refusal happened while modules were still loading, so the platform
+      reported a crash with no message rather than the reason.
+
+      Empty means no cross-origin request is allowed, which is the safe end of
+      the range: the API answers health checks and refuses browsers until it is
+      told who to trust. It is never `*` — a wildcard with credentials enabled
+      would let any site on the internet act as a signed-in user.
+    */
+    CORS_ORIGINS: z.string().default(''),
 
     /**
      * Managed providers hand out one connection string, not five fields.

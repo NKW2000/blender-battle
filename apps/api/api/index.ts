@@ -3,15 +3,24 @@ import 'reflect-metadata';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /*
-  The compiled output, not the source.
+  Loaded when the first request arrives, not when this file does.
 
-  Vercel builds this file with esbuild, which does not read `tsconfig` `paths`
-  — so importing `../src/bootstrap` would pull in a tree where every `@/…`
-  import fails to resolve, and the failure arrives at deploy time rather than
-  here. `nest build` plus `tsc-alias` has already rewritten those to relative
-  paths, so `dist` is self-contained and needs nothing but a `require`.
+  The import lives inside `instance()` below, and that placement is load-bearing.
+  Nest validates the environment while `AppModule` is being *defined* —
+  `ConfigModule.forRoot` runs its validator at module scope — so a missing
+  variable throws during module evaluation. A static import here would mean that
+  throw happened before any code in this file ran, and a function that fails to
+  load is all the platform can report: a generic crash page, no message, nothing
+  in the response naming the variable. Deferring the import moves that failure
+  inside the `try`, where it can be caught and answered with.
+
+  It resolves to the compiled output rather than the source because Vercel builds
+  this file with esbuild, which does not read `tsconfig` `paths` — so
+  `../src/bootstrap` would pull in a tree where every `@/…` import fails to
+  resolve. `nest build` plus `tsc-alias` has already rewritten those to relative
+  paths, so `dist` needs nothing but a require.
 */
-import { createApp } from '../dist/bootstrap';
+type Bootstrap = typeof import('../dist/bootstrap');
 
 /**
  * The serverless entry point.
@@ -42,12 +51,14 @@ import { createApp } from '../dist/bootstrap';
 let app: Promise<{ getHttpAdapter: () => { getInstance: () => unknown } }> | null = null;
 
 async function instance() {
-  app ??= createApp().then(async (created) => {
+  app ??= (async () => {
+    const { createApp }: Bootstrap = await import('../dist/bootstrap');
+    const created = await createApp();
     // `init` rather than `listen`: the module graph, guards and pipes are all
     // wired, but nothing binds a port — the platform owns the socket.
     await created.init();
     return created;
-  });
+  })();
 
   /*
     A failed boot is not cached.

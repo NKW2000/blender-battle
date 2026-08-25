@@ -73,7 +73,11 @@ first two must be different from each other.**
    | `NODE_ENV` | `production` |
 
    Leave `CORS_ORIGINS`, `FRONTEND_URL` and `OAUTH_CALLBACK_BASE` out for now —
-   you do not know those URLs yet. Step 6 comes back for them.
+   you do not know those URLs yet. Step 6 comes back for them. The API boots
+   without them and simply refuses browsers until it is told who to trust.
+
+   Everything in the table above, though, is genuinely required. A missing one
+   stops the API starting, and the response says which — see the check below.
 
 5. **Deploy.** A couple of minutes.
 6. Copy the URL it gives you, e.g. `https://blender-battle-api.vercel.app`.
@@ -85,9 +89,15 @@ first two must be different from each other.**
 
 Expect `{"success":true,...,"data":{"status":"ok","uptime":...}}`.
 
-If it fails, open the deployment → **Logs**. A missing environment variable is
-named explicitly there — the app refuses to start rather than running
-half-configured.
+If it fails, read the response rather than hunting for the logs. A boot failure
+answers with the reason:
+
+    {"success":false,"message":"The API could not start.",
+     "error":{"code":"BOOT_FAILED","detail":"Invalid environment configuration:
+       - JWT_ACCESS_SECRET: Required"}}
+
+Add what it names, redeploy, try again. Passwords are stripped out of that
+message, so a connection string in the error cannot leak through it.
 
 ---
 

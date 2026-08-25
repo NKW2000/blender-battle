@@ -24,8 +24,20 @@ import { AppConfig } from './config/app.config';
 export async function createApp(): Promise<NestExpressApplication> {
   // Env validation runs inside ConfigModule during this call — a misconfigured
   // deployment dies here, loudly, instead of failing on its first real request.
+  /*
+    `abortOnError: false` so a failed boot throws to the caller.
+
+    Nest's default is to log the error and call `process.exit(1)`. For a
+    long-running server that is reasonable — there is nobody to hand the error
+    to, and a half-built application should not stay up. On a serverless
+    platform it is the wrong shape entirely: the process *is* the request, so
+    exiting kills the invocation before anything can answer, and the caller sees
+    a generic crash with no message. Throwing instead lets the entry point
+    report which variable was missing.
+  */
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
+    abortOnError: false,
   });
 
   const config = app.get(AppConfig);

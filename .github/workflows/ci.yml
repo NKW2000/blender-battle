@@ -77,6 +77,16 @@ jobs:
       - name: Check every shared export is used
         run: node scripts/check-shared-exports.mjs
 
+      # Four deployments failed on faults nothing above could see: the function
+      # died before running a line of application code, so typecheck, lint, the
+      # tests and the build all passed while the deployed API returned a crash
+      # page naming nothing. This bundles the serverless entry point the way the
+      # platform does and requires it with no environment set — which is the
+      # state a half-configured deployment is in, and the one that has to stay
+      # diagnosable. Runs after Build because it needs `dist`.
+      - name: Check the serverless entry point bundles and loads
+        run: pnpm --filter @bb/api check:serverless
+
       # Vercel validates `vercel.json` against a strict schema and discards the
       # whole file on an unknown property — so a stray comment key silently
       # disables every setting in it and the deployment fails complaining about
