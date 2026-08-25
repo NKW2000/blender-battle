@@ -18,12 +18,12 @@ const CategoryBarChart = dynamic(
   () => import('@/components/analytics/charts').then((m) => m.CategoryBarChart),
   { ssr: false, loading: () => <Skeleton className="h-56 w-full" /> },
 );
+import { MailStatus } from '@/components/admin/mail-status';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatTile } from '@/components/profile/stat-tile';
 import { Button } from '@/components/ui/button';
 import {
   EmptyState,
-  PANEL_ICON,
   Panel,
   PanelBody,
   PanelHeader,
@@ -81,35 +81,7 @@ export default function AdminDashboardPage() {
         }
       />
 
-      {/*
-        Whether mail actually leaves the building.
-
-        Verification and reset failures are silent by design — the send is
-        swallowed so `forgot password` answers identically for a registered and
-        an unknown address — so a deployment with no driver configured is
-        indistinguishable from a working one on every other screen. This is the
-        one place that says which it is.
-      */}
-      {!metrics.mail.canSend ? (
-        <Panel className="border-punch">
-          <PanelHeader tone="punch" icon={PANEL_ICON.clock}>
-            <PanelTitle>Email is not being delivered</PanelTitle>
-          </PanelHeader>
-          <PanelBody className="flex flex-col gap-2">
-            <p className="text-sm font-extrabold text-haze">
-              The mail driver is{' '}
-              <span className="text-punch-soft">{metrics.mail.driver}</span>
-              {metrics.mail.driver === 'log'
-                ? ' — messages are written to the server log and never sent.'
-                : ' — its credentials are missing, so every send is refused.'}{' '}
-              Verification links and password resets are silently failing.
-            </p>
-            <p className="text-xs font-extrabold text-haze-5">
-              Set MAIL_DRIVER and its credentials in the API environment, then redeploy.
-            </p>
-          </PanelBody>
-        </Panel>
-      ) : null}
+      <MailStatus driver={metrics.mail.driver} canSend={metrics.mail.canSend} />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Players" value={metrics.users.total} />
