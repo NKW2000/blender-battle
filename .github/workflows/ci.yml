@@ -73,3 +73,11 @@ jobs:
       # policy that is documented but unwired reads as implemented.
       - name: Check every shared export is used
         run: node scripts/check-shared-exports.mjs
+
+      # Vercel validates `vercel.json` against a strict schema and discards the
+      # whole file on an unknown property — so a stray comment key silently
+      # disables every setting in it and the deployment fails complaining about
+      # whichever default then went wrong. Cheap to catch here; expensive to
+      # diagnose there.
+      - name: Check the Vercel config has no unknown properties
+        run: node scripts/check-vercel-config.mjs

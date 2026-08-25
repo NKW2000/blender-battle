@@ -234,6 +234,7 @@ every few minutes.
 
 | Symptom | Cause |
 | --- | --- |
+| Deploy fails: `should NOT have additional property` | Something in `vercel.json` is not a real Vercel property — most often a `"//"` comment key. Vercel discards the entire file, so every other setting stops applying too. `node scripts/check-vercel-config.mjs` catches it before a push. |
 | Build fails: `No Output Directory named "public" found` | The **API** project's Root Directory is not `apps/api`. Vercel is building from somewhere else and cannot see `apps/api/vercel.json`. Settings → General → Root Directory. |
 | Build fails: `NEXT_PUBLIC_API_URL is not set` | Add it to the **web** project, redeploy. |
 | Site loads, every request fails | `NEXT_PUBLIC_API_URL` missing its `/api/v1`, or `CORS_ORIGINS` does not exactly match `<WEB-URL>`. |
