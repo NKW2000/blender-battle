@@ -3,6 +3,8 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @bb/shared build && pnpm --filter @bb/api build",
   "framework": null,
+  "//outputDirectory": "This project is only serverless functions, but Vercel still looks for a static output directory once the build finishes and fails the deploy without one. `public/` exists for that reason and is kept empty — see the note inside it.",
+  "outputDirectory": "public",
   "functions": {
     "api/index.ts": {
       "memory": 1024,

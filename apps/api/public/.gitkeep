@@ -1,0 +1,8 @@
+Vercel checks for a static output directory after the build, even for a project
+that is nothing but serverless functions. This directory exists to satisfy that
+check and is deliberately empty otherwise.
+
+Do not add files here. Vercel serves the filesystem before it applies rewrites,
+so anything in this directory would shadow the API route of the same path — an
+index.html would take over `/`, and the rewrite that sends every path to the
+Nest application would never see it.

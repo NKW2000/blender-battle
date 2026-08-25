@@ -234,6 +234,7 @@ every few minutes.
 
 | Symptom | Cause |
 | --- | --- |
+| Build fails: `No Output Directory named "public" found` | The **API** project's Root Directory is not `apps/api`. Vercel is building from somewhere else and cannot see `apps/api/vercel.json`. Settings → General → Root Directory. |
 | Build fails: `NEXT_PUBLIC_API_URL is not set` | Add it to the **web** project, redeploy. |
 | Site loads, every request fails | `NEXT_PUBLIC_API_URL` missing its `/api/v1`, or `CORS_ORIGINS` does not exactly match `<WEB-URL>`. |
 | Sign-in works, then drops you on refresh | `CORS_ORIGINS` wrong. The refresh cookie is only sent to a named origin. |
