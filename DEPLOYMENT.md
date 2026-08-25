@@ -241,6 +241,7 @@ every few minutes.
 | Sign-in works, then drops you on refresh | `CORS_ORIGINS` wrong. The refresh cookie is only sent to a named origin. |
 | Google sign-in fails | Redirect URI does not match `OAUTH_CALLBACK_BASE` exactly. |
 | `too many connections` | You used Neon's direct string. Switch to the pooled one and redeploy. |
+| `FUNCTION_INVOCATION_FAILED` / "This Serverless Function has crashed" | The API could not start. Load `<API-URL>/health` again — it now answers with the real reason under `error.detail`, most often a missing variable or a database URL it cannot reach. Passwords are stripped from that message before it is sent. |
 | API 500s right after deploying | Check **Logs**. A missing variable is named there. |
 
 ---

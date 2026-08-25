@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AppConfig } from '@/config/app.config';
 import { ConfigModule } from '@/config/config.module';
+import { migrations } from './migrations';
 
 @Module({
   imports: [
@@ -25,7 +26,15 @@ import { ConfigModule } from '@/config/config.module';
           that works right up until someone pastes half of it.
         */
         migrationsRun: config.runMigrationsOnBoot,
-        migrations: [`${__dirname}/migrations/*.{ts,js}`],
+        /*
+          The list, not a glob.
+
+          A runtime-built path cannot be followed by a bundler, so on a bundled
+          deployment the pattern matches nothing — and TypeORM then reports zero
+          pending migrations and starts cheerfully against an empty database.
+          The first query is what fails, a long way from the cause.
+        */
+        migrations,
         logging: config.isProduction ? ['error', 'warn'] : ['error', 'warn', 'migration'],
         // Bound the pool so a traffic spike queues inside the app instead of
         // exhausting Postgres connection slots across all instances.

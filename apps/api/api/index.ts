@@ -49,14 +49,69 @@ async function instance() {
     return created;
   });
 
-  return app;
+  /*
+    A failed boot is not cached.
+
+    `??=` alone stores the rejected promise, so an instance that failed once —
+    a database that was briefly unreachable, an environment variable fixed a
+    minute later — keeps failing for its whole lifetime, and the next request
+    replays a stale error rather than trying again. Clearing it on rejection
+    means the retry is a real retry.
+  */
+  try {
+    return await app;
+  } catch (error) {
+    app = null;
+    throw error;
+  }
+}
+
+/**
+ * A boot failure, in words.
+ *
+ * Without this the reader gets Vercel's generic FUNCTION_INVOCATION_FAILED page
+ * and has to go and find the log — and the log is exactly what someone
+ * deploying for the first time has the most trouble reaching. Nearly every
+ * failure here is a missing or malformed environment variable, and the
+ * validation names the variable.
+ *
+ * The message is returned; the stack is only logged. And anything shaped like a
+ * URL with credentials in it is redacted first — a connection error can quote
+ * the string it failed to connect with, and that string holds a password.
+ */
+function describe(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message
+    // Anything with a userinfo section: postgres://user:pass@host, rediss://…
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s@/]*@/gi, '$1***@')
+    .slice(0, 600);
 }
 
 export default async function handler(
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
-  const nest = await instance();
+  let nest;
+
+  try {
+    nest = await instance();
+  } catch (error) {
+    // The whole thing, once, where the platform's log will keep it.
+    console.error('API failed to start', error);
+
+    response.statusCode = 500;
+    response.setHeader('content-type', 'application/json');
+    response.end(
+      JSON.stringify({
+        success: false,
+        message: 'The API could not start.',
+        error: { code: 'BOOT_FAILED', detail: describe(error) },
+      }),
+    );
+    return;
+  }
+
   const express = nest.getHttpAdapter().getInstance() as (
     req: IncomingMessage,
     res: ServerResponse,
