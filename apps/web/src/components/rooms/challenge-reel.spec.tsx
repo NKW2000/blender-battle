@@ -47,13 +47,20 @@ function makeRoom(overrides: Partial<RoomDetail> = {}): RoomDetail {
 }
 
 describe('the draw reel', () => {
-  it('ends on the brief the server drew', async () => {
+  it('puts the drawn brief where the reel stops', () => {
+    /*
+      The landing index is `(REPS - 1) * pool + floor(pool / 2)` — inside the
+      last repetition, with reel still visible to the right of the marker. The
+      card written there is what ends up framed, so it has to be the server's
+      pick and nothing else.
+    */
     render(<ChallengeReel room={makeRoom()} />);
 
-    const rows = screen.getAllByText(/couch|horn|lamp|—/i);
-    // The last row is where the strip stops, so it is the one that has to be
-    // the winner. Everything before it is scenery.
-    expect(rows[rows.length - 1]).toHaveTextContent('Horn');
+    const cards = screen.getAllByText(/couch|horn|lamp/i);
+    const pool = 2; // The couch and A lamp — the winner is filtered out of the scenery.
+    const landing = (6 - 1) * pool + Math.floor(pool / 2);
+
+    expect(cards[landing]).toHaveTextContent('Horn');
   });
 
   it('shows other real briefs from the pool alongside it', () => {
@@ -66,9 +73,9 @@ describe('the draw reel', () => {
 
   it('does not repeat the winner among the scenery', () => {
     /*
-      The strip is filtered before the winner is appended. Without that the
-      drawn brief could flash past mid-spin and land again, which reads as the
-      reel having stopped early and restarted.
+      The pool is filtered before the winner is written into the landing slot.
+      Without that the drawn brief flashes past mid-spin and lands again, which
+      reads as the reel having stopped early and restarted.
     */
     render(<ChallengeReel room={makeRoom()} />);
 
@@ -80,9 +87,10 @@ describe('the draw reel', () => {
     challenges = undefined;
     render(<ChallengeReel room={makeRoom({ challenge: { title: 'Horn' } as never })} />);
 
-    const rows = screen.getAllByText(/horn|—/i);
-    expect(rows.length).toBeGreaterThan(1);
-    expect(rows[rows.length - 1]).toHaveTextContent('Horn');
+    // With nothing else to show, the winner is its own scenery — every card is
+    // the same, and the spin still runs rather than the screen sitting empty.
+    const cards = screen.getAllByText('Horn');
+    expect(cards.length).toBeGreaterThan(1);
 
     challenges = pool;
   });
@@ -99,13 +107,14 @@ describe('the draw reel', () => {
     vi.useFakeTimers();
     try {
       render(<ChallengeReel room={makeRoom()} />);
-      expect(screen.getByText(/picking from the catalogue/i)).toBeInTheDocument();
+      expect(screen.getByText(/slicing through the deck/i)).toBeInTheDocument();
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(4000);
+        // Past REVEAL_MS (4700), which is when the machine announces itself.
+        await vi.advanceTimersByTimeAsync(5000);
       });
 
-      expect(screen.getByText(/that is the one/i)).toBeInTheDocument();
+      expect(screen.getByText(/locked in/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

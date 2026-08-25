@@ -363,8 +363,15 @@ function Drawing({ room }: { room: RoomDetail }) {
   );
 }
 
-/** How much of the draw window the 3-2-1 keeps for itself. */
-const COUNTDOWN_SECONDS = 3;
+/**
+ * How much of the draw window the 3-2-1 keeps for itself.
+ *
+ * Two, not three. The reel spins for 4.4s and reveals at 4.7s, and the whole
+ * draw window is `ROOM_DRAW_SECONDS` — so giving the countdown three would cut
+ * the machine off a fraction before it landed, which is the one moment it
+ * exists for.
+ */
+const COUNTDOWN_SECONDS = 2;
 
 /**
  * Modelling window: the brief, the clock, and the upload.
