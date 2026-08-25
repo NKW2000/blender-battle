@@ -129,9 +129,21 @@ export function MobileNav({
         onClick={() => setOpen(true)}
         aria-label="Open menu"
         aria-expanded={open}
+        /*
+          No breakpoint of its own.
+
+          It used to hide itself at `md`. When the header moved its control
+          cluster to `lg` — because the full row needs 1000px and was drawing
+          over the wordmark below that — this button went on hiding at 768,
+          which left every width from 768 to 1023 with no desktop nav *and* no
+          menu button. There was no way to leave the page you were on.
+
+          The container decides now. One element owns the breakpoint, so the two
+          cannot disagree again.
+        */
         // h-11 w-11 is the 44px minimum a thumb needs; the icon inside is
         // smaller than the target on purpose.
-        className="arcade-focus flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/20 bg-white/6 text-bone transition-colors hover:bg-white/16 md:hidden"
+        className="arcade-focus flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/20 bg-white/6 text-bone transition-colors hover:bg-white/16"
       >
         <MenuGlyph />
       </button>
@@ -154,7 +166,14 @@ export function MobileNav({
         ? createPortal(
         <div
           className={cn(
-            'fixed inset-0 z-[60] transition-opacity duration-200 ease-out md:hidden',
+            /*
+              This one does keep a breakpoint, because it is portalled to
+              <body> and the header's `lg:hidden` cannot reach it. It matters
+              only for a window resized past the breakpoint while the drawer is
+              open — the trigger is already gone by then, so without it the
+              panel would be stranded on screen with nothing to have opened it.
+            */
+            'fixed inset-0 z-[60] transition-opacity duration-200 ease-out lg:hidden',
             'motion-reduce:transition-none',
             slidIn ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
