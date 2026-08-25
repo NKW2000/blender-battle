@@ -21,7 +21,16 @@
  * somebody forgot to trigger rather than one nobody wanted. `win` and `lose`
  * were also unplayed and were wired up instead of deleted.
  */
-export type SoundName = 'press' | 'select' | 'tick' | 'start' | 'vote' | 'win' | 'lose';
+export type SoundName =
+  | 'press'
+  | 'select'
+  | 'tick'
+  | 'start'
+  | 'vote'
+  | 'win'
+  | 'lose'
+  | 'reelTick'
+  | 'reelLock';
 
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -121,6 +130,41 @@ const RECIPES: Record<SoundName, () => void> = {
   },
 
   vote: () => tone({ from: 600, to: 900, duration: 0.1, type: 'triangle', gain: 0.18 }),
+
+  /*
+    One card passing the marker on the challenge machine.
+
+    Deliberately not `tick`. That one is a countdown beep — 880Hz, a quarter of
+    a second of gain, pitched to be *noticed* once a second. Fired thirty times
+    in four seconds it stops being a machine and becomes an alarm.
+
+    This is short, quiet and high, so what carries is the rhythm rather than the
+    note: the ear hears a rattle that slows, which is the whole sound of a reel
+    coming to rest. The pitch wanders a little each time because a real
+    mechanism never strikes twice identically, and a perfectly repeated click is
+    the thing that reads as synthetic.
+  */
+  reelTick: () =>
+    tone({
+      from: 1250 + Math.random() * 280,
+      to: 820,
+      duration: 0.028,
+      type: 'square',
+      gain: 0.055,
+    }),
+
+  /*
+    The card locking under the rails.
+
+    A low thunk for the mechanism landing and a bright fifth above it for the
+    result being announced — the two halves of "it stopped" and "here it is".
+    Louder than the ticks by a wide margin, because it is the one moment in the
+    sequence that means something.
+  */
+  reelLock: () => {
+    tone({ from: 180, to: 120, duration: 0.16, type: 'square', gain: 0.22 });
+    tone({ from: 660, to: 990, duration: 0.22, delay: 0.04, type: 'triangle', gain: 0.2 });
+  },
 
   // Played once when a room's result first appears, to whoever placed.
   win: () => {

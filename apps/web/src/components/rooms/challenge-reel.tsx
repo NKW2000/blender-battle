@@ -17,9 +17,36 @@ import type { RoomDetail } from '@/features/rooms/use-rooms';
 const CARD_W = 260;
 const REPS = 6;
 
-/** The design's spin: 4.4s on its own curve, result revealed just after. */
-const SPIN_MS = 4400;
-const REVEAL_MS = 4700;
+/*
+  Three stages, because one ease-out is not a spin.
+
+  A single transition from a standstill to the target is the motion of a
+  scrollbar being dragged: it starts at full speed and slows to nothing. A reel
+  is pulled, thrown, and caught — so it winds back a little first, overshoots
+  the slot, and snaps into it.
+
+  The middle stage keeps the handoff's own curve and very nearly its duration.
+  The two short stages either side are what make the middle read as momentum
+  rather than interpolation.
+*/
+const WINDUP_MS = 260;
+const SPIN_MS = 4000;
+const SETTLE_MS = 300;
+const REVEAL_MS = WINDUP_MS + SPIN_MS + SETTLE_MS;
+
+/** How far the reel pulls back before it throws, and past the slot before it snaps. */
+const WINDUP_PX = 26;
+const OVERSHOOT_PX = 18;
+
+/*
+  The floor between two ticks.
+
+  At full speed the reel crosses a card every ~40ms, and a click that fast is a
+  buzz rather than a rattle. Dropping the ones that fall inside this window is
+  what produces the ramp: dense but countable at the start, thinning to single
+  clicks as the reel gives up its speed — without any of that being scripted.
+*/
+const TICK_FLOOR_MS = 55;
 
 /** The card colours, cycled. Straight from the handoff's subject list. */
 const CARD_COLOURS = [
@@ -106,34 +133,104 @@ export function ChallengeReel({ room }: { room: RoomDetail }) {
     if (spun.current) return;
     spun.current = true;
 
+    const strip = stripRef.current;
+    const viewport = windowRef.current;
+    if (!strip || !viewport) return;
+
+    const offset = landingIndex * CARD_W + CARD_W / 2 - viewport.clientWidth / 2;
+
     /*
-      The handoff's own sequence: reset to zero with no transition, force a
-      reflow so the browser cannot collapse the two writes into one, then apply
-      the transition and the target in the next frame. Without the reflow the
-      element simply appears at the destination.
+      Reduced motion gets the answer, not the theatre.
+
+      Someone who has asked for less movement is not asking to be told the
+      result more slowly, and a four-second horizontal slide is exactly the kind
+      of motion that setting exists to suppress. No spin, no ticks, one sound.
     */
-    const start = window.setTimeout(() => {
-      const strip = stripRef.current;
-      const viewport = windowRef.current;
-      if (!strip || !viewport) return;
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      const offset = landingIndex * CARD_W + CARD_W / 2 - viewport.clientWidth / 2;
-
+    if (reduced) {
       strip.style.transition = 'none';
-      strip.style.transform = 'translateX(0px)';
-      void strip.offsetHeight;
-      strip.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.12,.85,.15,1)`;
       strip.style.transform = `translateX(-${offset}px)`;
-    }, 60);
-
-    const reveal = window.setTimeout(() => {
       setRevealed(true);
-      play('select');
-    }, REVEAL_MS);
+      play('reelLock');
+      return;
+    }
+
+    const timers: number[] = [];
+    let frame = 0;
+
+    // Wind up: a short pull the other way, which is what makes the throw read
+    // as a throw rather than a start.
+    strip.style.transition = `transform ${WINDUP_MS}ms cubic-bezier(.25,.9,.4,1)`;
+    strip.style.transform = `translateX(${WINDUP_PX}px)`;
+
+    timers.push(
+      window.setTimeout(() => {
+        // The throw, on the handoff's curve, aimed a fraction past the slot.
+        strip.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.12,.85,.15,1)`;
+        strip.style.transform = `translateX(-${offset + OVERSHOOT_PX}px)`;
+      }, WINDUP_MS),
+    );
+
+    timers.push(
+      window.setTimeout(() => {
+        // Caught: back the last few pixels, with a curve that overshoots
+        // slightly the other way so it settles rather than stops.
+        strip.style.transition = `transform ${SETTLE_MS}ms cubic-bezier(.34,1.3,.64,1)`;
+        strip.style.transform = `translateX(-${offset}px)`;
+      }, WINDUP_MS + SPIN_MS),
+    );
+
+    /*
+      Ticks are driven by where the reel actually is, not by a schedule.
+
+      Reading the transform each frame means the rhythm is the motion's own —
+      it slows exactly as the curve slows, and it stays right if the duration or
+      the easing is ever changed. A precomputed schedule would have to model the
+      cubic-bezier, and would drift away from what the eye is seeing the moment
+      either was touched.
+    */
+    let lastCard = -1;
+    let lastTickAt = 0;
+
+    const watch = () => {
+      /*
+        Measured from the boxes, not from the transform.
+
+        Parsing the computed matrix works but needs `DOMMatrix`, and a rect
+        subtraction says the same thing with the plainest API there is: how far
+        the strip's leading edge now sits behind the marker, divided by a card.
+      */
+      const stripLeft = strip.getBoundingClientRect().left;
+      const markerX = viewport.getBoundingClientRect().left + viewport.clientWidth / 2;
+      const card = Math.floor((markerX - stripLeft) / CARD_W);
+
+      if (card !== lastCard) {
+        lastCard = card;
+        const now = performance.now();
+        if (now - lastTickAt >= TICK_FLOOR_MS) {
+          lastTickAt = now;
+          play('reelTick');
+        }
+      }
+
+      frame = window.requestAnimationFrame(watch);
+    };
+    frame = window.requestAnimationFrame(watch);
+
+    timers.push(
+      window.setTimeout(() => {
+        window.cancelAnimationFrame(frame);
+        setRevealed(true);
+        play('reelLock');
+      }, REVEAL_MS),
+    );
 
     return () => {
-      window.clearTimeout(start);
-      window.clearTimeout(reveal);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.cancelAnimationFrame(frame);
     };
   }, [landingIndex, play]);
 

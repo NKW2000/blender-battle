@@ -22,3 +22,31 @@ afterEach(cleanup);
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+/*
+ * jsdom implements no media queries, so `matchMedia` is simply absent.
+ *
+ * Components ask it one question — whether the reader has requested reduced
+ * motion — and the honest default for a test environment is "no", because that
+ * is the branch the great majority of readers get and therefore the one worth
+ * exercising by default. A spec that cares about the other branch overrides
+ * this for itself.
+ *
+ * Stubbed here rather than guarded at the call site: adding a
+ * `typeof window.matchMedia === 'function'` check to production code to satisfy
+ * a test environment would be letting the harness dictate the source.
+ */
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }),
+});

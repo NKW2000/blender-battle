@@ -120,6 +120,41 @@ describe('the draw reel', () => {
     }
   });
 
+  it('skips the spin entirely when reduced motion is asked for', () => {
+    /*
+      Someone who has asked for less movement is not asking to be told the
+      result more slowly. A four-second horizontal slide is exactly the motion
+      that setting exists to suppress, so the reel jumps to the answer — and
+      because it is already there, the result is announced immediately rather
+      than after a spin nobody is watching.
+    */
+    const original = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    });
+
+    try {
+      render(<ChallengeReel room={makeRoom()} />);
+
+      // No timers advanced: it is already announced.
+      expect(screen.getByText(/locked in/i)).toBeInTheDocument();
+      expect(screen.queryByText(/slicing through the deck/i)).not.toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  });
+
   it('copes with a room whose challenge has not arrived yet', () => {
     // A brief render between the status changing and the payload carrying the
     // challenge must not blank the screen.
