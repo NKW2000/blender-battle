@@ -37,7 +37,7 @@ describe('refreshCookieOptions', () => {
 
   it('is cross-site and secure in production', () => {
     /*
-      The web app is on Cloudflare Workers and the API on Render — different
+      The two apps are separate Vercel projects — different
       sites — so `SameSite=None` is required for the cookie to be sent at all,
       and browsers refuse `None` without `Secure`. Getting this wrong does not
       error; it silently signs everyone out on every page load.

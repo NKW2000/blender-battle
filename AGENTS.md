@@ -121,13 +121,21 @@ pnpm db:migrate
 
 ## Deployment shape
 
-Web on **Cloudflare Workers** (OpenNext), API on **Render**, Postgres on
-**Neon**, Redis on Render Key Value.
+Both apps on **Vercel**, Postgres on **Neon**, Redis on **Upstash**.
 
-One trap worth stating twice: `NEXT_PUBLIC_*` is **inlined at build time**.
-Setting the API URL in `wrangler.jsonc` `vars` binds it at *runtime*, which is
-too late — doing that once shipped `localhost:4000` to production. It belongs in
-`apps/web/.env.production`, which is tracked.
+Two traps worth stating twice.
+
+`NEXT_PUBLIC_*` is **inlined at build time**. Setting the API URL in a hosting
+dashboard binds it at *runtime*, which is too late — doing that once shipped
+`localhost:4000` to production. It belongs in `apps/web/.env.production`, which
+is tracked for exactly that reason.
+
+Serverless means **no process between requests**, so `@Interval` and `@Cron`
+never fire in production. The application survives that because phases are
+derived rather than stored — a room advances when it is read. Anything added
+that assumes a live process (a socket gateway, an in-memory cache shared across
+requests, a queue consumer) needs somewhere else to live, and the work that is
+already not read-driven is triggered through `MaintenanceController` by cron.
 
 ---
 

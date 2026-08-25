@@ -197,19 +197,19 @@ pnpm infra:up         # postgres + redis only, no app processes
 
 ## Deployment
 
-Web on **Cloudflare Workers** via OpenNext, deployed by Cloudflare Workers
-Builds watching this repository; API on **Render**, which redeploys on push the
-same way. Postgres on **Neon**, Redis on Render Key Value. Vercel also works for
-the front end and is documented as an alternative, but nothing automated targets
-it.
+Both apps on **Vercel**, as two projects from this repository, with Postgres on
+**Neon** and Redis on **Upstash**. Each project redeploys on push.
 
 GitHub Actions runs [CI](.github/workflows/ci.yml) — typecheck, lint, tests,
 builds — and deploys nothing.
 
-The API needs a real long-running process for its schedulers; room phases now
-also advance on read, so a sleeping free instance costs latency rather than
-correctness. Full walkthrough, including exactly which environment variables go
-where: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+Vercel runs a function per request, so the schedulers never fire there. Most of
+the application does not care, and deliberately so: a room's phase advances when
+it is read and a challenge's is derived from its dates, neither of which needs a
+process watching a clock. The work that *is* not read-driven — freezing a
+winner, pruning expired tokens — is triggered by cron over HTTP. Full
+walkthrough, including exactly which environment variables go where:
+**[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Security notes
 

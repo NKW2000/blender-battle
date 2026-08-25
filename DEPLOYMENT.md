@@ -1,413 +1,174 @@
 # Deployment
 
-Three services, because they have genuinely different runtime needs.
+Everything runs on **Vercel**: two projects from this one repository, plus two
+managed data services.
 
-| Piece | Host | Why there |
-|---|---|---|
-| `apps/web` (Next.js) | Vercel **or** Cloudflare Workers | Static + SSR, no background work — see [step 4](#4-web-vercel-or-cloudflare-workers) |
-| `apps/api` (NestJS) | Render | Needs a **long-running process** — see below |
-| Postgres | Neon (or Supabase) | Managed. Neither Render's free tier nor Cloudflare can hold it — Render's expires after 30 days, and Cloudflare does not sell Postgres |
-| Redis | Render Key Value | Free tier, same region as the API |
+| Piece | Host |
+| --- | --- |
+| `apps/web` (Next.js) | Vercel |
+| `apps/api` (NestJS) | Vercel |
+| Postgres | Neon |
+| Redis | Upstash (or any Redis reachable over TLS) |
 
-**Why the API is not on Vercel.** Three schedulers drive the entire application:
-`@Interval(1000)` sweeps rooms through their phases, `@Interval(10_000)` resolves
-finished challenge events, and metrics refresh every five minutes. Serverless
-functions only execute during a request, so on Vercel none of those ever fire —
-rooms would freeze in `drawing` and challenges would never resolve. The API also
-receives image uploads through its own process, and Vercel caps a function
-request body at 4.5 MB.
+Both projects build from the repository root, because `@bb/shared` is a
+workspace package that has to be compiled before either app can import it.
 
 ---
 
-## 1. GitHub
+## The one thing to understand first
 
-```bash
-git remote add origin https://github.com/<you>/blender-battle.git
-git push -u origin main
-```
+Vercel runs a function per request. Nothing is alive between requests, so
+`@Interval` and `@Cron` never fire.
 
-`.env` is gitignored; `.env.example` is the tracked template. Verify before pushing:
+Most of this application does not care, and that is by design rather than by
+luck: a room's phase advances when it is *read*, and a challenge's phase is
+derived from its two stored dates. Neither needs a process watching a clock.
 
-```bash
-git ls-files | grep -E "(^|/)\.env$"
-```
+What is left is the work that is not read-driven — freezing a challenge's winner
+once voting closes, and pruning expired refresh tokens. Those are triggered over
+HTTP instead, by cron, at `/api/v1/maintenance/sweep`.
 
-That must print nothing.
+---
 
-## 2. Supabase
+## 1. Postgres — Neon
 
-1. Create a project. Save the database password when it is shown — it is not shown again.
-2. **Connect** → **Transaction pooler** → copy the URI (port `6543`).
+Create a project and take the **pooled** connection string; the host has
+`-pooler` in it.
 
-   Use the pooler, not the direct connection. The API keeps a connection pool of
-   its own, and pointing it at the direct endpoint exhausts the project's slots.
-3. Run the migrations from your machine. The production image is pruned to
-   `dist` plus runtime dependencies, so it cannot run the TypeORM CLI itself:
+This matters more here than on a long-running host. Every cold start opens its
+own connection pool and serverless multiplies instances under load, so the
+direct endpoint runs out of Postgres connection slots long before the traffic
+would justify it.
 
-   ```bash
-   DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require" \
-     pnpm --filter @bb/api migration:run
-   ```
+## 2. Redis — Upstash
 
-   Re-run this after any future migration — nothing applies schema automatically
-   (`synchronize` is off by design in every environment).
+Any Redis reachable over TLS works. It carries rate-limit counters, the
+scheduler locks, and the one-time OAuth exchange codes.
 
-## 3. Render (API + Redis)
+Take the `rediss://` URL. Nothing here needs Redis to be durable — every value
+in it is short-lived and re-derivable.
 
-**Dashboard → Blueprints → New Blueprint Instance**, pointed at the repo. It reads
-[`render.yaml`](render.yaml) and creates the web service plus the Key Value store.
+## 3. API — Vercel project
 
-Then set the values marked `sync: false`:
+**New Project** → this repository → **Root Directory: `apps/api`**.
+
+`apps/api/vercel.json` does the rest: it routes every path to `api/index.ts`,
+which boots Nest once per warm instance and hands the request to the same
+Express application the local server uses.
+
+### Environment variables
+
+    DATABASE_URL              the pooled Neon string
+    REDIS_URL                 rediss://…
+    JWT_ACCESS_SECRET         32+ random characters
+    JWT_REFRESH_SECRET        32+ random characters, different from the above
+    CLOUDINARY_CLOUD_NAME     CLOUDINARY_API_KEY      CLOUDINARY_API_SECRET
+    CORS_ORIGINS              https://<web-project>.vercel.app
+    FRONTEND_URL              https://<web-project>.vercel.app
+    OAUTH_CALLBACK_BASE       https://<api-project>.vercel.app
+    CRON_SECRET               a long random string
+    GOOGLE_CLIENT_ID          GOOGLE_CLIENT_SECRET
+    MAIL_DRIVER               MAIL_FROM               (+ that driver's own keys)
+
+`CORS_ORIGINS` is an explicit list and never a wildcard. The refresh token is an
+httpOnly cookie and the two apps are on different subdomains, so the API sends
+`Access-Control-Allow-Credentials: true` — which the CORS specification forbids
+pairing with `*`, because it would let any site on the internet make
+authenticated requests as your users.
+
+### Migrations
+
+Set `RUN_MIGRATIONS_ON_BOOT=true` and the API applies pending migrations when it
+starts. On a serverless host "starts" means the first cold start after a deploy,
+which is the behaviour you want.
+
+The alternative is running `pnpm --filter @bb/api migration:run` against
+`DATABASE_URL` from a machine that can reach Postgres on 5432 — which not every
+network allows.
+
+## 4. Web — Vercel project
+
+**New Project** → the same repository → **Root Directory: `apps/web`**.
+
+### Environment variables
 
 | Variable | Value |
-|---|---|
-| `DATABASE_URL` | Supabase pooler URI from step 2 |
-| `CORS_ORIGINS` | `https://<your-app>.vercel.app` (comma-separated for more) |
-| `FRONTEND_URL` | `https://<your-app>.vercel.app` |
-| `OAUTH_CALLBACK_BASE` | `https://<api>.onrender.com` — this service's own URL |
-| `CLOUDINARY_*` | From your Cloudinary dashboard |
-
-`REDIS_URL` wires itself from the Key Value service. `JWT_ACCESS_SECRET` and
-`JWT_REFRESH_SECRET` are generated by Render; both must be ≥32 characters and
-must differ from each other — the API refuses to boot otherwise, with a readable
-message naming the variable.
-
-Chicken-and-egg: `CORS_ORIGINS`, `FRONTEND_URL` and `NEXT_PUBLIC_API_URL` each
-reference the other service's URL. Deploy both once, then fill in the real
-domains and redeploy.
-
-### The free instance is viable, with one caveat
-
-`render.yaml` specifies `free`. Free web services sleep after 15 minutes idle
-and take roughly a minute to wake, and the schedulers sleep with them.
-
-That used to be fatal: a room's deadline would pass with nothing to advance it,
-and every player sat watching a timer at 0:00. It is no longer, because room
-phases are now **advanced on read** — `RoomsService.reconcile` brings a room up
-to the phase its stored timestamps imply, and it is called from the endpoints
-the clients poll. A sleeping API wakes on the first request and advances the
-room correctly, because a stored deadline does not care how late it is read.
-
-What remains is latency, not correctness: the first request after a sleep waits
-for the cold start. Pointing a free uptime pinger at `/health` every ten minutes
-removes that, and costs nothing.
-
-Move to `starter` when the cold start becomes the thing people complain about.
-
-### CORS_ORIGINS is now load-bearing
-
-The refresh token is an httpOnly cookie, not a value the front end stores, so
-sign-in depends on the browser being willing to send and accept it across
-origins. Three things have to line up or **sessions silently fail to persist** —
-the user signs in, the page reloads, and they are signed out again:
-
-- `CORS_ORIGINS` must contain the web app's exact origin (scheme + host, no
-  trailing slash). It can never be `*`: the CORS spec forbids a wildcard
-  alongside credentials, and browsers will refuse the response.
-- Both sides must be HTTPS in production. The cookie is issued
-  `SameSite=None; Secure`, which browsers only accept over TLS.
-- `FRONTEND_URL` must match too — it is what OAuth redirects and email links
-  are built from.
-
-In development everything is on `localhost`, which counts as the same site, so
-the cookie is issued `SameSite=Lax` without `Secure` and plain HTTP works.
-
-### Email (password reset and verification)
-
-`MAIL_DRIVER` defaults to `log`, which writes every message — reset links
-included — to the application log and sends nothing. The API runs fine that way,
-and it is the right default for development, but a user who forgets their
-password cannot recover their account. It is not a state to leave production in.
-
-The provider is [Resend](https://resend.com), reached with one HTTPS POST and no
-SDK. Nothing about the code is Resend-specific beyond that one call.
-
-#### No domain and no provider account? Use Gmail SMTP
-
-The option that cannot be refused: it uses a mailbox you already own, so there
-is no signup to be turned away from. Free, and roughly 500 messages a day.
-
-1. The Google account needs **2-Step Verification** on — App Passwords do not
-   exist without it. Google Account → **Security → 2-Step Verification**.
-2. **Security → 2-Step Verification → App passwords.** Create one named
-   anything; Google shows a 16-character password **once**.
-3. On Render set:
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | `https://<api-project>.vercel.app/api/v1` |
 
-   | Key | Value |
-   |---|---|
-   | `MAIL_DRIVER` | `smtp` |
-   | `SMTP_HOST` | `smtp.gmail.com` |
-   | `SMTP_PORT` | `465` |
-   | `SMTP_USER` | your full Gmail address |
-   | `SMTP_PASSWORD` | the App Password |
-   | `MAIL_FROM` | `Blender Battle <your-address@gmail.com>` |
+That is the only one. `NEXT_PUBLIC_*` values are compiled into the browser
+bundle by `next build`, so **changing this needs a redeploy, not a restart** —
+setting it and restarting is the mistake that looks like the variable being
+ignored.
 
-Your normal Google password will **not** work here and should not be put in.
-Only an App Password will authenticate, and it can be revoked on its own without
-touching the account.
+## 5. Google sign-in
 
-Google displays the App Password in four groups of four. Paste it either way —
-the spaces are stripped before use, because they are presentation and not part
-of the secret.
+In the Google Cloud console, the authorised redirect URI is:
 
-`MAIL_FROM` must be the same address as `SMTP_USER`. Gmail rewrites a mismatched
-sender to the authenticated account anyway, so a different value is at best
-ignored and at worst confusing.
+    https://<api-project>.vercel.app/api/v1/auth/oauth/google/callback
 
-The trade is the same as the other no-domain options, plus one more: mail is
-visibly from a gmail.com address, which is fine for a project and wrong for
-something presenting itself as a company. Any SMTP server works here — Fastmail,
-a work mailbox, a VPS — Gmail is simply the one most people already have.
+It must match `OAUTH_CALLBACK_BASE` exactly. A mismatch is refused by Google
+before the request ever reaches this application, so nothing here can report it
+usefully.
 
-#### No domain? Use Brevo or SendGrid instead
+## 6. The cron
 
-Resend cannot send to arbitrary recipients without a verified domain, and
-`workers.dev`, `onrender.com` and `vercel.app` cannot be verified — they belong
-to their platforms, you cannot add DNS records to them, and they sit on the
-Public Suffix List precisely so nobody can borrow their reputation.
+`apps/api/vercel.json` registers a daily job against `/api/v1/maintenance/sweep`,
+authenticated with `CRON_SECRET`.
 
-Both verify a **single sender address** instead. Confirm one inbox you already
-own and you can email anyone.
+**Daily is the Hobby plan's limit, and it is coarse for this.** A challenge whose
+voting closed at noon keeps its winner unfrozen until the job runs. Two ways to
+close that gap:
 
-**Brevo is the easier door**, and worth trying first: SendGrid rejects a fair
-number of new signups outright, and a provider you cannot get credentials for is
-not an option however good its API is.
+- Pro plan: change the schedule in `apps/api/vercel.json` to `*/5 * * * *`.
+- Any external pinger — cron-job.org, a GitHub Action, an uptime monitor —
+  calling the same URL with the same `Authorization: Bearer` header. It is an
+  ordinary authenticated request; nothing about it is Vercel-specific.
 
-**Brevo** — free tier 300/day.
+---
 
-1. [brevo.com](https://www.brevo.com) → sign up.
-2. **Senders, Domains & Dedicated IPs → Senders → Add a sender.** Use an address
-   you can read; Brevo emails it a confirmation link.
-3. **SMTP & API → API Keys → Generate a new API key.**
-4. On Render set `MAIL_DRIVER=brevo`.
+## Verify, in this order
 
-**SendGrid** — free tier 100/day.
+    curl https://<api>.vercel.app/health
+    curl https://<api>.vercel.app/api/v1/challenges/categories
 
-1. [sendgrid.com](https://sendgrid.com) → sign up.
-2. **Settings → Sender Authentication → Verify a Single Sender.**
-3. **Settings → API Keys → Create API Key**, **Restricted Access**, only
-   *Mail Send*.
-4. On Render set `MAIL_DRIVER=sendgrid`.
+The first returns `{"status":"ok"}`; the second the discipline list. Then open
+the web app and sign in — that exercises CORS, the refresh cookie and the origin
+allowlist together, which is where a misconfigured deployment actually shows up
+rather than in either curl.
 
-Either way, the other two variables are the same:
+The cron path, without waiting for it:
 
-| Key | Value |
-|---|---|
-| `RESEND_API_KEY` | the key from whichever provider you chose — the variable is named for the first one supported and holds whichever key is in use |
-| `MAIL_FROM` | `Blender Battle <the-address-you-verified>` |
+    curl -H "Authorization: Bearer $CRON_SECRET"       https://<api>.vercel.app/api/v1/maintenance/sweep
 
-`MAIL_FROM` keeps the same `Name <address>` format for both drivers, so
-switching provider is one variable and not a re-education about what the others
-mean.
+It reports each sweep separately, so a partial failure names itself.
 
-**The catch, stated plainly.** Mail sent this way carries no DKIM or SPF for a
-domain you control, so more of it lands in spam. That is an acceptable price for
-getting a signup flow working today, and a poor foundation for a product with
-users. Treat it as a stopgap and do the domain properly when you have one — at
-which point it is again one environment variable.
+---
 
-#### 1. Decide whether you need a domain
+## Known limits of this shape
 
-This is the step people get wrong, so it comes first.
+**Request bodies cap at 4.5MB.** An entry is two images at 2MB each, so a
+submission is about 4MB plus multipart overhead — inside the limit, but not by
+much. Raising `SUBMISSION_IMAGE_MAX_BYTES` past 2MB would break uploads on
+Vercel before it broke anything else.
 
-**Without a verified domain**, Resend lets you send from `onboarding@resend.dev`
-— but *only to the email address you signed up with*. That is genuinely useful:
-it proves the whole flow end to end, and you can reset your own password. It
-will silently refuse every other recipient, so it is a test configuration, not a
-launch one.
+**Cold starts.** The first request after an idle period pays for booting Nest,
+opening a database pool and connecting to Redis. Nothing in the product is
+sensitive to that — the deadlines are stored instants and do not care how late
+they are read — but it is visible.
 
-**With a verified domain**, you can send to anybody. You need a domain you
-control and the ability to add DNS records to it.
+**No process between requests.** Covered above, and worth remembering before
+adding anything that assumes one: a WebSocket gateway, an in-memory cache shared
+across requests, or a queue consumer would each need somewhere else to live.
 
-#### 2. Create the account and (optionally) verify the domain
+---
 
-1. Sign up at [resend.com](https://resend.com).
-2. **Domains → Add Domain**, enter your domain.
-3. Resend shows a set of DNS records — a DKIM `TXT`, an SPF `TXT`, and usually a
-   `MX` for bounce handling. Add them at your DNS provider exactly as shown.
-4. Press **Verify**. Propagation is usually minutes; it can be longer.
+## Local development
 
-Skip this if you are testing with `onboarding@resend.dev`.
+Unchanged, and unrelated to any of the above.
 
-#### 3. Create an API key
+    pnpm infra:up      # postgres + redis in Docker
+    pnpm dev           # both apps, watching
 
-**API Keys → Create API Key.** Give it **Sending access** only — this deployment
-never lists, reads or deletes anything, and a key that can only send is a key
-that can only be abused in one way.
-
-Copy it now; Resend shows it once. Treat it as a password: it goes into Render's
-environment, never into this repository, and never into a chat window.
-
-#### 4. Set it on Render
-
-`blender-battle-api` → **Environment**:
-
-| Key | Value |
-|---|---|
-| `MAIL_DRIVER` | `resend` |
-| `RESEND_API_KEY` | the key from step 3 |
-| `MAIL_FROM` | `Blender Battle <no-reply@yourdomain>` — or `Blender Battle <onboarding@resend.dev>` while testing |
-| `FRONTEND_URL` | must already point at the deployed web app |
-
-`FRONTEND_URL` is not optional here: every reset and verification link is built
-from it, so if it is wrong the emails send successfully and lead nowhere.
-
-Save. Render redeploys.
-
-#### 5. Confirm it works
-
-The API refuses to boot with `MAIL_DRIVER=resend` and no `RESEND_API_KEY`, so a
-half-finished configuration fails loudly at startup instead of silently
-swallowing recovery email. A successful deploy already tells you the pair is
-present.
-
-For the round trip, ask for a reset on an address that has an account:
-
-```bash
-curl -i -X POST https://<your-api>/api/v1/auth/password/forgot   -H 'Content-Type: application/json'   -d '{"email":"you@example.com"}'
-```
-
-Expect `204` — and note it returns `204` for an unregistered address too, on
-purpose, so the endpoint cannot be used to discover who has an account. The real
-confirmation is the email arriving, and Resend's **Logs** page showing the
-delivery.
-
-If nothing arrives:
-
-- **Resend Logs empty** — the API never called out. Check `MAIL_DRIVER` is
-  exactly `resend`, and look for `Mail send failed` in the Render logs.
-- **Logs show a 403 about the domain** — you are sending from an address on a
-  domain that is not verified.
-- **Logs show delivery, no email** — check spam. The messages are plain text and
-  deliberately so: a password reset that arrives as a styled HTML button is the
-  exact shape of a phishing message.
-
-#### What gets sent
-
-Four messages, all plain text, all one sentence and a link:
-
-- **Reset your password** — link valid one hour, single use
-- **Confirm your address** — link valid three days
-- **Your password was changed** — sent *after* a successful reset, so somebody
-  whose account was taken finds out
-- **Reset requested for an account with no password** — for accounts that sign
-  in with Discord or Google, explaining there is nothing to reset
-
-`MailService.send` never throws. Its callers are auth flows whose response must
-not depend on delivery: `forgot-password` answers identically for a known and an
-unknown address, and a provider outage must not become a different status code
-for a real one. Failures are logged and swallowed.
-
-## 4. Web (Vercel **or** Cloudflare Workers)
-
-Pick one. Both serve the same build; only the host differs.
-
-### Why the API cannot join it on Cloudflare
-
-The front end ports to Workers cleanly because it does nothing but render. The
-API does not, and the reasons are structural rather than a matter of
-configuration:
-
-| Blocker | Where |
-|---|---|
-| `@Interval` schedulers run continuously; Cron Triggers floor at one minute | `room-scheduler.service.ts` |
-| `@node-rs/bcrypt` is a compiled `.node` binary the Workers runtime cannot load | `auth/services/password.service.ts` |
-| `ioredis` needs a raw TCP socket, which Workers does not provide | `modules/redis/redis.service.ts` |
-
-Cloudflare also hosts no Postgres, and the schema uses `uuid[]`, `jsonb`,
-`timestamptz` and `inet`, none of which exist in D1/SQLite. Moving the API there
-means rewriting the schedulers onto Durable Object alarms and replacing the
-password hash — which signs out every existing account. Keep the API on Render.
-
-### 4a. Vercel
-
-**Add New → Project**, import the repo, then:
-
-- **Root Directory**: `apps/web`
-- **Framework**: Next.js (auto-detected)
-- **Build Command**: leave default — Vercel picks up the `vercel-build` script,
-  which compiles `@bb/shared` first. `@bb/shared` resolves through its `dist`
-  entry, so the default `next build` alone would fail on a clean checkout.
-- **Environment variable**: `NEXT_PUBLIC_API_URL` = `https://<api>.onrender.com/api/v1`
-
-`NEXT_PUBLIC_*` is inlined into the browser bundle at build time. Never put a
-secret in one, and redeploy after changing it — it is baked in, not read at runtime.
-
-### 4b. Cloudflare Workers
-
-Runs through [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare),
-configured in [`apps/web/wrangler.jsonc`](apps/web/wrangler.jsonc) and
-[`apps/web/open-next.config.ts`](apps/web/open-next.config.ts).
-
-1. Set the API URL in `apps/web/.env.production` (tracked in the repository),
-   **not** in `wrangler.jsonc` under `vars`.
-
-   This one has bitten before and shipped `localhost:4000` to production.
-   `NEXT_PUBLIC_*` values are inlined into the bundle by `next build`; a Worker
-   `vars` binding is applied at *runtime*, long after the string has already
-   been baked into the JavaScript. `wrangler.jsonc` says the same thing at the
-   point of temptation.
-2. Add the Worker's URL to the API's `CORS_ORIGINS` **and** `FRONTEND_URL` on
-   Render. Skipping this leaves a site that loads and then fails every request.
-3. Deploy one of two ways.
-
-**From the Cloudflare dashboard.** Workers & Pages → Create → Import a
-repository. Leave the root directory at the repository root and use:
-
-| Setting | Value |
-|---|---|
-| Build command | `pnpm cf:build` |
-| Deploy command | `pnpm cf:deploy` |
-
-Both are root scripts that `--filter` into `apps/web`. That indirection is the
-point: Workers Builds runs commands from the repository root, and wrangler
-invoked there fails with *"application detection logic has been run in the root
-of a workspace"* because it cannot tell which project in the workspace is meant.
-
-Workers Builds watches the repository itself, so a push to `main` is all a
-deploy takes — there is no GitHub Action in the loop and no Cloudflare API token
-stored anywhere in this repo.
-
-There used to be a `deploy-web.yml` workflow doing the same job. It was removed:
-it duplicated a deploy Cloudflare was already performing, and it failed on every
-push because the `CLOUDFLARE_API_TOKEN` secret it needed was never set — a red
-cross on every commit for a step that was not doing anything. Fewer places
-holding a deploy credential is the better end state anyway.
-
-**From a machine.**
-
-```bash
-pnpm --filter @bb/web exec wrangler login
-pnpm --filter @bb/web cf:deploy
-```
-
-> **Windows needs Developer Mode on.** OpenNext forces Next's `standalone`
-> output, which builds `node_modules` out of symlinks, and Windows refuses to
-> create those otherwise — the build dies on `EPERM: operation not permitted,
-> symlink`. Turn it on under **Settings → Privacy & security → For developers**,
-> or just let CI do the build, which is why the workflow above exists.
-
-`pnpm --filter @bb/web cf:preview` runs the built Worker locally on `workerd`,
-which catches runtime differences the plain `next build` cannot.
-
-## 5. Verify
-
-```bash
-curl https://<api>.onrender.com/health
-curl https://<api>.onrender.com/api/v1/challenges
-```
-
-Then in the browser: register an account, create a room, and confirm it advances
-out of `drawing` on its own after about seven seconds. That transition is driven
-entirely by the scheduler, so it is the single best check that the API is running
-as a real process rather than waking per request.
-
-## Notes
-
-- **Cloudinary** stays as-is; it is already external and needs no migration.
-- **`docker-compose.yml`** is for local development only. Nothing in production reads it.
-- **Scaling to more than one API instance is safe.** Both sweeps take a Redis
-  lock (`lock:rooms:sweep`, `lock:challenge-events:sweep`) before doing work, so
-  instances cannot double-process a room.
-- **Rotating a JWT secret** signs every existing session out. That is the
-  intended behaviour, not a bug.
+Locally the API runs as a long-running process, so the schedulers *do* fire and
+the maintenance endpoint is not needed.

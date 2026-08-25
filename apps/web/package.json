@@ -5,14 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "//vercel-build": "Vercel prefers this script when present. @bb/shared resolves through its dist entry, so it must be compiled before next build â€” Vercel's default command would only build this package.",
-    "vercel-build": "pnpm --filter @bb/shared build && next build",
     "start": "next start -p 3000",
-    "//cloudflare": "Cloudflare Workers via OpenNext. @bb/shared resolves through its dist entry, so it is compiled before next build, for the same reason vercel-build exists.",
-    "cf:build": "pnpm --filter @bb/shared build && opennextjs-cloudflare build",
-    "cf:preview": "pnpm cf:build && wrangler dev",
-    "cf:deploy": "pnpm cf:build && wrangler deploy",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run"
@@ -37,7 +30,6 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",
     "@eslint/js": "^9.39.5",
-    "@opennextjs/cloudflare": "^1.20.2",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.1.0",
@@ -52,7 +44,6 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.65.0",
-    "vitest": "^3.0.0",
-    "wrangler": "^4.118.0"
+    "vitest": "^3.0.0"
   }
 }

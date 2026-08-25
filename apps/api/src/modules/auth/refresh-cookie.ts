@@ -16,11 +16,19 @@ export const REFRESH_COOKIE = 'bb_refresh';
  *
  * ## The cross-site problem
  *
- * The web app is on Cloudflare Workers and the API is on Render, so in
- * production these are genuinely different sites and the cookie has to be
- * `SameSite=None; Secure` to be sent at all. In development both run on
- * `localhost` — different ports, same site — so `Lax` works there and `Secure`
- * would stop the cookie being set over plain HTTP.
+ * The two apps are separate Vercel projects, so in production they are
+ * genuinely different *sites* and the cookie has to be `SameSite=None; Secure`
+ * to be sent at all.
+ *
+ * Two subdomains of one domain would normally be same-site, which makes this
+ * worth stating precisely: `vercel.app` is on the Public Suffix List, so the
+ * browser treats `web.vercel.app` and `api.vercel.app` as separate registrable
+ * domains rather than siblings. A custom domain shared by both would change
+ * that — and would be a reason to revisit this, not something to leave assumed.
+ *
+ * In development both run on `localhost` — different ports, same site — so
+ * `Lax` works there and `Secure` would stop the cookie being set over plain
+ * HTTP.
  *
  * `SameSite=None` is what makes CSRF a live concern rather than a theoretical
  * one, which is why the endpoints that read this cookie also demand a custom
