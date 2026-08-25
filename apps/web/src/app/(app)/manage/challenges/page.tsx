@@ -63,6 +63,18 @@ export default function ManageChallengesPage() {
             ]}
           />
 
+          {/*
+            The catalogue's way in.
+
+            It left the top-level nav — eight destinations did not fit the bar,
+            and browsing every published brief is an authoring task rather than
+            something a player needs one tap away. This is where a manager is
+            already standing when they want it.
+          */}
+          <Button asChild variant="outline" className="shrink-0 whitespace-nowrap">
+            <Link href="/challenges">Catalogue</Link>
+          </Button>
+
           <Button asChild className="shrink-0 whitespace-nowrap">
             <Link href="/manage/challenges/new">New challenge</Link>
           </Button>

@@ -38,7 +38,6 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         { href: '/events', label: 'Challenges' },
         { href: '/rooms', label: 'Rooms' },
         { href: '/leaderboard', label: 'Ranks' },
-        { href: '/challenges', label: 'Catalogue' },
         { href: `/u/${user.username}`, label: 'Profile' },
         ...(canAuthor ? [{ href: '/manage/challenges', label: 'Manage' }] : []),
         ...(user.role === Role.ADMIN ? [{ href: '/admin', label: 'Admin' }] : []),
@@ -49,17 +48,25 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       [
         { href: '/events', label: 'Challenges' },
         { href: '/leaderboard', label: 'Ranks' },
-        { href: '/challenges', label: 'Catalogue' },
       ];
 
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-40 border-b-4 border-edge bg-panel/95 backdrop-blur-sm">
         {/*
-          Two rows on narrow screens, one from md up. The nav strip scrolls
-          inside itself rather than widening the page — a horizontally scrolling
-          body is never acceptable, and with this many destinations the single
-          row overflows well before mobile widths.
+          The drawer holds until the full row genuinely fits, which is `lg` and
+          not `md`.
+
+          Measured: an admin's row — brand, seven destinations, sound,
+          notifications and sign-out — needs 1000px, and a player's 851px. It
+          was appearing from 768px, so between there and about 1130 the nav had
+          nowhere to go and drew straight over the wordmark, which is exactly
+          what it looked like: "CHALLENGES" sitting on top of "BLENDERBATTLE".
+
+          Nothing here shrinks — the links are `shrink-0` and a wordmark is an
+          SVG at a fixed size — so an overflowing row cannot compress, it can
+          only overlap. Switching where it fits is the fix; `min-w-0` on the nav
+          is the seatbelt if a future destination pushes it over again.
         */}
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4 sm:gap-4 md:px-6">
           {/*
@@ -83,7 +90,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
 
           {/* Below md the destinations live in the drawer, so the bar keeps only
               what has to stay reachable in one tap. */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:hidden">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:hidden">
             <SoundToggle />
             {user ? <NotificationBell /> : null}
             <MobileNav
@@ -94,7 +101,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
             />
           </div>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
+          <nav className="hidden min-w-0 items-center gap-1 lg:flex" aria-label="Main">
             {navLinks.map((link) => {
               const isCurrent = pathname === link.href;
               return (
@@ -108,7 +115,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                   onMouseEnter={() => router.prefetch(link.href)}
                   onFocus={() => router.prefetch(link.href)}
                   aria-current={isCurrent ? 'page' : undefined}
-                  className={`shrink-0 rounded-xl px-3 py-2 font-display text-xs font-bold uppercase tracking-wider transition-colors ${
+                  className={`shrink-0 rounded-xl px-2.5 py-2 font-display text-xs font-bold uppercase tracking-wider transition-colors ${
                     isCurrent
                       ? 'border-2 border-edge bg-sun text-edge'
                       : 'text-bone-muted hover:text-bone'
