@@ -404,11 +404,38 @@ function OtherEntries({ event }: { event: EventDetail }) {
   return (
     <section className="flex flex-col gap-4">
       <h2 className="font-display text-xl font-bold text-cream">Other entries</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/*
+        Swiped on a phone, laid out as a grid from `sm` up.
+
+        Every entry is a 1:1 image, so stacking them one per row put a single
+        full-width square on screen at a time and made a ten-entry contest an
+        enormous scroll — the results read as a list to work through rather than
+        a gallery to look at.
+
+        Scroll snapping rather than the translateX carousel used for references:
+        this is a phone, and a track driven by arrow buttons cannot be swiped.
+        Native overflow scrolling gets the gesture, the momentum and the
+        keyboard for free, and degrades to an ordinary scroller if snapping is
+        unsupported.
+
+        The cards stop short of full width on purpose. The next one peeking past
+        the edge is what says there is more to the right; a card that filled the
+        viewport would look like the only one.
+      */}
+      <div
+        className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-2 sm:overflow-x-visible sm:pb-0 lg:grid-cols-3"
+        // A scroller is only reachable by keyboard if something can hold focus,
+        // and the cards themselves are not interactive.
+        tabIndex={0}
+        role="group"
+        aria-label={`${others.length} other entries`}
+      >
         {others.map((entry) => (
           <div
             key={entry.id}
-            className="flex flex-col gap-2 rounded-[16px] border-[3px] border-ink bg-white/4 p-2"
+            // The mobile width has to be undone explicitly at `sm`, or the card
+            // stays at 78% of its grid column instead of filling it.
+            className="flex w-[78%] shrink-0 snap-center flex-col gap-2 rounded-[16px] border-[3px] border-ink bg-white/4 p-2 sm:w-full sm:shrink"
             style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary asset */}

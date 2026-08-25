@@ -310,3 +310,106 @@ describe('after submitting an entry', () => {
     expect(screen.queryByAltText('Your workspace')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The results gallery.
+ *
+ * Every entry is a 1:1 image, so one per row put a single full-width square on
+ * screen at a time and turned a ten-entry contest into an enormous scroll. It
+ * swipes horizontally on a phone and returns to a grid from `sm` up.
+ *
+ * These assert the mechanism rather than the appearance — jsdom has no layout,
+ * so a screenshot test is not available, but "is it still a horizontal
+ * scroller" is exactly what a future refactor would break silently.
+ */
+function entry(id: string, username: string, voteCount: number) {
+  return {
+    id,
+    userId: `u-${id}`,
+    username,
+    imageUrl: `https://cdn.test/${id}.png`,
+    workspacePhotoUrl: null,
+    notes: null,
+    voteCount,
+    submittedAt: new Date().toISOString(),
+  };
+}
+
+describe('the results gallery', () => {
+  const finished = () =>
+    makeEvent({
+      phase: 'finished',
+      winnerEntryId: 'win',
+      entries: [
+        entry('win', 'winner', 10),
+        entry('a', 'alice', 5),
+        entry('b', 'bob', 3),
+        entry('c', 'carol', 1),
+      ],
+    });
+
+  it('scrolls horizontally rather than stacking', () => {
+    view(finished());
+
+    const gallery = screen.getByRole('group', { name: /other entries/i });
+
+    // The pair that makes it a slideshow: overflow to scroll through, snapping
+    // so it settles on a card instead of anywhere.
+    expect(gallery.className).toContain('overflow-x-auto');
+    expect(gallery.className).toContain('snap-x');
+  });
+
+  it('goes back to a grid on wider screens', () => {
+    // The phone layout must not follow a desktop reader up: four squares in a
+    // row is the right shape when there is width for it.
+    view(finished());
+
+    const gallery = screen.getByRole('group', { name: /other entries/i });
+
+    expect(gallery.className).toContain('sm:grid');
+    expect(gallery.className).toContain('sm:overflow-x-visible');
+  });
+
+  it('leaves the next card peeking, so there is something to swipe toward', () => {
+    /*
+      A card at full width reads as the only card. The cut-off edge of the next
+      one is the entire affordance — without it a phone user has no reason to
+      think anything is to the right.
+    */
+    view(finished());
+
+    const card = screen.getByAltText('Entry by alice').closest('div');
+
+    expect(card?.className).toContain('w-[78%]');
+    expect(card?.className).toContain('snap-center');
+  });
+
+  it('keeps the winner out of the gallery', () => {
+    // The winner has its own panel above; repeating it here would read as a tie.
+    view(finished());
+
+    const gallery = screen.getByRole('group', { name: /other entries/i });
+
+    expect(gallery.textContent).not.toContain('winner');
+    expect(gallery.textContent).toContain('alice');
+  });
+
+  it('orders the also-rans by votes', () => {
+    view(finished());
+
+    const names = screen
+      .getByRole('group', { name: /other entries/i })
+      .textContent?.replace(/\d+/g, '');
+
+    expect(names?.indexOf('alice')).toBeLessThan(names?.indexOf('bob') ?? -1);
+    expect(names?.indexOf('bob')).toBeLessThan(names?.indexOf('carol') ?? -1);
+  });
+
+  it('can be reached by keyboard', () => {
+    // A scroll container is only reachable with a keyboard if something in it
+    // can take focus, and these cards are not interactive.
+    view(finished());
+
+    expect(screen.getByRole('group', { name: /other entries/i })).toHaveAttribute('tabindex', '0');
+  });
+});

@@ -14,7 +14,6 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
-  OAuthProvider,
 } from '@bb/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type UseFormRegister } from 'react-hook-form';
@@ -37,8 +36,6 @@ import {
 } from '@/components/ui/panel';
 import {
   useForgotPassword,
-  useLinkProvider,
-  useLinkedAccounts,
   useResendVerification,
 } from '@/features/auth/use-recovery';
 import { useSession } from '@/features/auth/use-session';
@@ -396,7 +393,6 @@ export default function ProfileSettingsPage() {
         use of a narrow column and a good use of a wide one, so here they sit
         side by side instead of stacked.
       */}
-      <ConnectedAccountsPanel />
 
       {/* Full width on purpose: it is a gallery of finished work, and it was the
           one thing the old narrow column actually hurt. */}
@@ -512,76 +508,6 @@ function AccountPanel() {
             <dd className="uppercase text-haze">{user.role}</dd>
           </div>
         </dl>
-      </PanelBody>
-    </Panel>
-  );
-}
-
-/**
- * Which providers this account can be signed in with.
- *
- * `/auth/oauth/linked` has been served the whole time with nothing calling it,
- * so an account could be connected to a provider and no screen would say
- * so. Connecting is a redirect to the same endpoint the sign-in buttons use,
- * with the caller's id taken from their token rather than the query string.
- */
-function ConnectedAccountsPanel() {
-  const { data: linked, isLoading } = useLinkedAccounts();
-  const link = useLinkProvider();
-
-  const providers: Array<{ id: OAuthProvider; label: string }> = [
-    { id: OAuthProvider.GOOGLE, label: 'Google' },
-    { id: OAuthProvider.APPLE, label: 'Apple' },
-  ];
-
-  return (
-    <Panel>
-      <PanelHeader tone="mint" icon={PANEL_ICON.users}>
-        <PanelTitle>Sign-in methods</PanelTitle>
-      </PanelHeader>
-      <PanelBody className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {isLoading ? (
-          <Skeleton className="h-12 w-full" />
-        ) : (
-          providers.map((provider) => {
-            const account = linked?.find((item) => item.provider === provider.id);
-
-            return (
-              <div
-                key={provider.id}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-[14px] border-[2.5px] border-ink bg-white/5 px-4 py-3"
-                style={{ boxShadow: '0 4px 0 var(--color-ink)' }}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-extrabold text-cream">{provider.label}</p>
-                  {account ? (
-                    <p className="truncate text-xs font-extrabold text-mint">
-                      {account.handle ?? 'Connected'}
-                    </p>
-                  ) : (
-                    <p className="text-xs font-extrabold text-haze-5">Not connected</p>
-                  )}
-                </div>
-
-                {account ? (
-                  <span className="shrink-0 text-xs font-black uppercase tracking-[1px] text-mint">
-                    ✓
-                  </span>
-                ) : (
-                  <ChunkyButton
-                    size="sm"
-                    tone="cream"
-                    className="shrink-0"
-                    onClick={() => link.mutate(provider.id)}
-                    disabled={link.isPending}
-                  >
-                    {link.isPending ? 'Opening…' : 'Connect'}
-                  </ChunkyButton>
-                )}
-              </div>
-            );
-          })
-        )}
       </PanelBody>
     </Panel>
   );
