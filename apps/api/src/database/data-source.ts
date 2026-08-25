@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { DataSource } from 'typeorm';
 
+import { migrations } from './migrations';
+
 // The TypeORM CLI runs outside the Nest container, so it loads env itself. Same
 // search order as ConfigModule: app-local first, then the monorepo root.
 loadEnv({ path: '.env.local' });
@@ -61,7 +63,16 @@ export default new DataSource({
   type: 'postgres',
   ...connection(),
   entities: ['src/**/*.entity.ts'],
-  migrations: ['src/database/migrations/*.ts'],
+  /*
+    The same list the application uses, not a second glob.
+
+    Two ways of finding the same migrations is one way too many: this glob also
+    matched the list's own `index.ts`, which re-exports every class, so the CLI
+    saw all twenty twice and refused to run any of them. Importing the list
+    means the CLI and the running application can never disagree about what
+    exists or in what order.
+  */
+  migrations,
   migrationsTableName: 'migrations',
   /**
    * Each migration in its own transaction, not one transaction for the batch.

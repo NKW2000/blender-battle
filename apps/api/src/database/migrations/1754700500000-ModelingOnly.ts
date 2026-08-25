@@ -51,25 +51,20 @@ export class ModelingOnly1754700500000 implements MigrationInterface {
       `UPDATE "rooms" SET "category_id" = $1 WHERE "category_id" IS NOT NULL AND "category_id" <> $1`,
       [id],
     );
-    // Nullable and purely cosmetic on a profile, so it is cleared rather than
-    // rewritten — claiming everyone's favourite discipline is Modeling would be
-    // inventing data.
-    await queryRunner.query(
-      `UPDATE "users" SET "favorite_category_id" = NULL WHERE "favorite_category_id" <> $1`,
-      [id],
-    );
+    /*
+      `users` needs nothing.
 
+      It once carried a `favorite_category_id`, and this cleared it. That column
+      was a placeholder that never got wired to anything, and DropReservedColumns
+      — which sorts earlier, so it has always already run by the time this does —
+      removes it. Clearing it here could therefore only ever fail, and did: every
+      migration from a fresh database stopped on `column "favorite_category_id"
+      does not exist`, which on a serverless deployment surfaced as an API that
+      would not start at all.
+    */
     await queryRunner.query(`DELETE FROM "categories" WHERE "id" <> $1`, [id]);
   }
 
-  /**
-   * Restores the other thirteen.
-   *
-   * What cannot be restored is which category each challenge used to be in —
-   * that association was overwritten above and nothing recorded it. Reverting
-   * gives back the list, not the assignments, and everything stays on Modeling
-   * until a manager moves it. Worth knowing before running it.
-   */
   /**
    * Restores the other thirteen.
    *

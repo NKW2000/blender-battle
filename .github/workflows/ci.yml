@@ -34,6 +34,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Migrations are only ever true against a real database. A `ModelingOnly`
+    # migration updated a column that an earlier migration had already dropped,
+    # so every run from an empty database stopped on `column
+    # "favorite_category_id" does not exist` — and because the deployment applies
+    # migrations at boot, that surfaced as an API that would not start. Nothing
+    # in this workflow could have seen it: the SQL is a string until something
+    # executes it.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        # Without this the first migration can race the server's startup.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -76,6 +96,15 @@ jobs:
       # policy that is documented but unwired reads as implemented.
       - name: Check every shared export is used
         run: node scripts/check-shared-exports.mjs
+
+      # Every migration, in order, against an empty database — which is the only
+      # state that matters, since it is what a new deployment starts from. A
+      # migration that is written, reviewed and committed still proves nothing
+      # until something runs it.
+      - name: Run migrations from an empty database
+        run: pnpm --filter @bb/api migration:run
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
       # Four deployments failed on faults nothing above could see: the function
       # died before running a line of application code, so typecheck, lint, the
