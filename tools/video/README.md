@@ -41,13 +41,64 @@ guarantee the property the renderer needs rather than hoping the browser kept up
 | File | What it does |
 | --- | --- |
 | `render.mjs` | The renderer. Frames out of Chrome, MP4 out of FFmpeg. |
+| `mix.mjs` | Builds the soundtrack and muxes it onto a rendered video. |
+| `audio/synth.mjs` | Generates the music bed, applause and whistle. |
 | `still.mjs` | Single frames at given timestamps, for checking a scene without rendering the lot. |
+| `check-fit.mjs` | Walks both frame shapes through every scene, reporting overflow. |
 | `build-ad.mjs` | Inlines the fonts into `scenes/ad.html`. |
 | `scenes/ad.template.html` | The ad. Edit this, not `ad.html`. |
 
 Check a scene before committing to a full render:
 
     node still.mjs scenes/ad.html 1.6 11.6 25.2
+
+## The whole ad, end to end
+
+    npm install
+    node audio/synth.mjs
+    AD_URL=blenderbattle.vercel.app node build-ad.mjs
+    node render.mjs scenes/ad.html --out ad-16x9.mp4 --seconds 38.5 --fps 30 --width 1920 --height 1080
+    node render.mjs scenes/ad.html --out ad-9x16.mp4 --seconds 38.5 --fps 30 --width 1080 --height 1920
+    node mix.mjs ad-16x9.mp4 -o blenderbattle-ad-1080p.mp4
+    node mix.mjs ad-9x16.mp4 -o blenderbattle-ad-vertical.mp4
+
+## One design, two shapes
+
+Every size in the ad is in `vmin`. The landscape frame is 1920x1080 and the
+vertical one is 1080x1920 — different shapes, but the *smaller* side is 1080 in
+both, so a `vmin` is the same number of pixels either way. Type is therefore
+identical between the cuts rather than merely proportional.
+
+Where a size also has to respect the frame's width — headlines, the wordmark,
+the address — it is capped with `min(Nvmin, Mvw)`. 9:16 is only 1080 wide, and a
+line that sits comfortably in the wide frame will run off the narrow one.
+
+`check-fit.mjs` walks both viewports through the middle of every scene and
+reports anything that overflows either edge:
+
+    node check-fit.mjs scenes/ad.html
+
+## Sound
+
+`audio/synth.mjs` generates the music bed, the applause and the whistle from
+oscillators and noise. Nothing is sampled. A stock loop brings a licence the
+project would have to honour on every re-cut, and a "royalty free" file from an
+unclear source is a copyright claim waiting to happen; generated audio belongs
+to this repository outright. It is also seeded rather than random, so the same
+files come out every run.
+
+The voiceover is Windows SAPI, through `System.Speech`. That is why it sounds
+synthetic: it is a placeholder that costs nothing and needs no account. To
+replace it with a real read, drop six WAVs into `audio/trimmed/` named
+`vo1.wav` to `vo6.wav` and re-run `mix.mjs` — the cue times are at the top of
+that file, and the scene boundaries they match are at the top of the template.
+
+`mix.mjs` places every cue, sums them, limits the peaks and normalises to
+-14 LUFS. Two settings there are load-bearing: `normalize=0` on the mix, because
+left on, ffmpeg divides by the input count and adding one short sound would
+quietly drop the entire soundtrack; and an explicit `-ar 48000`, because
+`loudnorm` resamples its output to 96kHz and unusual rates are what platform
+transcoders mishandle.
 
 ## Dependencies
 

@@ -17,7 +17,6 @@
     src: url(data:font/woff2;base64,__NUNITO__) format('woff2');
   }
 
-  /* The app's own tokens, so the ad cannot drift from the product. */
   :root {
     --ink: #0e0b2b;
     --void: #14103a;
@@ -27,13 +26,22 @@
     --mint: #5ef2a8;
     --punch: #ff3d9a;
     --haze: rgba(255, 246, 233, .62);
+
+    /*
+      Every size below is in vmin, and that one decision is what lets a single
+      design serve both cuts. The landscape frame is 1920x1080 and the vertical
+      one is 1080x1920 — different shapes, but the *smaller* side is 1080 in
+      both, so a vmin is exactly the same number of pixels either way. Type set
+      this way is identical in both renders rather than merely proportional, and
+      the layout is a centred column, which is a shape both frames can hold.
+    */
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
-    width: 1920px;
-    height: 1080px;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     background: var(--ink);
     font-family: 'Nunito', system-ui, sans-serif;
@@ -43,20 +51,45 @@
 
   #stage {
     position: relative;
-    width: 1920px;
-    height: 1080px;
-    background:
-      radial-gradient(1400px 900px at 50% -10%, #322A85 0%, #1B1550 46%, #14103A 100%);
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
+    background: var(--void);
   }
 
-  /* The dot field the app paints behind its hero. */
-  #stage::before {
-    content: '';
+  /* The lamp behind everything, which drifts for the whole film. */
+  #glow {
+    position: absolute;
+    left: 50%;
+    top: -10%;
+    width: 160vmin;
+    height: 120vmin;
+    margin-left: -80vmin;
+    background: radial-gradient(closest-side, #3a2f9e 0%, #221a63 45%, transparent 72%);
+    will-change: transform;
+  }
+
+  /* A dot field that pans, so the frame is never completely still. */
+  #dots {
+    position: absolute;
+    inset: -10%;
+    background-image: radial-gradient(rgba(255,255,255,.055) .22vmin, transparent .24vmin);
+    background-size: 4.3vmin 4.3vmin;
+    will-change: transform;
+  }
+
+  /* Loose shapes drifting behind the type, from the landing page's language. */
+  .float {
+    position: absolute;
+    border: .32vmin solid var(--ink);
+    will-change: transform;
+  }
+
+  #vignette {
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(rgba(255,255,255,.05) 2px, transparent 2.2px);
-    background-size: 46px 46px;
+    background: radial-gradient(closest-side, transparent 55%, rgba(6,4,20,.55) 100%);
+    pointer-events: none;
   }
 
   .scene {
@@ -66,8 +99,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    opacity: 0;
     will-change: opacity, transform;
+    padding: 0 6vmin;
   }
 
   .display { font-family: 'Fredoka', system-ui, sans-serif; font-weight: 700; }
@@ -77,10 +110,10 @@
     position: relative;
     display: grid;
     place-items: center;
-    transform: rotate(45deg);
     border-radius: 24%;
     background: var(--sun);
-    box-shadow: 0 14px 0 var(--ink);
+    box-shadow: 0 1.3vmin 0 var(--ink);
+    will-change: transform;
   }
   .mark::after {
     content: '';
@@ -90,369 +123,661 @@
     background: var(--ink);
   }
 
-  .wordmark { font-size: 116px; letter-spacing: 2px; line-height: 1; }
-  .wordmark .b { color: var(--sun); }
-
-  .tagline {
-    font-size: 34px;
-    font-weight: 800;
-    color: var(--haze);
-    letter-spacing: .4px;
+  /* The ring that sweeps around the mark on the opening beat. */
+  #ring {
+    position: absolute;
+    border: .55vmin solid var(--sun);
+    border-radius: 50%;
+    opacity: 0;
+    will-change: transform, opacity;
   }
 
-  /* ---- reusable furniture ------------------------------------------ */
+  .wordmark { font-size: min(10.7vmin, 7.6vw); letter-spacing: .2vmin; line-height: 1; white-space: nowrap; }
+  .wordmark .b { color: var(--sun); }
+
+  /* Each letter is its own box, so type can arrive a letter at a time. */
+  .ltr { display: inline-block; will-change: transform, opacity; }
+
+  .tagline { font-size: 3.15vmin; font-weight: 800; color: var(--haze); text-align: center; }
+
   .eyebrow {
     font-family: 'Fredoka', system-ui, sans-serif;
     font-weight: 700;
-    font-size: 22px;
-    letter-spacing: 4px;
+    font-size: 2.05vmin;
+    letter-spacing: .38vmin;
     text-transform: uppercase;
     color: var(--sun);
+    white-space: nowrap;
   }
 
   .headline {
-    font-size: 96px;
-    line-height: 1.02;
+    font-size: min(8.4vmin, 7vw);
+    line-height: 1.03;
     text-align: center;
-    letter-spacing: -1px;
+    letter-spacing: -.08vmin;
   }
 
   .sub {
-    font-size: 32px;
+    font-size: 2.95vmin;
     font-weight: 800;
     color: var(--haze);
     text-align: center;
-    max-width: 1100px;
-    line-height: 1.4;
+    max-width: min(92vmin, 86vw);
+    line-height: 1.45;
   }
 
   .panel {
-    border: 4px solid var(--ink);
-    border-radius: 26px;
+    border: .37vmin solid var(--ink);
+    border-radius: 2.4vmin;
     background: rgba(255,255,255,.05);
-    box-shadow: 0 10px 0 var(--ink);
-    padding: 30px 36px;
+    box-shadow: 0 .93vmin 0 var(--ink);
   }
 
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    border: 3px solid var(--ink);
-    border-radius: 999px;
-    padding: 12px 26px;
+    border: .28vmin solid var(--ink);
+    border-radius: 99vmin;
+    padding: 1.1vmin 2.4vmin;
     font-family: 'Fredoka', system-ui, sans-serif;
     font-weight: 700;
-    font-size: 26px;
-    box-shadow: 0 5px 0 var(--ink);
+    font-size: 2.4vmin;
+    box-shadow: 0 .46vmin 0 var(--ink);
+    white-space: nowrap;
+    will-change: transform, opacity;
   }
 
   .tile {
-    width: 260px;
-    height: 260px;
-    border: 4px solid var(--ink);
-    border-radius: 22px;
-    box-shadow: 0 10px 0 var(--ink);
+    width: 24vmin;
+    height: 24vmin;
+    border: .37vmin solid var(--ink);
+    border-radius: 2vmin;
+    box-shadow: 0 .93vmin 0 var(--ink);
     display: grid;
     place-items: center;
     font-family: 'Fredoka', system-ui, sans-serif;
     font-weight: 700;
-    font-size: 30px;
+    font-size: 2.8vmin;
     color: var(--ink);
+    will-change: transform, opacity;
   }
 
-  .row { display: flex; align-items: center; gap: 28px; }
+  .row { display: flex; align-items: center; gap: 2.6vmin; flex-wrap: nowrap; }
   .col { display: flex; flex-direction: column; align-items: center; }
 
-  /* Leaderboard rows */
-  .lb {
-    display: flex;
-    align-items: center;
-    gap: 26px;
-    width: 900px;
-    padding: 20px 28px;
-    border: 3px solid var(--ink);
-    border-radius: 18px;
-    background: rgba(255,255,255,.05);
-    font-size: 30px;
-    font-weight: 800;
-  }
-  .lb .rank {
-    font-family: 'Fredoka', system-ui, sans-serif;
-    font-size: 34px;
-    width: 74px;
-    height: 60px;
+  /* ---- entries, for the blind-ballot beat --------------------------- */
+  .entry {
+    width: 22vmin;
+    height: 26vmin;
+    border-radius: 2vmin;
+    border: .37vmin solid var(--ink);
+    box-shadow: 0 .93vmin 0 var(--ink);
     display: grid;
     place-items: center;
-    border: 3px solid var(--ink);
-    border-radius: 14px;
+    font-family: 'Fredoka', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 5vmin;
     color: var(--ink);
+    will-change: transform;
   }
-  .lb .score { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--sun); }
+
+  /* ---- standings ---------------------------------------------------- */
+  .lb {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2.2vmin;
+    width: 78vmin;
+    max-width: 100%;
+    padding: 1.7vmin 2.4vmin;
+    border: .28vmin solid var(--ink);
+    border-radius: 1.6vmin;
+    background: rgba(255,255,255,.05);
+    font-size: 2.7vmin;
+    font-weight: 800;
+    overflow: hidden;
+    will-change: transform, opacity;
+  }
+  /* The score bar growing behind the row. */
+  .lb .bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, rgba(255,210,63,.30), rgba(255,210,63,.05));
+    will-change: transform;
+    transform-origin: left center;
+  }
+  .lb .rank {
+    position: relative;
+    font-family: 'Fredoka', system-ui, sans-serif;
+    font-size: 3.1vmin;
+    width: 6.6vmin;
+    height: 5.4vmin;
+    display: grid;
+    place-items: center;
+    border: .28vmin solid var(--ink);
+    border-radius: 1.2vmin;
+    color: var(--ink);
+    flex: none;
+  }
+  .lb .who { position: relative; }
+  .lb .score {
+    position: relative;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--sun);
+    font-family: 'Fredoka', system-ui, sans-serif;
+  }
 
   .url {
     font-family: 'Fredoka', system-ui, sans-serif;
     font-weight: 700;
-    font-size: 44px;
+    font-size: min(3.9vmin, 4.6vw);
     color: var(--aqua);
-    letter-spacing: 1px;
+    letter-spacing: .09vmin;
+    position: relative;
+    white-space: nowrap;
+  }
+  /* A rule that wipes in under the address. */
+  .url::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1.1vmin;
+    height: .37vmin;
+    background: var(--aqua);
+    border-radius: 99vmin;
+    transform: scaleX(var(--wipe, 0));
+    transform-origin: left center;
+  }
+
+  /* Sparks thrown out when the result lands. */
+  .spark {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform, opacity;
+  }
+
+  /* The film's own progress, along the bottom edge. */
+  #progress {
+    position: absolute;
+    left: 0; bottom: 0;
+    height: .55vmin;
+    background: var(--sun);
+    transform-origin: left center;
+    width: 100%;
   }
 </style>
 </head>
 <body>
 <div id="stage">
+  <div id="glow"></div>
+  <div id="dots"></div>
 
-  <!-- 1 — the mark and the name ------------------------------------- -->
+  <!-- Drifting furniture. Positions are in vmin from the centre, so they land
+       sensibly in a tall frame as well as a wide one. -->
+  <div class="float" id="f1" style="width:7vmin;height:7vmin;border-radius:1.8vmin;background:var(--sun)"></div>
+  <div class="float" id="f2" style="width:4.6vmin;height:4.6vmin;border-radius:50%;background:var(--aqua)"></div>
+  <div class="float" id="f3" style="width:5.6vmin;height:5.6vmin;border-radius:1.4vmin;background:var(--mint)"></div>
+  <div class="float" id="f4" style="width:3.6vmin;height:3.6vmin;border-radius:50%;background:var(--punch)"></div>
+
+  <!-- 1 — the name --------------------------------------------------- -->
   <section class="scene" id="s1">
-    <div class="mark" id="s1mark" style="width:230px;height:230px"></div>
-    <div class="display wordmark" id="s1word" style="margin-top:86px">BLENDER<span class="b">BATTLE</span></div>
-    <div class="tagline" id="s1tag" style="margin-top:26px">Live modelling duels for Blender artists</div>
+    <div style="position:relative;display:grid;place-items:center">
+      <div id="ring" style="width:40vmin;height:40vmin"></div>
+      <div class="mark" id="s1mark" style="width:21vmin;height:21vmin"></div>
+    </div>
+    <div class="display wordmark" id="s1word" style="margin-top:7.4vmin" data-split>BLENDER<span class="b">BATTLE</span></div>
+    <div class="tagline" id="s1tag" style="margin-top:2.4vmin">Live modelling duels for Blender artists</div>
   </section>
 
   <!-- 2 — the draw ---------------------------------------------------- -->
   <section class="scene" id="s2">
     <div class="eyebrow" id="s2eye">Step one</div>
-    <div class="display headline" id="s2head" style="margin-top:22px">The brief is drawn,<br>not chosen</div>
-    <div class="sub" id="s2sub" style="margin-top:28px">Nobody sees it before the room starts — the host included.</div>
-    <div class="row" id="s2row" style="margin-top:52px">
+    <div class="display headline" id="s2head" style="margin-top:2vmin" data-split>The brief is drawn</div>
+    <div class="sub" id="s2sub" style="margin-top:2.4vmin">Nobody sees it before the room starts — the host included.</div>
+    <div class="row" id="s2row" style="margin-top:4.6vmin">
       <div class="tile" style="background:var(--mint)">EASY</div>
       <div class="tile" style="background:var(--sun)">MEDIUM</div>
       <div class="tile" style="background:var(--punch);color:var(--cream)">HARD</div>
     </div>
   </section>
 
-  <!-- 3 — the build --------------------------------------------------- -->
+  <!-- 3 — the clock --------------------------------------------------- -->
   <section class="scene" id="s3">
     <div class="eyebrow" id="s3eye">Step two</div>
-    <div class="display headline" id="s3head" style="margin-top:22px">Everyone builds<br>against one clock</div>
-    <div class="panel col" id="s3panel" style="margin-top:46px;padding:44px 90px">
-      <div class="display" id="s3clock" style="font-size:150px;letter-spacing:2px;color:var(--sun);font-variant-numeric:tabular-nums">30:00</div>
-      <div style="font-size:28px;font-weight:800;color:var(--haze);margin-top:10px">2 to 16 artists, same deadline</div>
+    <div class="display headline" id="s3head" style="margin-top:2vmin" data-split>One brief, one clock</div>
+    <div class="panel col" id="s3panel" style="margin-top:4vmin;padding:3.7vmin 7.4vmin">
+      <div style="position:relative;display:grid;place-items:center">
+        <svg id="s3ring" width="34vmin" height="34vmin" viewBox="0 0 100 100" style="width:34vmin;height:34vmin;transform:rotate(-90deg)">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="5"></circle>
+          <circle id="s3arc" cx="50" cy="50" r="44" fill="none" stroke="var(--sun)" stroke-width="5"
+                  stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="display" id="s3clock"
+             style="position:absolute;font-size:9.3vmin;letter-spacing:.2vmin;color:var(--sun);font-variant-numeric:tabular-nums">30:00</div>
+      </div>
+      <div id="s3note" style="font-size:2.6vmin;font-weight:800;color:var(--haze);margin-top:1.4vmin;white-space:nowrap">2 to 16 artists, same deadline</div>
     </div>
   </section>
 
   <!-- 4 — the ballot -------------------------------------------------- -->
   <section class="scene" id="s4">
     <div class="eyebrow" id="s4eye">Step three</div>
-    <div class="display headline" id="s4head" style="margin-top:22px">Judged blind</div>
-    <div class="sub" id="s4sub" style="margin-top:28px">Entries arrive with no names attached. You cannot vote for yourself.</div>
-    <div class="row" id="s4row" style="margin-top:52px">
-      <div class="chip" style="background:var(--aqua);color:var(--ink)">Artist hidden</div>
-      <div class="chip" style="background:var(--mint);color:var(--ink)">One vote each</div>
-      <div class="chip" style="background:var(--sun);color:var(--ink)">4+ entries to rank</div>
+    <div class="display headline" id="s4head" style="margin-top:2vmin" data-split>Judged blind</div>
+    <div class="row" id="s4row" style="margin-top:4vmin">
+      <div class="entry" style="background:var(--aqua)">?</div>
+      <div class="entry" style="background:var(--mint)">?</div>
+      <div class="entry" style="background:var(--sun)">?</div>
     </div>
+    <div class="sub" id="s4sub" style="margin-top:3.2vmin">No names attached. You cannot vote for your own.</div>
   </section>
 
   <!-- 5 — the standings ----------------------------------------------- -->
   <section class="scene" id="s5">
-    <div class="eyebrow" id="s5eye">And then</div>
-    <div class="display headline" id="s5head" style="margin-top:22px">It counts</div>
-    <div class="col" id="s5list" style="gap:18px;margin-top:46px">
-      <div class="lb" data-lb><span class="rank" style="background:var(--sun)">1</span><span>kessler</span><span class="score" data-score="1284">0</span></div>
-      <div class="lb" data-lb><span class="rank" style="background:var(--aqua)">2</span><span>norrin</span><span class="score" data-score="1150">0</span></div>
-      <div class="lb" data-lb><span class="rank" style="background:var(--punch);color:var(--cream)">3</span><span>vex</span><span class="score" data-score="1097">0</span></div>
+    <div class="eyebrow" id="s5eye">And it counts</div>
+    <div class="display headline" id="s5head" style="margin-top:2vmin" data-split>Climb the board</div>
+    <div class="col" id="s5list" style="gap:1.5vmin;margin-top:4vmin">
+      <div class="lb" data-lb><span class="bar" style="width:100%"></span><span class="rank" style="background:var(--sun)">1</span><span class="who">kessler</span><span class="score" data-score="1284">0</span></div>
+      <div class="lb" data-lb><span class="bar" style="width:88%"></span><span class="rank" style="background:var(--aqua)">2</span><span class="who">norrin</span><span class="score" data-score="1150">0</span></div>
+      <div class="lb" data-lb><span class="bar" style="width:79%"></span><span class="rank" style="background:var(--punch);color:var(--cream)">3</span><span class="who">vex</span><span class="score" data-score="1097">0</span></div>
     </div>
   </section>
 
   <!-- 6 — the call ----------------------------------------------------- -->
   <section class="scene" id="s6">
-    <div class="mark" id="s6mark" style="width:150px;height:150px"></div>
-    <div class="display wordmark" id="s6word" style="margin-top:70px;font-size:92px">BLENDER<span class="b">BATTLE</span></div>
-    <div class="display" id="s6cta" style="margin-top:34px;font-size:54px">Start a room. Draw a brief. Build.</div>
-    <div class="url" id="s6url" style="margin-top:34px">__URL__</div>
+    <div class="mark" id="s6mark" style="width:14vmin;height:14vmin"></div>
+    <div class="display wordmark" id="s6word" style="margin-top:6vmin;font-size:min(8.6vmin,6.6vw)" data-split>BLENDER<span class="b">BATTLE</span></div>
+    <div class="display" id="s6cta" style="margin-top:3vmin;font-size:min(4.6vmin,4.4vw);text-align:center">Start a room. Draw a brief. Build.</div>
+    <div class="url" id="s6url" style="margin-top:3.4vmin">__URL__</div>
   </section>
 
+  <div id="vignette"></div>
+  <div id="progress"></div>
 </div>
 
 <script>
 /*
   The whole film as one function of time.
 
-  Nothing here animates on its own: there is no CSS animation, no transition and
-  no timer. `seek(t)` is given a timestamp and sets every property from it, so
-  frame 300 looks the same whether it was rendered first, last, or on a machine
-  that took a second over it. That is the property the renderer depends on, and
-  authoring the timeline this way is what guarantees it rather than hoping the
-  browser kept up.
+  Nothing animates on its own: no CSS animation, no transition, no timer.
+  `seek(t)` is handed a timestamp and sets every property from it, so frame 300
+  is identical whether it was rendered first, last, or on a machine that took a
+  second over it. Authoring the timeline this way is what guarantees the
+  determinism the renderer depends on, rather than hoping the browser kept up.
 */
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const span = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+const mix = (a, b, p) => a + (b - a) * p;
 
-/** Progress through [start, end], 0..1. */
-const span = (t, start, end) => clamp((t - start) / (end - start), 0, 1);
-
-/** Slow at both ends — the standard "this was designed" curve. */
-const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
-
-/** Fast out, settling — for things arriving. */
 const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+const easeOutExpo = (p) => (p === 1 ? 1 : 1 - Math.pow(2, -10 * p));
 
-/** A little past the target, then back. Gives the arcade bounce. */
+/** A little past the target, then back — the arcade bounce. */
 function overshoot(p) {
-  const c = 1.70158 + 1;
+  const c = 2.70158;
   return 1 + c * Math.pow(p - 1, 3) + 1.70158 * Math.pow(p - 1, 2);
 }
 
+/** Settles with a couple of diminishing wobbles. */
+function spring(p) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  return 1 - Math.pow(2, -9 * p) * Math.cos((p * 9 - 0.75) * (Math.PI * 2) / 3);
+}
+
+/*
+  Timings follow the voiceover rather than the other way round.
+
+  Each scene is as long as its line takes to read plus room to breathe, which
+  is why these are not round numbers. Changing a line means changing the pair.
+*/
 const SCENES = [
-  { id: 's1', from: 0.0, to: 5.0 },
-  { id: 's2', from: 5.0, to: 9.5 },
-  { id: 's3', from: 9.5, to: 14.0 },
-  { id: 's4', from: 14.0, to: 18.5 },
-  { id: 's5', from: 18.5, to: 23.0 },
-  { id: 's6', from: 23.0, to: 28.0 },
+  { id: 's1', from: 0.00, to: 5.90 },
+  { id: 's2', from: 5.90, to: 14.10 },
+  { id: 's3', from: 14.10, to: 21.10 },
+  { id: 's4', from: 21.10, to: 27.70 },
+  { id: 's5', from: 27.70, to: 33.10 },
+  { id: 's6', from: 33.10, to: 38.50 },
 ];
 
-/** Cross-fade window between scenes, in seconds. */
-const FADE = 0.45;
+const RUNTIME = 38.5;
+const HANDOVER = 0.5;
 
 const el = (id) => document.getElementById(id);
 
-function setScene(scene, t) {
-  const node = el(scene.id);
-  const inP = span(t, scene.from, scene.from + FADE);
-  const outP = span(t, scene.to - FADE, scene.to);
-  const visible = inP * (1 - outP);
+/*
+  Type is split into letters once, at load.
 
-  node.style.opacity = String(visible);
-  // A scene that is invisible must not be able to catch a stray pixel.
-  node.style.visibility = visible <= 0.001 ? 'hidden' : 'visible';
-
-  // The whole scene drifts a little as it arrives and leaves, which reads as
-  // depth without anybody noticing a specific movement.
-  const drift = (1 - easeOut(inP)) * 40 - outP * 30;
-  node.style.transform = `translateY(${drift}px)`;
-
-  return t - scene.from;
-}
-
-function seek(t) {
-  for (const scene of SCENES) {
-    const local = setScene(scene, t);
-    SCENE_BODY[scene.id]?.(local, t);
+  Doing it per frame would rebuild the DOM 1155 times and, worse, would reset
+  layout mid-render. The spans are created here and only their transforms are
+  touched afterwards.
+*/
+function splitLetters() {
+  for (const node of document.querySelectorAll('[data-split]')) {
+    const walk = (parent) => {
+      for (const child of [...parent.childNodes]) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const frag = document.createDocumentFragment();
+          for (const ch of child.textContent) {
+            const s = document.createElement('span');
+            s.className = 'ltr';
+            // A space with no width collapses; this keeps the gap.
+            s.textContent = ch === ' ' ? ' ' : ch;
+            frag.appendChild(s);
+          }
+          parent.replaceChild(frag, child);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          walk(child);
+        }
+      }
+    };
+    walk(node);
+    node.dataset.count = String(node.querySelectorAll('.ltr').length);
   }
 }
 
-const SCENE_BODY = {
-  // The mark lands, spins the last quarter turn, and the name arrives under it.
+/**
+ * Reveals a line one letter at a time.
+ *
+ * The stagger is what separates "text faded in" from something that was
+ * designed: each letter starts a fraction after the one before it, so the eye
+ * is led along the line in reading order.
+ */
+function revealLetters(node, local, start, perLetter = 0.028, rise = 2.6) {
+  const letters = node.querySelectorAll('.ltr');
+  letters.forEach((letter, i) => {
+    const p = span(local, start + i * perLetter, start + i * perLetter + 0.42);
+    const e = spring(p);
+    letter.style.opacity = String(clamp(p * 1.6, 0, 1));
+    letter.style.transform =
+      `translateY(${(1 - e) * rise}vmin) rotate(${(1 - e) * -6}deg) scale(${mix(0.86, 1, e)})`;
+  });
+}
+
+/** Sparks thrown from a point, made once and reused. */
+function makeSparks(host, count, seedColours) {
+  const made = [];
+  for (let i = 0; i < count; i += 1) {
+    const s = document.createElement('div');
+    s.className = 'spark';
+    const size = 0.7 + (i % 4) * 0.35;
+    s.style.width = `${size}vmin`;
+    s.style.height = `${size}vmin`;
+    s.style.background = seedColours[i % seedColours.length];
+    /*
+      Inserted first, not appended.
+
+      Appended, a spark paints above everything in the row and the burst
+      lands squarely on top of the winner name. The rank, name and score are
+      all positioned, so anything inserted ahead of them sits behind them —
+      which is where a spark thrown from the row belongs.
+    */
+    host.insertBefore(s, host.firstChild);
+    made.push({ node: s, angle: (i / count) * Math.PI * 2 + (i % 3) * 0.4, reach: 14 + (i % 5) * 4 });
+  }
+  return made;
+}
+
+let sparks = [];
+
+/* ------------------------------------------------------------- the film */
+
+function seek(t) {
+  ambient(t);
+
+  for (const scene of SCENES) {
+    const node = el(scene.id);
+    const inP = span(t, scene.from, scene.from + HANDOVER);
+    const outP = span(t, scene.to - HANDOVER, scene.to);
+    const visible = inP * (1 - outP);
+
+    node.style.opacity = String(visible);
+    node.style.visibility = visible <= 0.002 ? 'hidden' : 'visible';
+
+    /*
+      Scenes travel rather than fade.
+
+      Each arrives from below with a slight scale and leaves upward, which
+      reads as one camera moving through a sequence instead of six slides
+      being swapped. The two motions overlap during the handover, so there is
+      never a frame where nothing is moving.
+    */
+    const rise = (1 - easeOutExpo(inP)) * 7;
+    const exit = easeInOut(outP) * -5;
+    const zoom = mix(0.965, 1, easeOutExpo(inP)) * mix(1, 1.04, easeInOut(outP));
+    node.style.transform = `translateY(${rise + exit}vmin) scale(${zoom})`;
+
+    if (visible > 0.002) BODY[scene.id](t - scene.from, t);
+  }
+
+  // The film's own progress line.
+  el('progress').style.transform = `scaleX(${clamp(t / RUNTIME, 0, 1)})`;
+}
+
+/** Everything that never stops moving. */
+function ambient(t) {
+  // The lamp breathes and drifts.
+  el('glow').style.transform =
+    `translate(${Math.sin(t * 0.21) * 6}vmin, ${Math.cos(t * 0.17) * 3.5}vmin) scale(${1 + Math.sin(t * 0.3) * 0.05})`;
+
+  // The dot field pans slowly on a diagonal, which is what stops a flat
+  // background from reading as a still image.
+  el('dots').style.transform = `translate(${(t * 0.55) % 4.3}vmin, ${(t * 0.34) % 4.3}vmin)`;
+
+  const floats = [
+    { id: 'f1', x: -44, y: -31, rate: 0.42, spin: 12, phase: 0 },
+    { id: 'f2', x: 44, y: -24, rate: 0.35, spin: -9, phase: 1.7 },
+    { id: 'f3', x: -44, y: 30, rate: 0.30, spin: 14, phase: 3.1 },
+    { id: 'f4', x: 44, y: 28, rate: 0.47, spin: -16, phase: 4.6 },
+  ];
+
+  for (const f of floats) {
+    const bob = Math.sin(t * f.rate + f.phase) * 2.6;
+    const sway = Math.cos(t * f.rate * 0.7 + f.phase) * 1.6;
+    const node = el(f.id);
+    node.style.left = '50%';
+    node.style.top = '50%';
+    node.style.transform =
+      `translate(calc(-50% + ${f.x + sway}vmin), calc(-50% + ${f.y + bob}vmin)) rotate(${Math.sin(t * f.rate * 0.8 + f.phase) * f.spin}deg)`;
+  }
+}
+
+const BODY = {
+  // The mark drops in, a ring snaps out past it, the name builds letter by
+  // letter, and the mark keeps breathing for the rest of the scene.
   s1(local) {
-    const land = span(local, 0.1, 1.3);
-    const scale = 0.35 + overshoot(easeOut(land)) * 0.65;
-    const spin = 45 + (1 - easeOut(land)) * 180;
-    el('s1mark').style.transform = `rotate(${spin}deg) scale(${scale})`;
+    const land = span(local, 0.05, 1.25);
+    const e = spring(land);
+    const idle = Math.sin(Math.max(0, local - 1.2) * 1.7) * 0.02;
+    el('s1mark').style.transform =
+      `rotate(${mix(-135, 45, easeOutExpo(land))}deg) scale(${mix(0.2, 1, e) + idle})`;
 
-    const word = span(local, 0.85, 1.7);
-    el('s1word').style.opacity = String(word);
-    el('s1word').style.transform = `translateY(${(1 - easeOut(word)) * 34}px)`;
+    const ring = span(local, 0.5, 1.5);
+    el('ring').style.opacity = String((1 - ring) * 0.85);
+    el('ring').style.transform = `scale(${mix(0.35, 1.35, easeOut(ring))})`;
 
-    const tag = span(local, 1.3, 2.2);
+    revealLetters(el('s1word'), local, 0.85, 0.026, 3);
+
+    const tag = span(local, 1.9, 2.8);
     el('s1tag').style.opacity = String(tag);
-    el('s1tag').style.transform = `translateY(${(1 - easeOut(tag)) * 22}px)`;
+    el('s1tag').style.transform =
+      `translateY(${(1 - easeOut(tag)) * 2}vmin) scale(${mix(0.97, 1, easeOut(tag))})`;
   },
 
-  // The three difficulty tiles deal in one after another.
+  // The three tiles are dealt like cards, then keep a slow idle sway.
   s2(local) {
-    const eye = span(local, 0.15, 0.7);
+    const eye = span(local, 0.1, 0.6);
     el('s2eye').style.opacity = String(eye);
+    el('s2eye').style.transform = `translateY(${(1 - easeOut(eye)) * 1.4}vmin)`;
 
-    const head = span(local, 0.3, 1.1);
-    el('s2head').style.opacity = String(head);
-    el('s2head').style.transform = `translateY(${(1 - easeOut(head)) * 30}px)`;
+    revealLetters(el('s2head'), local, 0.28, 0.022, 2.4);
 
-    const sub = span(local, 0.7, 1.4);
+    const sub = span(local, 1.0, 1.7);
     el('s2sub').style.opacity = String(sub);
+    el('s2sub').style.transform = `translateY(${(1 - easeOut(sub)) * 1.6}vmin)`;
 
     const tiles = el('s2row').children;
     for (let i = 0; i < tiles.length; i += 1) {
-      const p = span(local, 1.1 + i * 0.22, 1.9 + i * 0.22);
-      tiles[i].style.opacity = String(p);
+      const p = span(local, 1.35 + i * 0.19, 2.15 + i * 0.19);
+      const e = spring(p);
+
+      // Dealt from a stack off to the left, spinning as they go.
+      const idle = Math.sin((local + i * 1.3) * 0.9) * 1.1;
+      const drift = p >= 1 ? idle : 0;
+      tiles[i].style.opacity = String(clamp(p * 2, 0, 1));
       tiles[i].style.transform =
-        `translateY(${(1 - overshoot(easeOut(p))) * 60}px) rotate(${(1 - p) * (i - 1) * 6}deg)`;
+        `translate(${mix(-26, 0, e)}vmin, ${mix(10, 0, e) + drift}vmin)` +
+        ` rotate(${mix(-38, 0, e) + drift * 0.5}deg) scale(${mix(0.7, 1, e)})`;
     }
   },
 
-  // A clock that actually counts down, because a frozen one reads as a mock-up.
+  // A clock that runs, with the ring draining alongside it.
   s3(local) {
-    const eye = span(local, 0.15, 0.7);
+    const eye = span(local, 0.1, 0.6);
     el('s3eye').style.opacity = String(eye);
+    el('s3eye').style.transform = `translateY(${(1 - easeOut(eye)) * 1.4}vmin)`;
 
-    const head = span(local, 0.3, 1.1);
-    el('s3head').style.opacity = String(head);
-    el('s3head').style.transform = `translateY(${(1 - easeOut(head)) * 30}px)`;
+    revealLetters(el('s3head'), local, 0.28, 0.022, 2.4);
 
-    const panel = span(local, 0.9, 1.6);
-    el('s3panel').style.opacity = String(panel);
-    el('s3panel').style.transform = `scale(${0.9 + easeOut(panel) * 0.1})`;
+    const panel = span(local, 0.95, 1.75);
+    const pe = spring(panel);
+    el('s3panel').style.opacity = String(clamp(panel * 2, 0, 1));
+    el('s3panel').style.transform = `translateY(${mix(6, 0, pe)}vmin) scale(${mix(0.86, 1, pe)})`;
 
-    // 30:00 down to 27:xx over the scene — slow enough to read, moving enough
-    // to be alive.
-    const ticked = clamp((local - 1.4) * 55, 0, 175);
-    const remaining = Math.max(0, 1800 - Math.floor(ticked));
+    // Counts 30:00 down to about 27:00 across the scene.
+    const running = clamp((local - 1.5) / 4.2, 0, 1);
+    const remaining = Math.max(0, Math.round(1800 - running * 178));
     const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
     const ss = String(remaining % 60).padStart(2, '0');
     el('s3clock').textContent = `${mm}:${ss}`;
+
+    // A tick on each whole second, so the digits have a pulse behind them.
+    const beat = Math.abs(Math.sin(Math.max(0, local - 1.5) * Math.PI));
+    el('s3clock').style.transform = `scale(${1 + (running > 0 ? beat * 0.014 : 0)})`;
+
+    // 276.5 is the circumference at r=44.
+    el('s3arc').setAttribute('stroke-dashoffset', String(276.5 * running * 0.55));
+
+    const note = span(local, 1.8, 2.5);
+    el('s3note').style.opacity = String(note);
   },
 
+  // Three anonymous entries flip up, then one is chosen.
   s4(local) {
-    const eye = span(local, 0.15, 0.7);
+    const eye = span(local, 0.1, 0.6);
     el('s4eye').style.opacity = String(eye);
+    el('s4eye').style.transform = `translateY(${(1 - easeOut(eye)) * 1.4}vmin)`;
 
-    const head = span(local, 0.3, 1.1);
-    el('s4head').style.opacity = String(head);
-    el('s4head').style.transform = `translateY(${(1 - easeOut(head)) * 30}px)`;
+    revealLetters(el('s4head'), local, 0.28, 0.024, 2.4);
 
-    const sub = span(local, 0.75, 1.5);
-    el('s4sub').style.opacity = String(sub);
+    const entries = el('s4row').children;
+    for (let i = 0; i < entries.length; i += 1) {
+      const p = span(local, 1.1 + i * 0.16, 1.85 + i * 0.16);
+      const e = spring(p);
 
-    const chips = el('s4row').children;
-    for (let i = 0; i < chips.length; i += 1) {
-      const p = span(local, 1.2 + i * 0.2, 1.9 + i * 0.2);
-      chips[i].style.opacity = String(p);
-      chips[i].style.transform = `scale(${0.8 + overshoot(easeOut(p)) * 0.2})`;
+      /*
+        A flip on the Y axis, which is the gesture the beat is about: a card
+        turning face up while staying anonymous.
+      */
+      const flip = mix(88, 0, easeOutExpo(p));
+      const idle = Math.sin((local + i * 0.9) * 1.15) * 0.8;
+
+      // The middle one is picked near the end of the scene.
+      const chosen = i === 1 ? span(local, 3.5, 4.1) : 0;
+      const lift = chosen * 2.4;
+
+      entries[i].style.opacity = String(clamp(p * 2, 0, 1));
+      entries[i].style.transform =
+        `perspective(90vmin) rotateY(${flip}deg)` +
+        ` translateY(${mix(5, 0, e) - lift + (p >= 1 ? idle : 0)}vmin)` +
+        ` scale(${mix(0.85, 1, e) + chosen * 0.06})`;
+      entries[i].style.boxShadow =
+        chosen > 0 ? `0 ${0.93 + chosen * 0.9}vmin 0 var(--ink)` : '0 .93vmin 0 var(--ink)';
     }
+
+    const sub = span(local, 2.2, 2.9);
+    el('s4sub').style.opacity = String(sub);
+    el('s4sub').style.transform = `translateY(${(1 - easeOut(sub)) * 1.6}vmin)`;
   },
 
-  // Scores count up. The eye reads a rising number as a result being earned.
+  // Rows slide in, bars grow, scores count, and the winner throws sparks.
   s5(local) {
-    const eye = span(local, 0.15, 0.7);
+    const eye = span(local, 0.1, 0.6);
     el('s5eye').style.opacity = String(eye);
+    el('s5eye').style.transform = `translateY(${(1 - easeOut(eye)) * 1.4}vmin)`;
 
-    const head = span(local, 0.3, 1.1);
-    el('s5head').style.opacity = String(head);
-    el('s5head').style.transform = `translateY(${(1 - easeOut(head)) * 30}px)`;
+    revealLetters(el('s5head'), local, 0.28, 0.024, 2.4);
 
     const rows = el('s5list').querySelectorAll('[data-lb]');
     rows.forEach((row, i) => {
-      const p = span(local, 0.9 + i * 0.25, 1.7 + i * 0.25);
-      row.style.opacity = String(p);
-      row.style.transform = `translateX(${(1 - easeOut(p)) * -70}px)`;
+      const p = span(local, 0.95 + i * 0.2, 1.7 + i * 0.2);
+      const e = spring(p);
+      row.style.opacity = String(clamp(p * 2, 0, 1));
+      row.style.transform = `translateX(${mix(-9, 0, e)}vmin) scale(${mix(0.95, 1, e)})`;
+
+      const grow = span(local, 1.2 + i * 0.2, 2.5 + i * 0.2);
+      row.querySelector('.bar').style.transform = `scaleX(${easeOut(grow)})`;
 
       const score = row.querySelector('.score');
       const target = Number(score.dataset.score);
-      const counted = span(local, 1.2 + i * 0.25, 2.6 + i * 0.25);
+      const counted = span(local, 1.25 + i * 0.2, 2.9 + i * 0.2);
       score.textContent = String(Math.round(target * easeInOut(counted)));
+
+      // The number swells as it lands, then settles.
+      const pop = i === 0 ? span(local, 2.9, 3.3) : 0;
+      score.style.transform = `scale(${1 + Math.sin(pop * Math.PI) * 0.16})`;
     });
+
+    // Sparks off the first row, once it has finished counting.
+    const burst = span(local, 3.0, 4.0);
+    for (const s of sparks) {
+      const reach = easeOut(burst) * s.reach;
+      s.node.style.opacity = String((1 - burst) * 0.95);
+      s.node.style.transform =
+        `translate(calc(-50% + ${Math.cos(s.angle) * reach}vmin), calc(-50% + ${Math.sin(s.angle) * reach - burst * 3}vmin)) scale(${1 - burst * 0.4})`;
+    }
   },
 
+  // Everything comes back together for the address.
   s6(local) {
-    const land = span(local, 0.15, 1.1);
-    el('s6mark').style.transform = `rotate(45deg) scale(${0.6 + overshoot(easeOut(land)) * 0.4})`;
+    const land = span(local, 0.1, 1.0);
+    const e = spring(land);
+    const idle = Math.sin(Math.max(0, local - 1.0) * 1.6) * 0.025;
+    el('s6mark').style.transform =
+      `rotate(${mix(-60, 45, easeOutExpo(land))}deg) scale(${mix(0.3, 1, e) + idle})`;
 
-    const word = span(local, 0.6, 1.4);
-    el('s6word').style.opacity = String(word);
-    el('s6word').style.transform = `translateY(${(1 - easeOut(word)) * 28}px)`;
+    revealLetters(el('s6word'), local, 0.55, 0.022, 2.4);
 
-    const cta = span(local, 1.0, 1.8);
+    const cta = span(local, 1.35, 2.1);
     el('s6cta').style.opacity = String(cta);
+    el('s6cta').style.transform =
+      `translateY(${(1 - easeOut(cta)) * 1.8}vmin) scale(${mix(0.96, 1, easeOut(cta))})`;
 
-    const url = span(local, 1.4, 2.2);
+    const url = span(local, 1.8, 2.5);
     el('s6url').style.opacity = String(url);
-    // A slow pulse so the last thing on screen is the thing still moving.
-    const pulse = 1 + Math.sin(Math.max(0, local - 2.2) * 2.4) * 0.02;
-    el('s6url').style.transform = `scale(${url >= 1 ? pulse : 1})`;
+    el('s6url').style.setProperty('--wipe', String(easeOut(span(local, 2.1, 2.9))));
+
+    // A slow pulse, so the last thing on screen is still alive.
+    const pulse = 1 + Math.sin(Math.max(0, local - 2.6) * 2.2) * 0.022;
+    el('s6url').style.transform = `scale(${url >= 1 ? pulse : mix(0.96, 1, easeOut(url))})`;
   },
 };
 
+splitLetters();
+
+// The winner row hosts the sparks, so they follow it if the layout moves.
+const winner = document.querySelector('#s5list [data-lb]');
+winner.style.overflow = 'visible';
+sparks = makeSparks(winner, 18, ['var(--sun)', 'var(--aqua)', 'var(--mint)', 'var(--punch)']);
+for (const s of sparks) {
+  s.node.style.left = '50%';
+  s.node.style.top = '50%';
+  s.node.style.opacity = '0';
+}
+
 window.seek = seek;
+window.RUNTIME = RUNTIME;
 
 // Frame zero, so a screenshot taken before the first seek is still correct.
 seek(0);
