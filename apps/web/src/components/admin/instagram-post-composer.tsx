@@ -47,6 +47,8 @@ export interface PostPrefill {
   /** The challenge reference, or the winning render. */
   imageUrl?: string;
   avatarUrl?: string;
+  /** The challenge's own photo, for the tease slide. */
+  referenceUrl?: string;
 }
 
 /**
@@ -73,7 +75,9 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const probeRef = useRef<HTMLSpanElement>(null);
   const imageRef = useRef<CanvasImageSource | null>(null);
   const avatarRef = useRef<CanvasImageSource | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
+  const referenceRef = useRef<CanvasImageSource | null>(null);
+  // Every object URL made here, so none of them outlive the page.
+  const objectUrls = useRef<string[]>([]);
 
   const [kind, setKind] = useState<PostKind>(prefill?.kind ?? 'challenge');
   const [format, setFormat] = useState<PostFormatId>('portrait');
@@ -88,6 +92,7 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const [votes, setVotes] = useState<number | null>(prefill?.votes ?? null);
   const [callToAction, setCallToAction] = useState('Follow on Instagram');
   const [fileName, setFileName] = useState<string | null>(null);
+  const [referenceName, setReferenceName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loadingLinked, setLoadingLinked] = useState(false);
 
@@ -134,6 +139,7 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
       callToAction,
       image: imageRef.current,
       avatar: avatarRef.current,
+      reference: referenceRef.current,
     };
 
     canvasRefs.current.forEach((canvas, slide) => {
@@ -226,17 +232,19 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   */
   const linkedImage = prefill?.imageUrl;
   const linkedAvatar = prefill?.avatarUrl;
+  const linkedReference = prefill?.referenceUrl;
 
   useEffect(() => {
-    if (!linkedImage && !linkedAvatar) return;
+    if (!linkedImage && !linkedAvatar && !linkedReference) return;
 
     let cancelled = false;
     setLoadingLinked(true);
 
     void (async () => {
-      const [image, avatar] = await Promise.all([
+      const [image, avatar, reference] = await Promise.all([
         linkedImage ? loadCorsImage(linkedImage).catch(() => null) : null,
         linkedAvatar ? loadCorsImage(linkedAvatar).catch(() => null) : null,
+        linkedReference ? loadCorsImage(linkedReference).catch(() => null) : null,
       ]);
 
       if (cancelled) return;
@@ -246,6 +254,10 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
         setFileName('From the challenge');
       }
       if (avatar) avatarRef.current = avatar;
+      if (reference) {
+        referenceRef.current = reference;
+        setReferenceName('From the challenge');
+      }
 
       setLoadingLinked(false);
       // Only the entry image failing is worth interrupting for; a missing
@@ -260,33 +272,49 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the link
-  }, [linkedImage, linkedAvatar]);
+  }, [linkedImage, linkedAvatar, linkedReference]);
 
-  // The object URL is revoked when it is replaced or the page goes away;
-  // leaking one per file choice would pin every image in memory for the session.
+  /*
+    Object URLs are revoked when the page goes away.
+
+    Not when one is replaced: the `Image` decoded from it is still the thing
+    being drawn on every repaint, and revoking the URL a live image was decoded
+    from is how a canvas ends up blank on the next redraw.
+  */
   useEffect(
     () => () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      for (const url of objectUrls.current) URL.revokeObjectURL(url);
     },
     [],
   );
 
-  const chooseImage = (file: File | undefined) => {
+  /*
+    One picker for both slots.
+
+    A winner post carries two pictures — the winning render and the challenge's
+    own photo — and they are chosen the same way, so `into` says which ref the
+    result lands in rather than there being two near-identical handlers.
+  */
+  const chooseImage = (file: File | undefined, into: 'entry' | 'reference' = 'entry') => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      notify.error('That is not an image', 'Pick a PNG or JPEG reference.');
+      notify.error('That is not an image', 'Pick a PNG or JPEG.');
       return;
     }
 
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const objectUrl = URL.createObjectURL(file);
-    objectUrlRef.current = objectUrl;
+    objectUrls.current.push(objectUrl);
 
     const image = new Image();
     image.onload = () => {
-      imageRef.current = image;
-      setFileName(file.name);
+      if (into === 'reference') {
+        referenceRef.current = image;
+        setReferenceName(file.name);
+      } else {
+        imageRef.current = image;
+        setFileName(file.name);
+      }
       paint();
     };
     image.onerror = () => notify.error('That image could not be read', 'Try a different file.');
@@ -466,6 +494,20 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
                 className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
               />
             </Field>
+
+            {kind === 'winner' ? (
+              <Field label="Challenge photo" hint={referenceName ?? 'Shown on slide 1'}>
+                <label className="arcade-focus flex cursor-pointer items-center justify-center rounded-[14px] border-[3px] border-dashed border-white/24 bg-white/5 px-4 py-5 text-center text-sm font-extrabold text-bone-muted hover:bg-white/10">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event) => chooseImage(event.target.files?.[0], 'reference')}
+                  />
+                  {referenceName ? 'Choose a different photo' : "Upload the challenge's photo"}
+                </label>
+              </Field>
+            ) : null}
 
             {kind === 'winner' ? (
               <Field label="Winner" hint="Their name on the site">

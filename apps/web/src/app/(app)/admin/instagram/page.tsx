@@ -60,6 +60,7 @@ function usePrefill(): PostPrefill | undefined {
     votes: parsedVotes,
     imageUrl: safeImageUrl(text('image')),
     avatarUrl: safeImageUrl(text('avatar')),
+    referenceUrl: safeImageUrl(text('reference')),
   };
 }
 

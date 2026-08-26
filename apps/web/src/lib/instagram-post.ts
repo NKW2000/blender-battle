@@ -80,6 +80,14 @@ export interface PostContent {
   votes: number | null;
   /** The line under the credit, e.g. "Follow on Instagram". Winner post only. */
   callToAction: string;
+  /**
+   * The challenge's own photo, shown as a thumbnail on the tease slide.
+   *
+   * Separate from `image`, which on a winner post is the winning render. The
+   * two are different pictures doing different jobs: one says which challenge
+   * this was, the other is the answer being withheld until slide two.
+   */
+  reference: CanvasImageSource | null;
 }
 
 export interface PostFonts {
@@ -231,6 +239,7 @@ export function instagramPostHref(params: {
   votes?: number | null;
   imageUrl?: string | null;
   avatarUrl?: string | null;
+  referenceUrl?: string | null;
 }) {
   const query = new URLSearchParams({ kind: params.kind });
 
@@ -244,6 +253,7 @@ export function instagramPostHref(params: {
   put('username', params.username);
   put('image', params.imageUrl);
   put('avatar', params.avatarUrl);
+  put('reference', params.referenceUrl);
 
   // Zero is a real tally and must survive, which `put` would drop.
   if (typeof params.votes === 'number' && params.votes >= 0) {
@@ -543,12 +553,14 @@ function drawSquareFrame(
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = HAZE;
-    ctx.font = `800 30px ${fonts.body}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emptyLabel, cx, top + size / 2);
-    ctx.textBaseline = 'alphabetic';
+    if (emptyLabel) {
+      ctx.fillStyle = HAZE;
+      ctx.font = `800 30px ${fonts.body}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emptyLabel, cx, top + size / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
     return;
   }
 
@@ -866,16 +878,37 @@ function drawWinnerTease(
   ).slice(0, 3);
 
   const cueHeight = isPortrait ? 150 : 132;
-  const blockHeight =
+  const textHeight =
     leadSize + leadSize * 0.5 + nameLines.length * nameSize * 0.92 + leadSize * 1.5 + cueHeight;
 
-  // Centred between the marquee and the brand, so the slide reads as one held
-  // sentence rather than as a page with a gap in the middle of it.
   const top = pad + 150;
-  const bottom = H - pad - 46;
-  let cursor = top + Math.max(20, (bottom - top - blockHeight) / 2) + leadSize;
+  const bottom = H - pad - 58;
+  const room = bottom - top;
 
+  /*
+    The challenge's photo, sized from what the sentence leaves.
+
+    It is a thumbnail rather than a hero: the slide's job is to name the
+    challenge and point right, and a large picture here competes with the
+    winning render on the slide after it. Capped, floored, and dropped entirely
+    when a long title leaves no room for it — the sentence is the slide.
+  */
+  const thumbGap = isPortrait ? 44 : 36;
+  const maxThumb = isPortrait ? 340 : 250;
+  const spare = room - textHeight - thumbGap - 40;
+  const thumb = content.reference && spare >= 150 ? Math.min(maxThumb, spare) : 0;
+
+  const blockHeight = (thumb ? thumb + thumbGap : 0) + textHeight;
+  let cursor = top + Math.max(20, (room - blockHeight) / 2);
+
+  if (thumb) {
+    drawSquareFrame(ctx, content.reference, W / 2, cursor, thumb, '', fonts);
+    cursor += thumb + thumbGap;
+  }
+
+  cursor += leadSize;
   ctx.font = `800 ${leadSize}px ${fonts.body}`;
+  ctx.textAlign = 'center';
   ctx.fillStyle = HAZE;
   ctx.fillText('THE WINNER OF', W / 2, cursor);
   cursor += leadSize * 0.5;
