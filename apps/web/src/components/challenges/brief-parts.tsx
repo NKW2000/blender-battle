@@ -2,7 +2,7 @@
 
 import { ChallengeAssetType, type ChallengeAsset, type TagSummary } from '@bb/shared';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   PANEL_ICON,
@@ -141,6 +141,24 @@ export function JudgedOnPanel({ objectives }: { objectives: string[] }) {
  * whatever the challenge has. Below two images the arrows and dots are pointless
  * furniture, so they are not rendered — and with none, neither is the panel.
  */
+/**
+ * How far a drag must travel before it counts as a swipe.
+ *
+ * A share of the slide rather than a fixed pixel count, so the gesture asks for
+ * the same fraction of the carousel on a phone as on a desktop. The floor stops
+ * a very narrow container from turning a stray tap-wobble into a slide change,
+ * and a tap that moves a few pixels — which every tap does — must never move
+ * the carousel, or the arrows and dots become unusable.
+ */
+export function swipeTarget(deltaX: number, width: number, current: number, count: number) {
+  const threshold = Math.max(44, width * 0.18);
+  if (count < 2 || Math.abs(deltaX) < threshold) return current;
+
+  // Dragging left (negative) reveals the next slide.
+  const next = deltaX < 0 ? current + 1 : current - 1;
+  return ((next % count) + count) % count;
+}
+
 export function ReferencePanel({ references }: { references: ChallengeAsset[] }) {
   const [index, setIndex] = useState(0);
   const count = references.length;
@@ -149,6 +167,92 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
   // is open, and the poll would otherwise leave the track scrolled to a slide
   // that no longer exists.
   const current = count > 0 ? Math.min(index, count - 1) : 0;
+
+  /*
+    Dragging the track with a finger.
+
+    Pointer events rather than touch events, so the same code covers a phone and
+    a mouse drag on the desktop, and `touch-action: pan-y` on the track is what
+    keeps the two gestures apart: the browser keeps vertical panning for
+    scrolling the page and hands us the horizontal movement. Without it a swipe
+    down the page over the carousel would either scroll nothing or fight itself.
+  */
+  const frameRef = useRef<HTMLDivElement>(null);
+  const startX = useRef(0);
+  const [drag, setDrag] = useState(0);
+
+  /*
+    Whether a drag is in progress lives in a ref, not in state.
+
+    The handlers guard on it, and `pointerdown` and the first `pointermove` can
+    arrive before React has re-rendered — a guard reading state would still see
+    `false` there and drop the beginning of the gesture, or the whole gesture
+    when it is a quick one. The state below exists only to switch the CSS
+    transition off, which can safely lag a frame.
+  */
+  const draggingRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+
+  const onPointerDown = (event: React.PointerEvent) => {
+    // Mouse: primary button only. A right-click opening the context menu must
+    // not leave the track stuck mid-drag.
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (count < 2) return;
+
+    /*
+      A press that starts on the arrows is theirs, not a drag.
+
+      Capturing the pointer retargets the `pointerup` to this frame, and a click
+      is delivered to the common ancestor of the press and the release — so
+      capturing a press that began on an arrow would stop that arrow's click
+      ever firing. Rather than trying to time the two, the gesture simply
+      declines to start on top of a control.
+    */
+    if ((event.target as HTMLElement).closest('button')) return;
+
+    startX.current = event.clientX;
+    draggingRef.current = true;
+    setDragging(true);
+
+    /*
+      Capture, so a swipe that runs off the edge of the image still ends here.
+      Without it a quick flick leaves the frame mid-gesture, the `pointerup`
+      lands on whatever is underneath, and the track stays stuck at the offset
+      the finger left it at.
+    */
+    frameRef.current?.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    setDrag(event.clientX - startX.current);
+  };
+
+  const release = (pointerId: number) => {
+    draggingRef.current = false;
+    setDragging(false);
+    setDrag(0);
+    if (frameRef.current?.hasPointerCapture(pointerId)) {
+      frameRef.current.releasePointerCapture(pointerId);
+    }
+  };
+
+  const endDrag = (event: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+
+    const width = frameRef.current?.offsetWidth ?? 0;
+    setIndex(swipeTarget(event.clientX - startX.current, width, current, count));
+    release(event.pointerId);
+  };
+
+  /*
+    A cancelled pointer snaps back rather than committing.
+
+    The browser cancels when it takes the gesture over for scrolling, and at
+    that moment the last horizontal delta is meaningless — committing it would
+    change the slide because the reader scrolled the page.
+  */
+  const cancelDrag = (event: React.PointerEvent) => release(event.pointerId);
 
   if (count === 0) {
     return (
@@ -190,12 +294,21 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
         */}
         <div className="mx-auto w-full max-w-[520px]">
         <div
+          ref={frameRef}
           className="relative aspect-square overflow-hidden rounded-2xl border-[3px] border-ink bg-arcade-deep"
-          style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
+          style={{ boxShadow: '0 5px 0 var(--color-ink)', touchAction: count > 1 ? 'pan-y' : undefined }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={cancelDrag}
         >
           <div
-            className="flex h-full transition-transform duration-[450ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none"
-            style={{ transform: `translateX(-${current * 100}%)` }}
+            className={`flex h-full ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none ${
+              // No transition while the finger is down: the track has to follow
+              // the finger, and easing toward each pointer position lags behind it.
+              dragging ? '' : 'transition-transform duration-[450ms]'
+            }`}
+            style={{ transform: `translateX(calc(-${current * 100}% + ${drag}px))` }}
           >
             {references.map((asset, i) => (
               <div key={asset.id} className="h-full w-full flex-none">
@@ -203,7 +316,10 @@ export function ReferencePanel({ references }: { references: ChallengeAsset[] })
                 <img
                   src={asset.url}
                   alt={`Reference ${i + 1}`}
-                  className="h-full w-full object-cover"
+                  // Without this a mouse drag starts the browser's own image
+                  // drag instead of ours, and the gesture dies on the first move.
+                  draggable={false}
+                  className="h-full w-full select-none object-cover"
                 />
               </div>
             ))}
