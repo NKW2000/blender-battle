@@ -274,12 +274,22 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-[1.4fr_1fr]">
+      {/*
+        One block on a phone, two cards side by side from `lg`.
+
+        Stacked, these were a bordered image card and a bordered details card
+        with a gap between them — and because they carried different borders (4px
+        `edge` against 3px `ink`) they read as two unrelated sections rather than
+        one piece of work and its description. Side by side that separation is
+        correct; stacked it is just a seam through the middle of one thing.
+
+        So the wrapper owns the outline while stacked and the children own it once
+        there is room to sit them apart. The shadow moves with it, or the seam
+        would still be drawn by a shadow between two halves of the same card.
+      */}
+      <div className="grid grid-cols-1 items-stretch overflow-hidden rounded-[20px] border-4 border-edge bg-void shadow-[0_8px_0_var(--color-edge)] lg:grid-cols-[1.4fr_1fr] lg:gap-5 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none">
         {/* Featured image */}
-        <div
-          className="relative overflow-hidden rounded-[20px] border-4 border-edge bg-void"
-          style={{ boxShadow: '0 8px 0 var(--color-edge)' }}
-        >
+        <div className="relative bg-void lg:overflow-hidden lg:rounded-[20px] lg:border-4 lg:border-edge lg:shadow-[0_8px_0_var(--color-edge)]">
           <div className="aspect-square w-full">
             {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary asset */}
             <img
@@ -313,11 +323,14 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
           ) : null}
         </div>
 
-        {/* Details panel */}
-        <div
-          className="flex flex-col justify-center gap-3 rounded-[22px] border-[3px] border-ink bg-white/4 p-6"
-          style={{ boxShadow: '0 8px 0 var(--color-edge)' }}
-        >
+        {/*
+          Details panel.
+
+          Stacked, its only edge is the rule separating it from the image above —
+          same weight and colour as the wrapper's outline, so it reads as a fold
+          in one card rather than the top of a second one.
+        */}
+        <div className="flex flex-col justify-center gap-3 border-t-4 border-edge bg-white/4 p-6 lg:rounded-[22px] lg:border-[3px] lg:border-ink lg:shadow-[0_8px_0_var(--color-edge)]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border-2 border-edge bg-sun px-3 py-1 font-display text-[0.6875rem] font-bold uppercase tracking-wider text-edge">
               {item.category}
