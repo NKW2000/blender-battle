@@ -448,18 +448,32 @@ export function drawPost(
   ctx.fillStyle = halo;
   ctx.fillRect(0, stageTop - 40, W, stageHeight + 120);
 
+  /*
+    Where the subject actually ends.
+
+    `containBox` letterboxes, so the subject almost never fills the stage. Both
+    the contact shadow and the type below key off this rather than the stage
+    box — keyed off the stage they sat in the leftover space, which put the
+    shadow a hundred pixels below the object it belonged to and opened a dead
+    gap above the title.
+  */
+  let subjectBottom = stageTop + stageHeight;
+
   if (content.image) {
     const sw = Number((content.image as { width?: number }).width ?? stageWidth);
     const sh = Number((content.image as { height?: number }).height ?? stageHeight);
     const box = containBox(sw, sh, stageWidth, stageHeight);
+    subjectBottom = stageTop + box.offsetY + box.height;
 
-    // A soft contact shadow under the subject, so it stands on the ground.
+    // A contact shadow, so the cut-out stands on the ground instead of hovering
+    // in front of it. Thick and fairly opaque because it is dark ink over an
+    // already dark ground — thin and faint reads as nothing at all.
     ctx.save();
-    ctx.globalAlpha = 0.4;
-    ctx.filter = 'blur(26px)';
+    ctx.globalAlpha = 0.55;
+    ctx.filter = 'blur(30px)';
     ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.ellipse(stageCx, stageTop + stageHeight - 6, box.width * 0.34, 26, 0, 0, Math.PI * 2);
+    ctx.ellipse(stageCx, subjectBottom - 4, box.width * 0.36, 34, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -490,18 +504,44 @@ export function drawPost(
   tiltedBadge(ctx, style.label, W - pad - 30, stageTop + 34, -7, fonts, style.fill, style.ink, 34);
 
   // --- title ------------------------------------------------------------
-  let cursor = stageTop + stageHeight + (format.id === 'portrait' ? 118 : 96);
-
   const titleSize = format.id === 'portrait' ? 104 : 90;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
+  /*
+    The title's measure, as a fraction of the frame rather than a padding
+    multiple — the two formats are the same width, so a shared inset gave the
+    square, whose type is smaller, a much longer line. It ran to within a few
+    pixels of the edge and pushed a single orphaned word onto line two. A
+    narrower measure breaks it into two balanced lines instead.
+  */
   const titleLines = wrapText(
     (content.title || 'Untitled challenge').toUpperCase(),
-    W - pad * 1.4,
+    W * (format.id === 'portrait' ? 0.9 : 0.8),
     (s) => ctx.measureText(s).width,
   ).slice(0, 2);
+
+  /*
+    The blurb is measured before anything is drawn, because the whole type block
+    is centred in whatever room the subject leaves. A one-line title under a
+    short subject and a two-line title under a tall one both want to sit in the
+    middle of that space; anchoring to a fixed offset only ever suits one of them.
+  */
+  ctx.font = `800 31px ${fonts.body}`;
+  const blurbLines = content.blurb.trim()
+    ? wrapText(content.blurb, W - pad * 1.3, (s) => ctx.measureText(s).width).slice(0, 2)
+    : [];
+
+  const blockHeight = titleLines.length * titleSize + (blurbLines.length ? 16 + blurbLines.length * 44 : 0);
+  const footTop = H - pad - 46;
+  const room = footTop - subjectBottom;
+  const blockTop = subjectBottom + Math.max(40, (room - blockHeight) / 2);
+
+  // `cursor` is a baseline, so drop it off the block's top by the cap height.
+  let cursor = blockTop + titleSize * 0.78;
+
+  ctx.font = `700 ${titleSize}px ${fonts.display}`;
 
   for (const line of titleLines) {
     // Ink behind the type, offset — the product's shadow, not a blur.
@@ -512,11 +552,11 @@ export function drawPost(
     cursor += titleSize * 1.0;
   }
 
-  if (content.blurb.trim()) {
+  if (blurbLines.length) {
     ctx.font = `800 31px ${fonts.body}`;
     ctx.fillStyle = HAZE;
     cursor += 16;
-    for (const line of wrapText(content.blurb, W - pad * 2, (s) => ctx.measureText(s).width).slice(0, 2)) {
+    for (const line of blurbLines) {
       ctx.fillText(line, W / 2, cursor);
       cursor += 44;
     }
