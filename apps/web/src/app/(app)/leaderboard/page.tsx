@@ -18,7 +18,11 @@ import { useLeaderboard } from '@/features/leaderboard/use-leaderboard';
  */
 export default function LeaderboardPage() {
   const { user } = useSession();
-  const { data: standings, isLoading } = useLeaderboard();
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeaderboard();
+
+  // Every page flattened into one continuous list: ranks run straight through,
+  // so a page boundary is not a thing the reader should ever notice.
+  const standings = data?.pages.flat() ?? [];
 
   return (
     <div className="flex flex-col gap-8">
@@ -34,7 +38,7 @@ export default function LeaderboardPage() {
             <Skeleton key={row} className="h-16 w-full" />
           ))}
         </div>
-      ) : !standings || standings.length === 0 ? (
+      ) : standings.length === 0 ? (
         <EmptyState
           title="Nobody is ranked yet"
           description="The first ranked room to finish puts someone here."
@@ -101,6 +105,19 @@ export default function LeaderboardPage() {
               );
             })}
           </ul>
+
+          {hasNextPage ? (
+            <div className="flex justify-center border-t-2 border-edge px-4 py-4">
+              <button
+                type="button"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="arcade-focus rounded-[14px] border-[3px] border-white/16 bg-white/6 px-5 py-2.5 font-display text-sm font-bold text-bone transition-colors hover:bg-white/12 disabled:opacity-50"
+              >
+                {isFetchingNextPage ? 'Loading…' : 'Show more'}
+              </button>
+            </div>
+          ) : null}
         </Panel>
       )}
     </div>

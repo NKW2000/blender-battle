@@ -1,5 +1,6 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import { Toaster as SonnerToaster } from 'sonner';
 
 /**
@@ -16,14 +17,41 @@ import { Toaster as SonnerToaster } from 'sonner';
  * a colourblind viewer.
  */
 export function Toaster() {
+  const onPhone = useIsPhone();
+
   return (
     <SonnerToaster
-      position="bottom-right"
+      /*
+        Top of the screen on a phone, bottom-right everywhere else.
+
+        The bottom edge of a phone is the most contested space on the device:
+        the browser's own URL bar sits there and hides and reappears with
+        scroll, the home indicator overlaps it, and the on-screen keyboard
+        covers it entirely. A toast anchored 16px from the bottom is therefore
+        competing for exactly the region the operating system reserves — and a
+        message that reports a failed submit is most likely to fire while the
+        keyboard is still up, which is precisely when it cannot be seen.
+
+        The top edge has none of that, and nothing in the layout is fixed there.
+      */
+      position={onPhone ? 'top-center' : 'bottom-right'}
       // Long enough to read a server error, which is usually a full sentence.
       duration={6000}
       gap={12}
       // Full width on a phone, where a 356px card would hang off the screen.
-      mobileOffset={{ left: 16, right: 16, bottom: 16 }}
+      mobileOffset={{ left: 16, right: 16, top: 16, bottom: 16 }}
+      /*
+        Stacked at full size rather than shuffled into a deck.
+
+        Sonner's default collapses everything behind the newest toast and scales
+        it down, so a second and third error arrive as slivers of shrinking text
+        under the first. Errors are exactly the case where more than one arrives
+        at once — an upload that fails twice and then reports the entry was not
+        saved — and that is the moment the text has to stay readable.
+      */
+      expand
+      // Beyond three the screen is the problem, not the reporting.
+      visibleToasts={3}
       toastOptions={{
         unstyled: true,
         classNames: {
@@ -60,6 +88,34 @@ export function Toaster() {
       }}
     />
   );
+}
+
+/**
+ * Whether this is a phone-sized viewport.
+ *
+ * `useSyncExternalStore` rather than an effect with `useState`: the server has
+ * no viewport, and rendering the desktop position first and correcting it after
+ * hydration would move a toast that was already on screen. The third argument
+ * is the server snapshot, and answering `false` there keeps the markup the
+ * server sent identical to the client's first paint.
+ *
+ * 640px is Tailwind's `sm`, so this splits at the same place every layout in
+ * the app already does.
+ */
+function useIsPhone(): boolean {
+  return useSyncExternalStore(subscribeToPhoneQuery, isPhoneNow, () => false);
+}
+
+const PHONE_QUERY = '(max-width: 639px)';
+
+function subscribeToPhoneQuery(onChange: () => void): () => void {
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+function isPhoneNow(): boolean {
+  return window.matchMedia(PHONE_QUERY).matches;
 }
 
 function BangGlyph() {

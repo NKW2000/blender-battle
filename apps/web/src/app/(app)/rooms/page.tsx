@@ -15,7 +15,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { ChunkyButton } from '@/components/arcade/chunky';
-import { DateTimeField, toLocalInputValue } from '@/components/ui/date-time-field';
+import { toLocalInputValue } from '@/components/ui/date-time-field';
+import { DeadlineField } from '@/components/ui/deadline-field';
 import { EmptyState, Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Select } from '@/components/ui/select';
 import { useCategories } from '@/features/challenges/use-challenges';
@@ -254,7 +255,25 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
   // the trigger on close.
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement | null;
-    nameRef.current?.focus();
+
+    /*
+      Focus lands on the dialog itself unless there is a real keyboard.
+
+      Focusing the name field on open is a kindness on a desktop — you can start
+      typing straight away. On a phone it summons the on-screen keyboard the
+      instant the dialog appears, which covers half the form nobody has asked to
+      fill in yet, and every visitor has to dismiss it before they can see the
+      player count or the deadline.
+
+      `pointer: fine` is the question worth asking rather than screen width: it
+      distinguishes a mouse or trackpad from a fingertip, and a small window on a
+      laptop still deserves the shortcut. Moving focus to the panel keeps the
+      dialog contract intact — focus is inside it, Escape closes it, Tab is
+      trapped — without opening anything.
+    */
+    const hasPrecisePointer = window.matchMedia('(pointer: fine)').matches;
+    if (hasPrecisePointer) nameRef.current?.focus();
+    else panelRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -348,6 +367,9 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
     >
       <div
         ref={panelRef}
+        // Focusable so the dialog can hold focus itself when autofocusing the
+        // name field would raise the on-screen keyboard. Never in the tab order.
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bb-create-room-title"
@@ -520,12 +542,11 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
             </p>
           </FormSection>
 
-          <FormSection label="Deadline" hint="Any time from 5 minutes out">
-            <DateTimeField
-              ariaLabel="Ends at"
+          <FormSection label="How long" hint="From five minutes to a week">
+            <DeadlineField
               value={endsAtLocal}
+              now={now}
               invalid={Boolean(endsAtError)}
-              minDate={new Date(now + CHALLENGE_MIN_MINUTES * 60_000)}
               onChange={setEndsAtLocal}
             />
             <p
@@ -535,7 +556,7 @@ function CreateRoomPanel({ onClose }: { onClose: () => void }) {
                 endsAtError ? 'text-punch-soft' : 'text-bone-faint',
               )}
             >
-              {endsAtError ?? 'Every player sees this in their own timezone.'}
+              {endsAtError ?? 'Every player sees the finish time in their own timezone.'}
             </p>
           </FormSection>
         </div>
