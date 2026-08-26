@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select';
 import {
   POST_FORMATS,
   drawPost,
+  knockOutBackground,
   postFileName,
   type PostFormatId,
   type PostFonts,
@@ -26,7 +27,7 @@ import { notify } from '@/lib/notify';
 export function InstagramPostComposer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const probeRef = useRef<HTMLSpanElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
+  const imageRef = useRef<CanvasImageSource | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
   const [format, setFormat] = useState<PostFormatId>('portrait');
@@ -36,6 +37,18 @@ export function InstagramPostComposer() {
   const [url, setUrl] = useState('blenderbattle.vercel.app');
   const [fileName, setFileName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [cutOut, setCutOut] = useState(true);
+  const [tolerance, setTolerance] = useState(36);
+  const [working, setWorking] = useState(false);
+
+  /*
+    The untouched bitmap is kept alongside the one being shown.
+
+    Knocking the backdrop out is destructive, so re-running it on its own output
+    would eat further into the subject every time the tolerance moved. Each pass
+    starts from the original.
+  */
+  const sourceRef = useRef<ImageBitmap | HTMLImageElement | null>(null);
 
   /*
     The real font families, read off the page rather than named.
@@ -101,6 +114,57 @@ export function InstagramPostComposer() {
     [],
   );
 
+  /**
+   * Rebuilds what gets drawn from the untouched source.
+   *
+   * Always from the original: the knock-out is destructive, so running it over
+   * its own output would eat further into the subject each time the tolerance
+   * moved.
+   */
+  const prepare = useCallback(async () => {
+    const source = sourceRef.current;
+    if (!source) return;
+
+    if (!cutOut) {
+      imageRef.current = source;
+      paint();
+      return;
+    }
+
+    setWorking(true);
+    try {
+      const w = Number((source as { width: number }).width);
+      const h = Number((source as { height: number }).height);
+
+      /*
+        Worked on at most 1400px on the long edge.
+
+        The flood fill is per-pixel, and a 6000px phone photo is 36 million of
+        them — several seconds of frozen tab for a result that is then scaled
+        down into a 1080px poster anyway.
+      */
+      const scale = Math.min(1, 1400 / Math.max(w, h));
+      const cw = Math.max(1, Math.round(w * scale));
+      const ch = Math.max(1, Math.round(h * scale));
+
+      const work = document.createElement('canvas');
+      work.width = cw;
+      work.height = ch;
+      const wctx = work.getContext('2d', { willReadFrequently: true });
+      if (!wctx) return;
+
+      wctx.drawImage(source as CanvasImageSource, 0, 0, cw, ch);
+      wctx.putImageData(knockOutBackground(wctx.getImageData(0, 0, cw, ch), tolerance), 0, 0);
+
+      imageRef.current = work;
+      paint();
+    } catch {
+      notify.error('That image could not be processed', 'Try turning the cut-out off.');
+    } finally {
+      setWorking(false);
+    }
+  }, [cutOut, tolerance, paint]);
+
   const chooseImage = (file: File | undefined) => {
     if (!file) return;
 
@@ -115,13 +179,18 @@ export function InstagramPostComposer() {
 
     const image = new Image();
     image.onload = () => {
-      imageRef.current = image;
+      sourceRef.current = image;
       setFileName(file.name);
-      paint();
+      void prepare();
     };
     image.onerror = () => notify.error('That image could not be read', 'Try a different file.');
     image.src = objectUrl;
   };
+
+  // Re-cut whenever the knock-out settings change.
+  useEffect(() => {
+    if (sourceRef.current) void prepare();
+  }, [prepare]);
 
   const download = () => {
     const canvas = canvasRef.current;
@@ -213,6 +282,41 @@ export function InstagramPostComposer() {
               </label>
             </Field>
 
+            <Field label="Reference background" hint={cutOut ? 'Knocked out' : 'Kept'}>
+              <button
+                type="button"
+                aria-pressed={cutOut}
+                onClick={() => setCutOut((on) => !on)}
+                className={`arcade-focus flex items-center justify-between rounded-[14px] border-[3px] px-4 py-3 text-left font-display text-sm font-bold transition-colors ${
+                  cutOut
+                    ? 'border-mint bg-mint/16 text-cream'
+                    : 'border-white/16 bg-white/6 text-bone hover:bg-white/12'
+                }`}
+              >
+                <span>{cutOut ? 'Transparent — subject floats' : 'Keep the original backdrop'}</span>
+                <span className={cutOut ? 'text-mint' : 'text-bone-faint'}>{cutOut ? 'ON' : 'OFF'}</span>
+              </button>
+            </Field>
+
+            {cutOut ? (
+              <Field label="Cut-out strength" hint={String(tolerance)}>
+                {/*
+                  How close a pixel must be to the corners' colour to be removed.
+                  Low keeps a fringe of backdrop; high starts eating the subject,
+                  which is why it is a control rather than a constant.
+                */}
+                <input
+                  type="range"
+                  min={8}
+                  max={90}
+                  value={tolerance}
+                  onChange={(event) => setTolerance(Number(event.target.value))}
+                  className="w-full accent-[var(--color-sun)]"
+                  aria-label="Cut-out strength"
+                />
+              </Field>
+            ) : null}
+
             <Field label="Title">
               <input
                 value={title}
@@ -254,8 +358,8 @@ export function InstagramPostComposer() {
           </PanelBody>
         </Panel>
 
-        <ChunkyButton size="md" sheen onClick={download} disabled={!ready}>
-          {ready ? 'Download PNG' : 'Loading fonts…'}
+        <ChunkyButton size="md" sheen onClick={download} disabled={!ready || working}>
+          {!ready ? 'Loading fonts…' : working ? 'Cutting out…' : 'Download PNG'}
         </ChunkyButton>
       </div>
     </div>

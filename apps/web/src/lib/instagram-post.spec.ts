@@ -1,7 +1,38 @@
 import { Difficulty } from '@bb/shared';
 import { describe, expect, it } from 'vitest';
 
-import { DIFFICULTY_STYLE, POST_FORMATS, coverCrop, postFileName, wrapText } from './instagram-post';
+import {
+  DIFFICULTY_STYLE,
+  POST_FORMATS,
+  containBox,
+  coverCrop,
+  knockOutBackground,
+  postFileName,
+  wrapText,
+} from './instagram-post';
+
+/*
+  jsdom has no `ImageData`.
+
+  It is a browser API and the knock-out is right to use it, so the shim lives
+  here rather than the production code being bent around a test environment.
+*/
+if (typeof globalThis.ImageData === 'undefined') {
+  class ImageDataShim {
+    readonly data: Uint8ClampedArray;
+    readonly width: number;
+    readonly height: number;
+    readonly colorSpace = 'srgb' as const;
+
+    constructor(data: Uint8ClampedArray, width: number, height?: number) {
+      this.data = data;
+      this.width = width;
+      this.height = height ?? data.length / 4 / width;
+    }
+  }
+
+  globalThis.ImageData = ImageDataShim as unknown as typeof ImageData;
+}
 
 /**
  * The post composer's arithmetic.
@@ -136,5 +167,122 @@ describe('difficulty styling', () => {
     for (const value of Object.values(Difficulty)) {
       expect(DIFFICULTY_STYLE[value]).toBeDefined();
     }
+  });
+});
+
+/* ------------------------------------------------- background knock-out */
+
+/** Builds an ImageData by hand — jsdom has no canvas to get one from. */
+function makeImage(width: number, height: number, paint: (x: number, y: number) => [number, number, number]) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const [r, g, b] = paint(x, y);
+      const i = (y * width + x) * 4;
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = 255;
+    }
+  }
+  return new ImageData(data, width, height);
+}
+
+const alphaAt = (image: ImageData, x: number, y: number) => image.data[(y * image.width + x) * 4 + 3]!;
+
+describe('knocking the backdrop out of a reference', () => {
+  /*
+    A grey plate with a solid block in the middle — the shape of almost every
+    Blender render that will be dropped into this tool.
+  */
+  const render = () =>
+    makeImage(20, 20, (x, y) => (x >= 7 && x <= 12 && y >= 7 && y <= 12 ? [200, 40, 40] : [128, 128, 128]));
+
+  it('clears the backdrop', () => {
+    const out = knockOutBackground(render(), 20);
+
+    expect(alphaAt(out, 0, 0)).toBe(0);
+    expect(alphaAt(out, 19, 19)).toBe(0);
+  });
+
+  it('leaves the subject fully opaque', () => {
+    const out = knockOutBackground(render(), 20);
+
+    expect(alphaAt(out, 10, 10)).toBe(255);
+  });
+
+  it('keeps subject pixels that happen to match the backdrop', () => {
+    /*
+      The reason this floods from the edges instead of testing every pixel
+      against the backdrop colour. A grey detail *inside* the subject — an eye,
+      a screw, a shadow — is the same colour as the plate, and a global pass
+      would punch a hole straight through it.
+    */
+    const withGreyDetail = makeImage(20, 20, (x, y) => {
+      const inSubject = x >= 6 && x <= 13 && y >= 6 && y <= 13;
+      if (!inSubject) return [128, 128, 128];
+      const isDetail = x >= 9 && x <= 10 && y >= 9 && y <= 10;
+      return isDetail ? [128, 128, 128] : [200, 40, 40];
+    });
+
+    const out = knockOutBackground(withGreyDetail, 20);
+
+    expect(alphaAt(out, 9, 9)).toBe(255);
+  });
+
+  it('does not touch a backdrop outside the tolerance', () => {
+    // A busy photographic background must be left alone rather than half-eaten.
+    const noisy = makeImage(20, 20, (x, y) => [(x * 37) % 255, (y * 91) % 255, ((x + y) * 53) % 255]);
+    const out = knockOutBackground(noisy, 4);
+
+    let cleared = 0;
+    for (let i = 3; i < out.data.length; i += 4) if (out.data[i] === 0) cleared += 1;
+
+    expect(cleared).toBeLessThan(20 * 20 * 0.25);
+  });
+
+  it('does not overflow the stack on a large image', () => {
+    // A recursive fill dies here; the explicit stack is why this passes.
+    const big = makeImage(400, 400, () => [128, 128, 128]);
+
+    expect(() => knockOutBackground(big, 20)).not.toThrow();
+  });
+
+  it('leaves the original untouched', () => {
+    /*
+      Each pass runs from the untouched source, so the caller can move the
+      tolerance without the cut eating further into the subject every time.
+    */
+    const source = render();
+    const before = source.data[3];
+
+    knockOutBackground(source, 20);
+
+    expect(source.data[3]).toBe(before);
+  });
+});
+
+describe('containing a cut-out subject', () => {
+  it('fits the whole subject rather than cropping it', () => {
+    // A knocked-out subject must never be cropped — that is the opposite of the
+    // floating look the transparency exists to produce.
+    const box = containBox(2000, 1000, 500, 500);
+
+    expect(box.width).toBe(500);
+    expect(box.height).toBe(250);
+  });
+
+  it('centres what it fits', () => {
+    const box = containBox(1000, 2000, 500, 500);
+
+    expect(box.offsetX).toBe(125);
+    expect(box.offsetY).toBe(0);
+  });
+
+  it('never scales a small subject past the box', () => {
+    const box = containBox(100, 100, 500, 400);
+
+    expect(box.width).toBeLessThanOrEqual(500);
+    expect(box.height).toBeLessThanOrEqual(400);
   });
 });

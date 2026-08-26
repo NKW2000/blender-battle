@@ -56,18 +56,24 @@ export default function AdminUsersPage() {
         eyebrow="Administration"
         title="Users"
         action={
+        /*
+          Stacked and full width on a phone, a row from `sm`.
 
-        <div className="flex gap-3">
+          As a row these are 224px of input plus 176px of select plus the gap —
+          412px, in a container that does not wrap, on a 375px screen. The whole
+          page scrolled sideways because of two controls in the header.
+        */
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search username or email"
             aria-label="Search users"
-            className="arcade-focus h-11 w-56 rounded-2xl border-[3px] border-edge bg-panel px-4 font-bold text-bone placeholder:text-bone-faint"
+            className="arcade-focus h-11 w-full rounded-2xl border-[3px] border-edge bg-panel px-4 font-bold text-bone placeholder:text-bone-faint sm:w-56"
           />
 
           <Select
-            className="w-44"
+            className="w-full sm:w-44"
             ariaLabel="Filter by role"
             value={role}
             onChange={(value) => setRole(value as Role | '')}
