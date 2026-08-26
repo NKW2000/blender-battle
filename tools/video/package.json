@@ -1,0 +1,13 @@
+{
+  "name": "bb-video",
+  "private": true,
+  "type": "module",
+  "description": "Renders an HTML/CSS animation to MP4 by driving the page clock frame by frame.",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "puppeteer-core": "^23.11.1"
+  }
+}
