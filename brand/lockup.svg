@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Blender Battle">
+  <title>Blender Battle</title>
+  <!--
+    Mark and wordmark together, for banners and headers.
+
+    The type is Fredoka (the app's display face, free on Google Fonts). An SVG
+    carries a font by name, not inside it, so this renders with the fallback on a
+    machine that does not have Fredoka installed. Where that matters — anywhere
+    you are handing the file to someone else — export a PNG from this, or set the
+    text in Fredoka yourself and convert it to outlines.
+  -->
+  <rect width="1200" height="300" fill="#0e0b2b"/>
+  <g transform="translate(150 150) rotate(45)">
+    <rect x="-90" y="-90" width="180" height="180" rx="44" fill="#ffd23f"/>
+    <rect x="-29" y="-29" width="58" height="58" rx="7" fill="#0e0b2b"/>
+  </g>
+  <text x="290" y="150" dominant-baseline="central"
+        font-family="Fredoka, ui-rounded, 'Segoe UI', system-ui, sans-serif"
+        font-size="96" font-weight="700" letter-spacing="2">
+    <tspan fill="#fff6e9">BLENDER</tspan><tspan fill="#ffd23f">BATTLE</tspan>
+  </text>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Blender Battle">
+  <title>Blender Battle</title>
+  <!--
+    The mark, drawn from the same geometry as ArcadeLogo in the app: a rounded
+    square turned 45 degrees, in sun yellow, with a smaller square punched out of
+    the middle. Colours are the app's own tokens — ink #0e0b2b, sun #ffd23f.
+  -->
+  <rect width="512" height="512" fill="#0e0b2b"/>
+  <g transform="rotate(45 256 256)">
+    <rect x="91" y="91" width="330" height="330" rx="80" fill="#ffd23f"/>
+    <rect x="203" y="203" width="106" height="106" rx="12" fill="#0e0b2b"/>
+  </g>
+</svg>
