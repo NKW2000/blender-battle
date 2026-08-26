@@ -134,6 +134,26 @@ describe('the download filename', () => {
     expect(postFileName('', 'square')).toBe('blenderbattle-challenge-1x1.png');
   });
 
+  it('numbers the slides of a carousel, from one', () => {
+    /*
+      Uploaded in order, and a downloads folder sorts by name — so the order the
+      operator sees has to be the order Instagram is handed. Unnumbered, the
+      second file lands as "(1)" and sorts the same either way.
+    */
+    expect(postFileName('The couch', 'portrait', 'winner', 0, 2)).toBe(
+      'blenderbattle-winner-the-couch-4x5-1of2.png',
+    );
+    expect(postFileName('The couch', 'portrait', 'winner', 1, 2)).toBe(
+      'blenderbattle-winner-the-couch-4x5-2of2.png',
+    );
+  });
+
+  it('leaves a single-slide post unnumbered', () => {
+    expect(postFileName('The couch', 'square', 'challenge', 0, 1)).toBe(
+      'blenderbattle-the-couch-1x1.png',
+    );
+  });
+
   it('names a winner post as one', () => {
     /*
       The announcement and the result for a challenge share a title, so without
@@ -168,6 +188,15 @@ describe('difficulty styling', () => {
 describe('the post kinds', () => {
   it('offers the announcement and the result', () => {
     expect(Object.keys(POST_KINDS)).toEqual(['challenge', 'winner']);
+  });
+
+  it('makes the result a carousel and the announcement a single image', () => {
+    /*
+      The result is two slides because the first withholds the answer and points
+      right; an announcement has nothing to withhold.
+    */
+    expect(POST_KINDS.challenge.slides).toBe(1);
+    expect(POST_KINDS.winner.slides).toBe(2);
   });
 
   it('gives each kind its own marquee', () => {

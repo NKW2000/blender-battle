@@ -69,7 +69,7 @@ function loadCorsImage(url: string) {
 }
 
 export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
   const probeRef = useRef<HTMLSpanElement>(null);
   const imageRef = useRef<CanvasImageSource | null>(null);
   const avatarRef = useRef<CanvasImageSource | null>(null);
@@ -86,9 +86,13 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const [handle, setHandle] = useState(prefill?.handle ?? '');
   const [username, setUsername] = useState(prefill?.username ?? '');
   const [votes, setVotes] = useState<number | null>(prefill?.votes ?? null);
+  const [callToAction, setCallToAction] = useState('Follow on Instagram');
   const [fileName, setFileName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loadingLinked, setLoadingLinked] = useState(false);
+
+  // A winner is a two-slide carousel; an announcement is a single image.
+  const slideCount = POST_KINDS[kind].slides;
 
   /*
     The real font families, read off the page rather than named.
@@ -110,35 +114,52 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
     };
   }, []);
 
+  /*
+    Every slide is redrawn together.
+
+    A carousel is one post: the two images share a title, a palette and a foot,
+    and repainting only the one being edited is how the pair drifts apart.
+  */
   const paint = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const spec = POST_FORMATS[format];
-    canvas.width = spec.width;
-    canvas.height = spec.height;
+    const content = {
+      kind,
+      title,
+      blurb,
+      difficulty,
+      url,
+      handle,
+      username,
+      votes,
+      callToAction,
+      image: imageRef.current,
+      avatar: avatarRef.current,
+    };
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    canvasRefs.current.forEach((canvas, slide) => {
+      if (!canvas) return;
 
-    drawPost(
-      ctx,
-      spec,
-      {
-        kind,
-        title,
-        blurb,
-        difficulty,
-        url,
-        handle,
-        username,
-        votes,
-        image: imageRef.current,
-        avatar: avatarRef.current,
-      },
-      fonts(),
-    );
-  }, [kind, format, title, blurb, difficulty, url, handle, username, votes, fonts]);
+      canvas.width = spec.width;
+      canvas.height = spec.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      drawPost(ctx, spec, content, fonts(), slide);
+    });
+  }, [
+    kind,
+    format,
+    title,
+    blurb,
+    difficulty,
+    url,
+    handle,
+    username,
+    votes,
+    callToAction,
+    fonts,
+  ]);
 
   /*
     Wait for the webfonts before the first paint.
@@ -272,23 +293,44 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
     image.src = objectUrl;
   };
 
-  const download = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  /** Saves one slide, resolving once the browser has been handed the file. */
+  const saveSlide = (canvas: HTMLCanvasElement, slide: number) =>
+    new Promise<boolean>((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(false);
+          return;
+        }
 
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        notify.error('The post could not be saved', 'Try again.');
-        return;
-      }
+        const href = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = href;
+        link.download = postFileName(title, format, kind, slide, slideCount);
+        link.click();
+        URL.revokeObjectURL(href);
+        resolve(true);
+      }, 'image/png');
+    });
 
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = postFileName(title, format, kind);
-      link.click();
-      URL.revokeObjectURL(href);
-    }, 'image/png');
+  const download = async () => {
+    const canvases = canvasRefs.current.slice(0, slideCount).filter(Boolean) as HTMLCanvasElement[];
+    if (canvases.length === 0) return;
+
+    /*
+      Saved one after another rather than all at once.
+
+      Two `click()` calls in the same tick are treated as a multiple-download
+      attempt and the browser silently drops the second, so the operator gets
+      slide one and no warning that slide two never arrived.
+    */
+    let saved = 0;
+    for (const [slide, canvas] of canvases.entries()) {
+      if (await saveSlide(canvas, slide)) saved += 1;
+    }
+
+    if (saved < canvases.length) {
+      notify.error('Not every slide was saved', 'Try again.');
+    }
   };
 
   const spec = POST_FORMATS[format];
@@ -304,20 +346,36 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
         <PanelHeader>
           <PanelTitle>Preview</PanelTitle>
           <span className="font-mono text-xs text-bone-faint">
+            {slideCount > 1 ? `${slideCount} slides · ` : ''}
             {spec.width}×{spec.height} · {spec.ratio}
           </span>
         </PanelHeader>
-        <PanelBody className="flex justify-center">
+        <PanelBody className="flex flex-wrap items-start justify-center gap-5">
           {/*
-            The canvas is drawn at full export resolution and shown scaled, so
-            what is on screen is exactly the file that will be saved rather than
-            a preview that has to be trusted.
+            Every slide, side by side, each drawn at full export resolution and
+            shown scaled — so what is on screen is exactly the file that will be
+            saved rather than a preview that has to be trusted. Seeing the pair
+            together is also the only way to tell whether they read as one post.
           */}
-          <canvas
-            ref={canvasRef}
-            className="h-auto w-full max-w-[420px] rounded-[16px] border-[3px] border-ink"
-            style={{ boxShadow: '0 8px 0 var(--color-ink)', aspectRatio: `${spec.width} / ${spec.height}` }}
-          />
+          {Array.from({ length: slideCount }).map((_, slide) => (
+            <figure key={slide} className="flex min-w-0 flex-col items-center gap-2">
+              <canvas
+                ref={(node) => {
+                  canvasRefs.current[slide] = node;
+                }}
+                className="h-auto w-full max-w-[340px] rounded-[16px] border-[3px] border-ink"
+                style={{
+                  boxShadow: '0 8px 0 var(--color-ink)',
+                  aspectRatio: `${spec.width} / ${spec.height}`,
+                }}
+              />
+              {slideCount > 1 ? (
+                <figcaption className="eyebrow">
+                  {slide === 0 ? 'Slide 1 · the tease' : 'Slide 2 · the reveal'}
+                </figcaption>
+              ) : null}
+            </figure>
+          ))}
         </PanelBody>
       </Panel>
 
@@ -457,6 +515,24 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
               </Field>
             ) : null}
 
+            {kind === 'winner' ? (
+              <Field label="Line under the handle" hint={handle ? 'Shown' : 'Needs a handle'}>
+                {/*
+                  Kept as a field rather than a fixed string: the winner may use
+                  any pronoun, or none, and the person writing the post is the
+                  one who knows which. It is not drawn at all without a handle,
+                  since there would be nothing to follow.
+                */}
+                <input
+                  value={callToAction}
+                  onChange={(event) => setCallToAction(event.target.value)}
+                  maxLength={40}
+                  placeholder="Follow on Instagram"
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
+                />
+              </Field>
+            ) : null}
+
             <Field label="Difficulty">
               <Select
                 ariaLabel="Difficulty"
@@ -480,8 +556,19 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
           </PanelBody>
         </Panel>
 
-        <ChunkyButton size="md" sheen onClick={download} disabled={!ready || loadingLinked}>
-          {!ready ? 'Loading fonts…' : loadingLinked ? 'Fetching the images…' : 'Download PNG'}
+        <ChunkyButton
+          size="md"
+          sheen
+          onClick={() => void download()}
+          disabled={!ready || loadingLinked}
+        >
+          {!ready
+            ? 'Loading fonts…'
+            : loadingLinked
+              ? 'Fetching the images…'
+              : slideCount > 1
+                ? `Download ${slideCount} PNGs`
+                : 'Download PNG'}
         </ChunkyButton>
       </div>
     </div>
