@@ -41,15 +41,19 @@ export default function ManageChallengesPage() {
         eyebrow="Authoring"
         title="Your challenges"
         /*
-          Full width on a phone, where a fixed 192px filter beside the button
-          left the button too narrow for "New challenge" and it broke onto two
-          lines. The filter now takes whatever is left and the button keeps its
-          natural width.
+          The filter gets its own row on a phone; the two buttons share the one
+          below it. All three sat on a single row, and measured at 375px that
+          row was 343px wide against 113px of "Catalogue", 147px of "New
+          challenge" and 24px of gaps — 284px of it claimed by two `shrink-0`
+          buttons. The filter was left 59px, of which padding and the chevron
+          took all but *one pixel*, so its label rendered as nothing at all.
+
+          From `sm` there is room for the original single row.
         */
         action={
-          <div className="flex w-full gap-3 sm:w-auto">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <Select
-            className="min-w-0 flex-1 sm:w-48 sm:flex-none"
+            className="w-full sm:w-48"
             ariaLabel="Filter by status"
             value={status}
             onChange={(value) => setStatus(value as ChallengeStatus | '')}
@@ -63,21 +67,26 @@ export default function ManageChallengesPage() {
             ]}
           />
 
-          {/*
-            The catalogue's way in.
+          {/* Sharing a row, each taking half of it, rather than sizing to their
+              own text — two buttons of visibly different widths sitting side by
+              side read as a mistake at this size. */}
+          <div className="flex gap-3">
+            {/*
+              The catalogue's way in.
 
-            It left the top-level nav — eight destinations did not fit the bar,
-            and browsing every published brief is an authoring task rather than
-            something a player needs one tap away. This is where a manager is
-            already standing when they want it.
-          */}
-          <Button asChild variant="outline" className="shrink-0 whitespace-nowrap">
-            <Link href="/challenges">Catalogue</Link>
-          </Button>
+              It left the top-level nav — eight destinations did not fit the bar,
+              and browsing every published brief is an authoring task rather than
+              something a player needs one tap away. This is where a manager is
+              already standing when they want it.
+            */}
+            <Button asChild variant="outline" className="flex-1 whitespace-nowrap sm:flex-none">
+              <Link href="/challenges">Catalogue</Link>
+            </Button>
 
-          <Button asChild className="shrink-0 whitespace-nowrap">
-            <Link href="/manage/challenges/new">New challenge</Link>
-          </Button>
+            <Button asChild className="flex-1 whitespace-nowrap sm:flex-none">
+              <Link href="/manage/challenges/new">New challenge</Link>
+            </Button>
+          </div>
         </div>
         }
       />
