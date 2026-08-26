@@ -70,7 +70,21 @@ export function Toaster() {
           description:
             'mt-1 whitespace-pre-line text-xs font-extrabold leading-relaxed text-bone-muted break-words',
           icon: 'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-ink',
-          error: 'border-punch bg-punch/15 [&_[data-icon]]:bg-punch [&_[data-icon]]:text-ink',
+          /*
+            The error tint is mixed into the surface, not laid over it.
+
+            This was `bg-punch/15`, which replaced the panel colour with a 15%
+            opaque pink — so an error toast was 85% see-through and whatever page
+            was behind it read straight through the words. Errors are the toasts
+            that most need reading, and the ones most likely to appear over a
+            busy screen.
+
+            `color-mix` gives the same tint as a solid colour, and keeps it
+            derived from the two tokens rather than frozen into a hex nobody will
+            remember to update.
+          */
+          error:
+            'border-punch bg-[color-mix(in_srgb,var(--color-punch)_16%,var(--color-panel-raised))] [&_[data-icon]]:bg-punch [&_[data-icon]]:text-ink',
           success: 'border-mint [&_[data-icon]]:bg-mint [&_[data-icon]]:text-ink',
           info: 'border-aqua [&_[data-icon]]:bg-aqua [&_[data-icon]]:text-ink',
           warning: 'border-sun [&_[data-icon]]:bg-sun [&_[data-icon]]:text-ink',
