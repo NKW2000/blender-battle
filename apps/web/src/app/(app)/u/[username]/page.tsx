@@ -11,6 +11,7 @@ import { use, useMemo, useState } from 'react';
 
 import { ChevronIcon, FireIcon } from '@/components/ui/icons';
 import { EmptyState, Panel, Skeleton } from '@/components/ui/panel';
+import { SwipeRow } from '@/components/ui/swipe-row';
 import { useSession } from '@/features/auth/use-session';
 import { usePortfolio, usePublicProfile, useShowcase } from '@/features/users/use-users';
 import { formatDate } from '@/lib/utils';
@@ -227,11 +228,40 @@ export default function ProfilePage({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/*
+            Swiped on a phone, a grid from `sm` up.
+
+            One card per row put a single square on screen at a time, so an
+            artist with twenty finished runs had twenty screens of scrolling
+            below their showcase. `sm:contents` on the track takes the wrapper
+            out of the layout entirely once there is width for a grid, which
+            hands the cards straight to it — the same markup, laid out two ways,
+            rather than two copies kept in step by hand.
+          */}
+          <SwipeRow
+            ariaLabel={`${archive.length} archived works`}
+            className="snap-x snap-mandatory pb-1 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-x-visible lg:grid-cols-4"
+            trackClassName="gap-4 sm:contents"
+            itemSelector=":scope > * > *"
+          >
+            {/*
+              Each card is sized against the viewport, not the track.
+
+              A percentage would resolve against the `w-fit` track, whose own
+              width depends on its children — a circular question the browser
+              answers with a number that means nothing. Measured at 375px it gave
+              160px cards instead of the intended ~290. The cap keeps them sane
+              on the widths between a phone and the `sm` grid.
+            */}
             {archive.map((item) => (
-              <ArchiveCard key={item.id} item={item} />
+              <div
+                key={item.id}
+                className="w-[78vw] max-w-[320px] shrink-0 snap-center sm:w-auto sm:max-w-none"
+              >
+                <ArchiveCard item={item} />
+              </div>
             ))}
-          </div>
+          </SwipeRow>
         </section>
       ) : null}
 
@@ -363,9 +393,20 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
         </div>
       </div>
 
-      {/* Thumbnail strip */}
+      {/*
+        Thumbnail strip.
+
+        It used to wrap, which on a phone turned ten pinned works into three
+        left-aligned rows sitting under a centred gallery — the strip read as
+        spill rather than as a control. One line that scrolls keeps it a strip at
+        any width, centred while it fits and swipeable once it does not.
+      */}
       {work.length > 1 ? (
-        <div className="flex flex-wrap gap-2.5">
+        <SwipeRow
+          ariaLabel={`${work.length} pinned works`}
+          className="snap-x snap-mandatory pb-1"
+          trackClassName="gap-2.5"
+        >
           {work.map((entry, i) => (
             <button
               key={entry.id}
@@ -373,7 +414,7 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
               onClick={() => go(i)}
               aria-label={`Show ${entry.challengeTitle}`}
               aria-current={i === active}
-              className={`h-16 w-16 overflow-hidden rounded-xl border-[3px] transition-colors ${
+              className={`h-16 w-16 shrink-0 snap-center overflow-hidden rounded-xl border-[3px] transition-colors ${
                 i === active ? 'border-sun' : 'border-white/16 hover:border-white/40'
               }`}
             >
@@ -381,7 +422,7 @@ function WorkGallery({ work }: { work: PortfolioItem[] }) {
               <img src={entry.imageUrl} alt={entry.challengeTitle} className="h-full w-full object-cover" />
             </button>
           ))}
-        </div>
+        </SwipeRow>
       ) : null}
     </div>
   );
