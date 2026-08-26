@@ -30,6 +30,20 @@ export const POST_FORMATS = {
 export type PostFormatId = keyof typeof POST_FORMATS;
 export type PostFormat = (typeof POST_FORMATS)[PostFormatId];
 
+/**
+ * The two posts this tool makes.
+ *
+ * They are one layout with two headlines rather than two designs: a feed where
+ * the announcement and the result look like the same product is the whole point
+ * of making them here instead of in a graphics editor.
+ */
+export const POST_KINDS = {
+  challenge: { id: 'challenge', label: 'New challenge', marquee: 'NEW CHALLENGE' },
+  winner: { id: 'winner', label: 'Winner', marquee: 'WINNER' },
+} as const;
+
+export type PostKind = keyof typeof POST_KINDS;
+
 /* ---------------------------------------------------------------- tokens */
 
 const INK = '#0e0b2b';
@@ -50,124 +64,19 @@ export const DIFFICULTY_STYLE: Record<Difficulty, { label: string; fill: string;
 };
 
 export interface PostContent {
+  kind: PostKind;
   title: string;
   difficulty: Difficulty;
   blurb: string;
   url: string;
   image: CanvasImageSource | null;
+  /** The winner's Instagram handle, without the '@'. Ignored by a challenge post. */
+  handle: string;
 }
 
 export interface PostFonts {
   display: string;
   body: string;
-}
-
-/* ------------------------------------------------- background knock-out */
-
-/**
- * Knocks the flat backdrop out of a reference so the subject floats.
- *
- * A Blender render almost always arrives on one flat colour, and a rectangle of
- * grey sitting on the arcade gradient is the single thing that makes a post look
- * pasted together. Removing it is what lets the object sit *in* the poster.
- *
- * The method is a flood fill seeded from the edges rather than a colour-distance
- * pass over the whole image, and that distinction matters: a global pass also
- * deletes every pixel of the subject that happens to match the backdrop, which
- * on a grey render is most of its shading. Filling inwards from the border only
- * removes background that is actually connected to the border.
- *
- * Pixels are matched against the average of the four corners, so a subtle
- * vignette or gradient backdrop still reads as one region.
- */
-export function knockOutBackground(image: ImageData, tolerance = 32): ImageData {
-  const { width, height, data } = image;
-  const out = new Uint8ClampedArray(data);
-
-  // The reference colour: the mean of the four corners.
-  const corners = [
-    0,
-    (width - 1) * 4,
-    (height - 1) * width * 4,
-    ((height - 1) * width + width - 1) * 4,
-  ];
-  let br = 0;
-  let bg = 0;
-  let bb = 0;
-  for (const c of corners) {
-    br += data[c]!;
-    bg += data[c + 1]!;
-    bb += data[c + 2]!;
-  }
-  br /= 4;
-  bg /= 4;
-  bb /= 4;
-
-  const matches = (i: number) =>
-    Math.abs(data[i]! - br) <= tolerance &&
-    Math.abs(data[i + 1]! - bg) <= tolerance &&
-    Math.abs(data[i + 2]! - bb) <= tolerance;
-
-  /*
-    An explicit stack rather than recursion.
-
-    A 1080x1080 region is over a million pixels; a recursive fill blows the call
-    stack on any real photograph long before it finishes.
-  */
-  const seen = new Uint8Array(width * height);
-  const stack: number[] = [];
-
-  const push = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    const p = y * width + x;
-    if (seen[p]) return;
-    seen[p] = 1;
-    if (matches(p * 4)) stack.push(p);
-  };
-
-  for (let x = 0; x < width; x += 1) {
-    push(x, 0);
-    push(x, height - 1);
-  }
-  for (let y = 0; y < height; y += 1) {
-    push(0, y);
-    push(width - 1, y);
-  }
-
-  while (stack.length > 0) {
-    const p = stack.pop()!;
-    out[p * 4 + 3] = 0;
-
-    const x = p % width;
-    const y = (p - x) / width;
-    push(x + 1, y);
-    push(x - 1, y);
-    push(x, y + 1);
-    push(x, y - 1);
-  }
-
-  /*
-    One softening pass over the new edge.
-
-    A hard alpha cut leaves the backdrop's colour fringing every outline, which
-    reads as a bad cut-out. Averaging alpha across the boundary costs one pass
-    and is the difference between "floating" and "badly masked".
-  */
-  const feathered = new Uint8ClampedArray(out);
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const p = (y * width + x) * 4 + 3;
-      if (out[p] === 0) continue;
-
-      const neighbours =
-        out[p - 4]! + out[p + 4]! + out[p - width * 4]! + out[p + width * 4]!;
-      if (neighbours < 4 * 255) {
-        feathered[p] = Math.round((out[p]! + neighbours / 4) / 2);
-      }
-    }
-  }
-
-  return new ImageData(feathered, width, height);
 }
 
 /* ----------------------------------------------------------- pure helpers */
@@ -192,22 +101,89 @@ export function coverCrop(
 }
 
 /**
- * Contain-fit: the destination rect so a whole image fits inside a box.
+ * Reduces whatever the admin pasted to a bare Instagram handle.
  *
- * Used once the backdrop is gone. A knocked-out subject must never be cropped —
- * cover-fitting it would cut the model in half, which is the opposite of the
- * floating look the transparency exists to produce.
+ * People paste a profile URL, a handle with the '@' already on it, or a handle
+ * with a stray space — and a post that credits the winner as
+ * "@https://instagram.com/someone/" is worse than one that credits nobody.
+ * Instagram's own rules are the target: letters, digits, dots and underscores,
+ * up to thirty characters.
  */
-export function containBox(
-  sourceWidth: number,
-  sourceHeight: number,
-  boxWidth: number,
-  boxHeight: number,
-) {
-  const scale = Math.min(boxWidth / sourceWidth, boxHeight / sourceHeight);
-  const width = sourceWidth * scale;
-  const height = sourceHeight * scale;
-  return { width, height, offsetX: (boxWidth - width) / 2, offsetY: (boxHeight - height) / 2 };
+export function normalizeInstagramHandle(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  // A pasted profile link: keep the first path segment, drop the rest.
+  const fromUrl = trimmed.replace(/^.*instagram\.com\//i, '');
+  const firstSegment = fromUrl.split(/[/?#]/)[0] ?? '';
+
+  return firstSegment
+    .replace(/^@+/, '')
+    .replace(/[^A-Za-z0-9._]/g, '')
+    .toLowerCase()
+    .slice(0, 30);
+}
+
+/**
+ * Places the frame and the type block down the poster.
+ *
+ * Pulled out of the drawing and given tests because it has been wrong twice in
+ * the same way: the frame took a fixed share of the height, the type took what
+ * was left, and when the type did not fit, the last line was printed through
+ * the brand lockup at the foot. The invariant this exists to hold is that the
+ * block never extends past `footTop`, whatever it contains.
+ *
+ * The frame is sized around the type rather than the other way round — an image
+ * shrinking by thirty pixels is invisible, a headline colliding with the logo is
+ * the only thing anyone will see.
+ */
+export function layoutPost({
+  frameHeight,
+  pad,
+  stageTop,
+  idealStageHeight,
+  minStageHeight,
+  blockHeight,
+  minGap = 40,
+}: {
+  frameHeight: number;
+  pad: number;
+  stageTop: number;
+  idealStageHeight: number;
+  minStageHeight: number;
+  blockHeight: number;
+  minGap?: number;
+}) {
+  // Where the brand lockup begins, with a little air above it.
+  const footTop = frameHeight - pad - 46;
+
+  // The frame's hard shadow sits 14px below it and counts as part of its height.
+  const shadow = 14;
+
+  const stageHeight = Math.max(
+    minStageHeight,
+    Math.min(idealStageHeight, footTop - stageTop - shadow - blockHeight - minGap),
+  );
+
+  const subjectBottom = stageTop + stageHeight + shadow;
+
+  /*
+    Centred in the room the frame leaves, but never past the footer: the gap
+    wants to be at least `minGap` and takes less only when honouring it would
+    push the last line into the lockup.
+
+    The final clamp covers the case the drawing cannot currently reach but the
+    arithmetic can — a block taller than the room left once the frame is already
+    at its floor. Overlapping the bottom of the reference by a few pixels is a
+    blemish; printing the headline through the logo is a ruined post, so the
+    footer wins. It is floored at `stageTop` so the block can never climb above
+    the frame entirely.
+  */
+  const slack = footTop - subjectBottom - blockHeight;
+  const preferred = subjectBottom + Math.min(Math.max(minGap, slack / 2), Math.max(0, slack));
+  const blockTop = Math.max(stageTop, Math.min(preferred, footTop - blockHeight));
+
+  return { footTop, stageHeight, subjectBottom, blockTop };
 }
 
 /** Breaks a line to fit a width, using a caller-supplied measurer. */
@@ -232,7 +208,7 @@ export function wrapText(text: string, maxWidth: number, measure: (s: string) =>
 }
 
 /** A filename that sorts and reads sensibly in a downloads folder. */
-export function postFileName(title: string, format: PostFormatId) {
+export function postFileName(title: string, format: PostFormatId, kind: PostKind = 'challenge') {
   const slug =
     title
       .toLowerCase()
@@ -240,7 +216,11 @@ export function postFileName(title: string, format: PostFormatId) {
       .replace(/^-|-$/g, '')
       .slice(0, 48) || 'challenge';
 
-  return `blenderbattle-${slug}-${POST_FORMATS[format].ratio.replace(':', 'x')}.png`;
+  // The announcement and the result for one challenge share a title, so without
+  // the kind in the name the second download lands as "(1)" beside the first.
+  const prefix = kind === 'winner' ? 'blenderbattle-winner' : 'blenderbattle';
+
+  return `${prefix}-${slug}-${POST_FORMATS[format].ratio.replace(':', 'x')}.png`;
 }
 
 /* --------------------------------------------------------------- drawing */
@@ -376,9 +356,11 @@ function marquee(
 /**
  * Renders the whole post.
  *
- * Composed as a poster rather than a card: the subject floats over the arcade
- * ground with a glow behind it, the type is set big and tight underneath, and
- * everything is anchored by the marquee at the top and the brand at the foot.
+ * Composed as a poster: the reference is framed in the product's own slab —
+ * ink outline, hard offset shadow — the type is set big and tight underneath,
+ * and everything is anchored by the marquee at the top and the brand at the
+ * foot. A winner post is the same poster with a different headline, so the
+ * announcement and the result read as one product in a feed.
  */
 export function drawPost(
   ctx: CanvasRenderingContext2D,
@@ -430,80 +412,16 @@ export function drawPost(
   }
 
   // --- the marquee ----------------------------------------------------
-  marquee(ctx, 'NEW CHALLENGE', pad + 4, W, fonts);
+  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
 
-  // --- the subject, floating ------------------------------------------
-  const stageTop = pad + 92;
-  const stageHeight = format.id === 'portrait' ? H * 0.44 : H * 0.40;
-  const stageWidth = W - pad * 2;
-  const stageCx = W / 2;
-  const stageCy = stageTop + stageHeight / 2;
+  /* --- the type, measured before the frame is sized ---------------------
 
-  // A glow behind the subject: what makes a cut-out sit in the frame rather
-  // than on top of it.
-  const halo = ctx.createRadialGradient(stageCx, stageCy, 0, stageCx, stageCy, stageWidth * 0.6);
-  halo.addColorStop(0, 'rgba(255, 210, 63, 0.30)');
-  halo.addColorStop(0.45, 'rgba(255, 210, 63, 0.09)');
-  halo.addColorStop(1, 'rgba(255, 210, 63, 0)');
-  ctx.fillStyle = halo;
-  ctx.fillRect(0, stageTop - 40, W, stageHeight + 120);
-
-  /*
-    Where the subject actually ends.
-
-    `containBox` letterboxes, so the subject almost never fills the stage. Both
-    the contact shadow and the type below key off this rather than the stage
-    box — keyed off the stage they sat in the leftover space, which put the
-    shadow a hundred pixels below the object it belonged to and opened a dead
-    gap above the title.
+     Measuring first is what keeps the two apart. The frame used to be a fixed
+     fraction of the height and the type took what was left, with a floor under
+     the gap above it — so a post whose type nearly filled the remaining room
+     had that floor override the centring and push the last line straight
+     through the brand lockup. The frame is now sized around the type instead.
   */
-  let subjectBottom = stageTop + stageHeight;
-
-  if (content.image) {
-    const sw = Number((content.image as { width?: number }).width ?? stageWidth);
-    const sh = Number((content.image as { height?: number }).height ?? stageHeight);
-    const box = containBox(sw, sh, stageWidth, stageHeight);
-    subjectBottom = stageTop + box.offsetY + box.height;
-
-    // A contact shadow, so the cut-out stands on the ground instead of hovering
-    // in front of it. Thick and fairly opaque because it is dark ink over an
-    // already dark ground — thin and faint reads as nothing at all.
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.filter = 'blur(30px)';
-    ctx.fillStyle = INK;
-    ctx.beginPath();
-    ctx.ellipse(stageCx, subjectBottom - 4, box.width * 0.36, 34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.drawImage(
-      content.image,
-      pad + box.offsetX,
-      stageTop + box.offsetY,
-      box.width,
-      box.height,
-    );
-  } else {
-    ctx.strokeStyle = 'rgba(255,246,233,0.22)';
-    ctx.lineWidth = 5;
-    ctx.setLineDash([16, 14]);
-    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, 34);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = HAZE;
-    ctx.font = `800 32px ${fonts.body}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Drop the challenge reference here', stageCx, stageCy);
-  }
-
-  // The difficulty rides the subject's shoulder, tilted.
-  const style = DIFFICULTY_STYLE[content.difficulty];
-  tiltedBadge(ctx, style.label, W - pad - 30, stageTop + 34, -7, fonts, style.fill, style.ink, 34);
-
-  // --- title ------------------------------------------------------------
   const titleSize = format.id === 'portrait' ? 104 : 90;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
@@ -533,11 +451,108 @@ export function drawPost(
     ? wrapText(content.blurb, W - pad * 1.3, (s) => ctx.measureText(s).width).slice(0, 2)
     : [];
 
-  const blockHeight = titleLines.length * titleSize + (blurbLines.length ? 16 + blurbLines.length * 44 : 0);
-  const footTop = H - pad - 46;
-  const room = footTop - subjectBottom;
-  const blockTop = subjectBottom + Math.max(40, (room - blockHeight) / 2);
+  /*
+    The winner's credit.
 
+    It is the reason a winner post exists, so it is set in the sun accent at
+    nearly title scale rather than tucked into the blurb — big enough that the
+    person being credited can see their own name from the feed. A challenge post
+    has no credit and skips the line entirely.
+  */
+  const handle = content.kind === 'winner' ? normalizeInstagramHandle(content.handle) : '';
+  const creditSize = Math.round(titleSize * 0.62);
+  const creditGap = 26;
+
+  /*
+    The block's height expressed as the same advances the drawing below makes,
+    including the drop from the block's top to the first baseline and the line
+    advance after the last one. Counting only the lines understated it by about
+    a third of a line, which is exactly the margin by which the last line ended
+    up printed through the brand lockup.
+  */
+  const blockHeight =
+    titleSize * 0.78 +
+    titleLines.length * titleSize +
+    (handle ? creditGap + creditSize : 0) +
+    (blurbLines.length ? 16 + blurbLines.length * 44 : 0);
+
+
+
+
+  // --- the reference, framed -------------------------------------------
+  const stageTop = pad + 92;
+  const stageWidth = W - pad * 2;
+
+  const { stageHeight, blockTop } = layoutPost({
+    frameHeight: H,
+    pad,
+    stageTop,
+    idealStageHeight: format.id === 'portrait' ? H * 0.44 : H * 0.4,
+    minStageHeight: H * 0.26,
+    blockHeight,
+  });
+  const stageCx = W / 2;
+  const stageCy = stageTop + stageHeight / 2;
+  const stageRadius = 34;
+
+  /*
+    The frame is the product's slab, not a plain rectangle: ink shadow beneath,
+    the image clipped to the rounded corners, then the outline drawn over the
+    top so the image cannot creep past it.
+  */
+  if (content.image) {
+    const sw = Number((content.image as { width?: number }).width ?? stageWidth);
+    const sh = Number((content.image as { height?: number }).height ?? stageHeight);
+    const crop = coverCrop(sw, sh, stageWidth, stageHeight);
+
+    ctx.fillStyle = INK;
+    roundedRect(ctx, pad, stageTop + 14, stageWidth, stageHeight, stageRadius);
+    ctx.fill();
+
+    ctx.save();
+    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    ctx.clip();
+    ctx.drawImage(
+      content.image,
+      crop.sx,
+      crop.sy,
+      crop.sw,
+      crop.sh,
+      pad,
+      stageTop,
+      stageWidth,
+      stageHeight,
+    );
+    ctx.restore();
+
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 7;
+    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = 'rgba(255,246,233,0.22)';
+    ctx.lineWidth = 5;
+    ctx.setLineDash([16, 14]);
+    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = HAZE;
+    ctx.font = `800 32px ${fonts.body}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      content.kind === 'winner' ? 'Drop the winning render here' : 'Drop the challenge reference here',
+      stageCx,
+      stageCy,
+    );
+  }
+
+  // The difficulty rides the subject's shoulder, tilted.
+  const style = DIFFICULTY_STYLE[content.difficulty];
+  tiltedBadge(ctx, style.label, W - pad - 30, stageTop + 34, -7, fonts, style.fill, style.ink, 34);
+
+  // --- title ------------------------------------------------------------
   // `cursor` is a baseline, so drop it off the block's top by the cap height.
   let cursor = blockTop + titleSize * 0.78;
 
@@ -550,6 +565,16 @@ export function drawPost(
     ctx.fillStyle = CREAM;
     ctx.fillText(line, W / 2, cursor);
     cursor += titleSize * 1.0;
+  }
+
+  if (handle) {
+    cursor += creditGap;
+    ctx.font = `700 ${creditSize}px ${fonts.display}`;
+    ctx.fillStyle = INK;
+    ctx.fillText(`@${handle}`, W / 2 + 4, cursor + 6);
+    ctx.fillStyle = SUN;
+    ctx.fillText(`@${handle}`, W / 2, cursor);
+    cursor += creditSize;
   }
 
   if (blurbLines.length) {

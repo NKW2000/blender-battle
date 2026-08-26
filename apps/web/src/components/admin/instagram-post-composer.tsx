@@ -8,16 +8,19 @@ import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel
 import { Select } from '@/components/ui/select';
 import {
   POST_FORMATS,
+  POST_KINDS,
   drawPost,
-  knockOutBackground,
+  normalizeInstagramHandle,
   postFileName,
   type PostFormatId,
   type PostFonts,
+  type PostKind,
 } from '@/lib/instagram-post';
 import { notify } from '@/lib/notify';
 
 /**
- * Builds a finished Instagram post from a challenge reference.
+ * Builds a finished Instagram post — either a challenge announcement or the
+ * result, crediting the winner by their Instagram handle.
  *
  * Everything happens in the browser. The image is read from the chosen file,
  * composited onto a canvas and saved — nothing is uploaded, so this needed no
@@ -30,25 +33,15 @@ export function InstagramPostComposer() {
   const imageRef = useRef<CanvasImageSource | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
+  const [kind, setKind] = useState<PostKind>('challenge');
   const [format, setFormat] = useState<PostFormatId>('portrait');
   const [title, setTitle] = useState('The couch');
   const [blurb, setBlurb] = useState('Nobody sees the brief before the room starts.');
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.HARD);
   const [url, setUrl] = useState('blenderbattle.vercel.app');
+  const [handle, setHandle] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [cutOut, setCutOut] = useState(true);
-  const [tolerance, setTolerance] = useState(36);
-  const [working, setWorking] = useState(false);
-
-  /*
-    The untouched bitmap is kept alongside the one being shown.
-
-    Knocking the backdrop out is destructive, so re-running it on its own output
-    would eat further into the subject every time the tolerance moved. Each pass
-    starts from the original.
-  */
-  const sourceRef = useRef<ImageBitmap | HTMLImageElement | null>(null);
 
   /*
     The real font families, read off the page rather than named.
@@ -81,8 +74,13 @@ export function InstagramPostComposer() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    drawPost(ctx, spec, { title, blurb, difficulty, url, image: imageRef.current }, fonts());
-  }, [format, title, blurb, difficulty, url, fonts]);
+    drawPost(
+      ctx,
+      spec,
+      { kind, title, blurb, difficulty, url, handle, image: imageRef.current },
+      fonts(),
+    );
+  }, [kind, format, title, blurb, difficulty, url, handle, fonts]);
 
   /*
     Wait for the webfonts before the first paint.
@@ -114,57 +112,6 @@ export function InstagramPostComposer() {
     [],
   );
 
-  /**
-   * Rebuilds what gets drawn from the untouched source.
-   *
-   * Always from the original: the knock-out is destructive, so running it over
-   * its own output would eat further into the subject each time the tolerance
-   * moved.
-   */
-  const prepare = useCallback(async () => {
-    const source = sourceRef.current;
-    if (!source) return;
-
-    if (!cutOut) {
-      imageRef.current = source;
-      paint();
-      return;
-    }
-
-    setWorking(true);
-    try {
-      const w = Number((source as { width: number }).width);
-      const h = Number((source as { height: number }).height);
-
-      /*
-        Worked on at most 1400px on the long edge.
-
-        The flood fill is per-pixel, and a 6000px phone photo is 36 million of
-        them — several seconds of frozen tab for a result that is then scaled
-        down into a 1080px poster anyway.
-      */
-      const scale = Math.min(1, 1400 / Math.max(w, h));
-      const cw = Math.max(1, Math.round(w * scale));
-      const ch = Math.max(1, Math.round(h * scale));
-
-      const work = document.createElement('canvas');
-      work.width = cw;
-      work.height = ch;
-      const wctx = work.getContext('2d', { willReadFrequently: true });
-      if (!wctx) return;
-
-      wctx.drawImage(source as CanvasImageSource, 0, 0, cw, ch);
-      wctx.putImageData(knockOutBackground(wctx.getImageData(0, 0, cw, ch), tolerance), 0, 0);
-
-      imageRef.current = work;
-      paint();
-    } catch {
-      notify.error('That image could not be processed', 'Try turning the cut-out off.');
-    } finally {
-      setWorking(false);
-    }
-  }, [cutOut, tolerance, paint]);
-
   const chooseImage = (file: File | undefined) => {
     if (!file) return;
 
@@ -179,18 +126,13 @@ export function InstagramPostComposer() {
 
     const image = new Image();
     image.onload = () => {
-      sourceRef.current = image;
+      imageRef.current = image;
       setFileName(file.name);
-      void prepare();
+      paint();
     };
     image.onerror = () => notify.error('That image could not be read', 'Try a different file.');
     image.src = objectUrl;
   };
-
-  // Re-cut whenever the knock-out settings change.
-  useEffect(() => {
-    if (sourceRef.current) void prepare();
-  }, [prepare]);
 
   const download = () => {
     const canvas = canvasRef.current;
@@ -205,7 +147,7 @@ export function InstagramPostComposer() {
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = href;
-      link.download = postFileName(title, format);
+      link.download = postFileName(title, format, kind);
       link.click();
       URL.revokeObjectURL(href);
     }, 'image/png');
@@ -247,6 +189,28 @@ export function InstagramPostComposer() {
             <PanelTitle>Post</PanelTitle>
           </PanelHeader>
           <PanelBody className="flex flex-col gap-4">
+            <Field label="Post">
+              {/* Two posts, one layout. Announcing a challenge and crowning its
+                  winner should look like the same product in a feed. */}
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.values(POST_KINDS) as (typeof POST_KINDS)[PostKind][]).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={kind === option.id}
+                    onClick={() => setKind(option.id)}
+                    className={`arcade-focus rounded-[14px] border-[3px] px-3 py-3 font-display text-sm font-bold transition-colors ${
+                      kind === option.id
+                        ? 'border-sun bg-sun/20 text-cream'
+                        : 'border-white/16 bg-white/6 text-bone hover:bg-white/12'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             <Field label="Shape">
               <div className="grid grid-cols-2 gap-2">
                 {(Object.values(POST_FORMATS) as (typeof POST_FORMATS)[PostFormatId][]).map((option) => (
@@ -270,7 +234,10 @@ export function InstagramPostComposer() {
               </div>
             </Field>
 
-            <Field label="Reference image" hint={fileName ?? 'PNG or JPEG'}>
+            <Field
+              label={kind === 'winner' ? 'Winning render' : 'Reference image'}
+              hint={fileName ?? 'PNG or JPEG'}
+            >
               <label className="arcade-focus flex cursor-pointer items-center justify-center rounded-[14px] border-[3px] border-dashed border-white/24 bg-white/5 px-4 py-6 text-center text-sm font-extrabold text-bone-muted hover:bg-white/10">
                 <input
                   type="file"
@@ -278,44 +245,13 @@ export function InstagramPostComposer() {
                   className="sr-only"
                   onChange={(event) => chooseImage(event.target.files?.[0])}
                 />
-                {fileName ? 'Choose a different image' : 'Upload the challenge reference'}
+                {fileName
+                  ? 'Choose a different image'
+                  : kind === 'winner'
+                    ? 'Upload the winning render'
+                    : 'Upload the challenge reference'}
               </label>
             </Field>
-
-            <Field label="Reference background" hint={cutOut ? 'Knocked out' : 'Kept'}>
-              <button
-                type="button"
-                aria-pressed={cutOut}
-                onClick={() => setCutOut((on) => !on)}
-                className={`arcade-focus flex items-center justify-between rounded-[14px] border-[3px] px-4 py-3 text-left font-display text-sm font-bold transition-colors ${
-                  cutOut
-                    ? 'border-mint bg-mint/16 text-cream'
-                    : 'border-white/16 bg-white/6 text-bone hover:bg-white/12'
-                }`}
-              >
-                <span>{cutOut ? 'Transparent — subject floats' : 'Keep the original backdrop'}</span>
-                <span className={cutOut ? 'text-mint' : 'text-bone-faint'}>{cutOut ? 'ON' : 'OFF'}</span>
-              </button>
-            </Field>
-
-            {cutOut ? (
-              <Field label="Cut-out strength" hint={String(tolerance)}>
-                {/*
-                  How close a pixel must be to the corners' colour to be removed.
-                  Low keeps a fringe of backdrop; high starts eating the subject,
-                  which is why it is a control rather than a constant.
-                */}
-                <input
-                  type="range"
-                  min={8}
-                  max={90}
-                  value={tolerance}
-                  onChange={(event) => setTolerance(Number(event.target.value))}
-                  className="w-full accent-[var(--color-sun)]"
-                  aria-label="Cut-out strength"
-                />
-              </Field>
-            ) : null}
 
             <Field label="Title">
               <input
@@ -334,6 +270,23 @@ export function InstagramPostComposer() {
                 className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
               />
             </Field>
+
+            {kind === 'winner' ? (
+              <Field label="Winner's Instagram" hint={handle ? `@${normalizeInstagramHandle(handle)}` : '@handle'}>
+                {/*
+                  Whatever gets pasted is reduced to a bare handle when it is
+                  drawn, so a profile URL or a handle with the '@' already on it
+                  both work. The hint shows what will actually appear.
+                */}
+                <input
+                  value={handle}
+                  onChange={(event) => setHandle(event.target.value)}
+                  placeholder="username"
+                  maxLength={90}
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-mono text-sm font-bold text-bone"
+                />
+              </Field>
+            ) : null}
 
             <Field label="Difficulty">
               <Select
@@ -358,8 +311,8 @@ export function InstagramPostComposer() {
           </PanelBody>
         </Panel>
 
-        <ChunkyButton size="md" sheen onClick={download} disabled={!ready || working}>
-          {!ready ? 'Loading fonts…' : working ? 'Cutting out…' : 'Download PNG'}
+        <ChunkyButton size="md" sheen onClick={download} disabled={!ready}>
+          {ready ? 'Download PNG' : 'Loading fonts…'}
         </ChunkyButton>
       </div>
     </div>

@@ -4,35 +4,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DIFFICULTY_STYLE,
   POST_FORMATS,
-  containBox,
+  POST_KINDS,
   coverCrop,
-  knockOutBackground,
+  layoutPost,
+  normalizeInstagramHandle,
   postFileName,
   wrapText,
 } from './instagram-post';
-
-/*
-  jsdom has no `ImageData`.
-
-  It is a browser API and the knock-out is right to use it, so the shim lives
-  here rather than the production code being bent around a test environment.
-*/
-if (typeof globalThis.ImageData === 'undefined') {
-  class ImageDataShim {
-    readonly data: Uint8ClampedArray;
-    readonly width: number;
-    readonly height: number;
-    readonly colorSpace = 'srgb' as const;
-
-    constructor(data: Uint8ClampedArray, width: number, height?: number) {
-      this.data = data;
-      this.width = width;
-      this.height = height ?? data.length / 4 / width;
-    }
-  }
-
-  globalThis.ImageData = ImageDataShim as unknown as typeof ImageData;
-}
 
 /**
  * The post composer's arithmetic.
@@ -153,6 +131,19 @@ describe('the download filename', () => {
   it('falls back rather than producing a nameless file', () => {
     expect(postFileName('', 'square')).toBe('blenderbattle-challenge-1x1.png');
   });
+
+  it('names a winner post as one', () => {
+    /*
+      The announcement and the result for a challenge share a title, so without
+      the kind in the name the second download lands as "(1)" beside the first.
+    */
+    expect(postFileName('The couch', 'square', 'winner')).toBe(
+      'blenderbattle-winner-the-couch-1x1.png',
+    );
+    expect(postFileName('The couch', 'square', 'challenge')).toBe(
+      'blenderbattle-the-couch-1x1.png',
+    );
+  });
 });
 
 describe('difficulty styling', () => {
@@ -170,119 +161,141 @@ describe('difficulty styling', () => {
   });
 });
 
-/* ------------------------------------------------- background knock-out */
+/* ------------------------------------------------------------- post kinds */
 
-/** Builds an ImageData by hand — jsdom has no canvas to get one from. */
-function makeImage(width: number, height: number, paint: (x: number, y: number) => [number, number, number]) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const [r, g, b] = paint(x, y);
-      const i = (y * width + x) * 4;
-      data[i] = r;
-      data[i + 1] = g;
-      data[i + 2] = b;
-      data[i + 3] = 255;
-    }
-  }
-  return new ImageData(data, width, height);
-}
-
-const alphaAt = (image: ImageData, x: number, y: number) => image.data[(y * image.width + x) * 4 + 3]!;
-
-describe('knocking the backdrop out of a reference', () => {
-  /*
-    A grey plate with a solid block in the middle — the shape of almost every
-    Blender render that will be dropped into this tool.
-  */
-  const render = () =>
-    makeImage(20, 20, (x, y) => (x >= 7 && x <= 12 && y >= 7 && y <= 12 ? [200, 40, 40] : [128, 128, 128]));
-
-  it('clears the backdrop', () => {
-    const out = knockOutBackground(render(), 20);
-
-    expect(alphaAt(out, 0, 0)).toBe(0);
-    expect(alphaAt(out, 19, 19)).toBe(0);
+describe('the post kinds', () => {
+  it('offers the announcement and the result', () => {
+    expect(Object.keys(POST_KINDS)).toEqual(['challenge', 'winner']);
   });
 
-  it('leaves the subject fully opaque', () => {
-    const out = knockOutBackground(render(), 20);
-
-    expect(alphaAt(out, 10, 10)).toBe(255);
-  });
-
-  it('keeps subject pixels that happen to match the backdrop', () => {
-    /*
-      The reason this floods from the edges instead of testing every pixel
-      against the backdrop colour. A grey detail *inside* the subject — an eye,
-      a screw, a shadow — is the same colour as the plate, and a global pass
-      would punch a hole straight through it.
-    */
-    const withGreyDetail = makeImage(20, 20, (x, y) => {
-      const inSubject = x >= 6 && x <= 13 && y >= 6 && y <= 13;
-      if (!inSubject) return [128, 128, 128];
-      const isDetail = x >= 9 && x <= 10 && y >= 9 && y <= 10;
-      return isDetail ? [128, 128, 128] : [200, 40, 40];
-    });
-
-    const out = knockOutBackground(withGreyDetail, 20);
-
-    expect(alphaAt(out, 9, 9)).toBe(255);
-  });
-
-  it('does not touch a backdrop outside the tolerance', () => {
-    // A busy photographic background must be left alone rather than half-eaten.
-    const noisy = makeImage(20, 20, (x, y) => [(x * 37) % 255, (y * 91) % 255, ((x + y) * 53) % 255]);
-    const out = knockOutBackground(noisy, 4);
-
-    let cleared = 0;
-    for (let i = 3; i < out.data.length; i += 4) if (out.data[i] === 0) cleared += 1;
-
-    expect(cleared).toBeLessThan(20 * 20 * 0.25);
-  });
-
-  it('does not overflow the stack on a large image', () => {
-    // A recursive fill dies here; the explicit stack is why this passes.
-    const big = makeImage(400, 400, () => [128, 128, 128]);
-
-    expect(() => knockOutBackground(big, 20)).not.toThrow();
-  });
-
-  it('leaves the original untouched', () => {
-    /*
-      Each pass runs from the untouched source, so the caller can move the
-      tolerance without the cut eating further into the subject every time.
-    */
-    const source = render();
-    const before = source.data[3];
-
-    knockOutBackground(source, 20);
-
-    expect(source.data[3]).toBe(before);
+  it('gives each kind its own marquee', () => {
+    // The strip across the top is the only thing that tells the two apart at a
+    // glance in a feed, so they must not share a word.
+    expect(POST_KINDS.challenge.marquee).not.toBe(POST_KINDS.winner.marquee);
   });
 });
 
-describe('containing a cut-out subject', () => {
-  it('fits the whole subject rather than cropping it', () => {
-    // A knocked-out subject must never be cropped — that is the opposite of the
-    // floating look the transparency exists to produce.
-    const box = containBox(2000, 1000, 500, 500);
-
-    expect(box.width).toBe(500);
-    expect(box.height).toBe(250);
+describe('normalising an Instagram handle', () => {
+  it('takes a plain handle unchanged', () => {
+    expect(normalizeInstagramHandle('blenderguru')).toBe('blenderguru');
   });
 
-  it('centres what it fits', () => {
-    const box = containBox(1000, 2000, 500, 500);
-
-    expect(box.offsetX).toBe(125);
-    expect(box.offsetY).toBe(0);
+  it('drops a leading @', () => {
+    expect(normalizeInstagramHandle('@blenderguru')).toBe('blenderguru');
   });
 
-  it('never scales a small subject past the box', () => {
-    const box = containBox(100, 100, 500, 400);
+  it('pulls the handle out of a pasted profile URL', () => {
+    /*
+      The likeliest input by far: an admin copies the winner's profile from the
+      address bar. Crediting someone as "@https://instagram.com/x/" is worse
+      than crediting nobody.
+    */
+    expect(normalizeInstagramHandle('https://www.instagram.com/blenderguru/')).toBe('blenderguru');
+    expect(normalizeInstagramHandle('instagram.com/blenderguru?hl=en')).toBe('blenderguru');
+  });
 
-    expect(box.width).toBeLessThanOrEqual(500);
-    expect(box.height).toBeLessThanOrEqual(400);
+  it('keeps the dots and underscores a real handle may contain', () => {
+    expect(normalizeInstagramHandle('the_blender.guy')).toBe('the_blender.guy');
+  });
+
+  it('strips whitespace and characters Instagram does not allow', () => {
+    expect(normalizeInstagramHandle('  blender guru!  ')).toBe('blenderguru');
+  });
+
+  it('lowercases, because handles are not case sensitive', () => {
+    expect(normalizeInstagramHandle('BlenderGuru')).toBe('blenderguru');
+  });
+
+  it("holds to Instagram's thirty character limit", () => {
+    expect(normalizeInstagramHandle('a'.repeat(50))).toHaveLength(30);
+  });
+
+  it('returns nothing for input with no handle in it', () => {
+    // The credit line is skipped entirely rather than drawing a bare "@".
+    expect(normalizeInstagramHandle('   ')).toBe('');
+    expect(normalizeInstagramHandle('@@@')).toBe('');
+  });
+});
+
+/* ----------------------------------------------------------------- layout */
+
+describe('placing the frame and the type', () => {
+  /* The square, which is the tighter of the two and where this broke. */
+  const square = (blockHeight: number) =>
+    layoutPost({
+      frameHeight: 1080,
+      pad: 76,
+      stageTop: 168,
+      idealStageHeight: 1080 * 0.4,
+      minStageHeight: 1080 * 0.26,
+      blockHeight,
+    });
+
+  it('never lets the type run past the footer', () => {
+    /*
+      The invariant this function exists for. A winner post carries a title, a
+      credit and a line under it, and at that height the old arithmetic printed
+      the last line straight through the brand lockup.
+    */
+    for (let blockHeight = 100; blockHeight <= 520; blockHeight += 10) {
+      const { blockTop, footTop } = square(blockHeight);
+
+      expect(blockTop + blockHeight).toBeLessThanOrEqual(footTop + 0.001);
+    }
+  });
+
+  it('keeps the type clear of the frame', () => {
+    /*
+      Bounded by what the drawing can actually produce: a title capped at two
+      lines, a credit, and a blurb capped at two, which comes to about 436 in
+      the square. Past that the footer takes priority and the block is allowed
+      to touch the frame instead — see the clamp in `layoutPost`.
+    */
+    for (let blockHeight = 100; blockHeight <= 436; blockHeight += 10) {
+      const { blockTop, subjectBottom } = square(blockHeight);
+
+      expect(blockTop).toBeGreaterThanOrEqual(subjectBottom);
+    }
+  });
+
+  it('gives the frame its full share when the type is short', () => {
+    // A challenge post with a one-line title must look exactly as it did.
+    const { stageHeight } = square(200);
+
+    expect(stageHeight).toBe(1080 * 0.4);
+  });
+
+  it('shrinks the frame rather than colliding, once the type grows', () => {
+    /*
+      Which of the two gives way is the design decision here: an image thirty
+      pixels shorter is invisible, a headline through the logo is the only thing
+      anyone would see.
+    */
+    const short = square(200).stageHeight;
+    const tall = square(420).stageHeight;
+
+    expect(tall).toBeLessThan(short);
+  });
+
+  it('stops shrinking the frame at its floor', () => {
+    // Past this the reference would be a strip, which is worse than a tight gap.
+    const { stageHeight } = square(900);
+
+    expect(stageHeight).toBe(1080 * 0.26);
+  });
+
+  it('holds for the portrait too', () => {
+    for (let blockHeight = 100; blockHeight <= 640; blockHeight += 10) {
+      const { blockTop, footTop } = layoutPost({
+        frameHeight: 1350,
+        pad: 76,
+        stageTop: 168,
+        idealStageHeight: 1350 * 0.44,
+        minStageHeight: 1350 * 0.26,
+        blockHeight,
+      });
+
+      expect(blockTop + blockHeight).toBeLessThanOrEqual(footTop + 0.001);
+    }
   });
 });
