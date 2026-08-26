@@ -47,6 +47,15 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
+      /*
+        The 32 is here for the browser tab.
+
+        Left to choose between a 192 and a 512, a browser downscales one of them
+        itself, and a mark that is mostly one diagonal edge is exactly what comes
+        out of that looking soft. Offering a purpose-rendered 32 means the tab
+        gets an icon drawn at the size it is shown.
+      */
+      { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],

@@ -51,10 +51,10 @@ function roundedRectDistance(x, y, half, radius) {
 const COS45 = Math.SQRT1_2;
 
 /** How much of one pixel the mark covers: 0 outside, 1 inside, fractional on an edge. */
-function coverage(px, py, size, sideRatio, radiusRatio) {
+function coverage(px, py, size, sideRatio, radiusRatio, scale) {
   const centre = size / 2;
-  const half = (size * sideRatio) / 2;
-  const radius = size * radiusRatio;
+  const half = (size * sideRatio * scale) / 2;
+  const radius = size * radiusRatio * scale;
 
   let hits = 0;
   for (let sy = 0; sy < SAMPLES; sy += 1) {
@@ -78,7 +78,7 @@ function mix(from, to, amount) {
   return from.map((channel, i) => Math.round(channel + (to[i] - channel) * amount));
 }
 
-function render(size, { transparent }) {
+function render(size, { transparent = false, scale = 1 } = {}) {
   // One byte of filter type per row, then RGBA left to right.
   const stride = size * 4 + 1;
   const raw = Buffer.alloc(stride * size);
@@ -88,8 +88,8 @@ function render(size, { transparent }) {
     raw[row] = 0; // filter: none
 
     for (let x = 0; x < size; x += 1) {
-      const outer = coverage(x, y, size, OUTER_SIDE, OUTER_RADIUS);
-      const inner = coverage(x, y, size, INNER_SIDE, INNER_RADIUS);
+      const outer = coverage(x, y, size, OUTER_SIDE, OUTER_RADIUS, scale);
+      const inner = coverage(x, y, size, INNER_SIDE, INNER_RADIUS, scale);
 
       /*
         The hole is punched, not painted over.
@@ -168,14 +168,51 @@ function encodePng(width, height, raw) {
   ]);
 }
 
+/*
+  Maskable icons are cropped by the platform, not shown as drawn.
+
+  Android puts the icon behind a shape it chooses — circle, squircle, teardrop —
+  and guarantees only the middle 80% survives. The mark at full size spans 91% of
+  the width corner to corner, so its points would be shaved off by every one of
+  those shapes. Shrinking it to 79% puts the whole diamond inside the safe circle
+  while the ink plate bleeds to the edges, which is exactly what the maskable
+  purpose asks for: art in the middle, background everywhere.
+*/
+const MASKABLE_SCALE = 0.79;
+
+const WEB = join(HERE, '..', 'apps', 'web', 'public');
+
 const outputs = [
-  ['blender-battle-mark-1024.png', 1024, { transparent: false }],
-  ['blender-battle-mark-512.png', 512, { transparent: false }],
-  ['blender-battle-mark-1024-transparent.png', 1024, { transparent: true }],
+  // Brand files, for anywhere outside the app.
+  [join(HERE, 'blender-battle-mark-1024.png'), 1024, {}],
+  [join(HERE, 'blender-battle-mark-512.png'), 512, {}],
+  [join(HERE, 'blender-battle-mark-1024-transparent.png'), 1024, { transparent: true }],
+
+  /*
+    The app's own icons, at the paths the manifest and the document head already
+    name. Generated here rather than kept as separate artwork, so the tab, the
+    installed app and a social profile cannot end up showing three different
+    marks.
+  */
+  [join(WEB, 'icon-192.png'), 192, {}],
+  [join(WEB, 'icon-512.png'), 512, {}],
+  [join(WEB, 'icon-192-maskable.png'), 192, { scale: MASKABLE_SCALE }],
+  [join(WEB, 'icon-512-maskable.png'), 512, { scale: MASKABLE_SCALE }],
+
+  /*
+    iOS ignores the manifest and reads this one. It is also composited onto a
+    home screen with no background of its own, so it must keep its ink plate —
+    a transparent icon there renders on black.
+  */
+  [join(WEB, 'apple-touch-icon.png'), 180, {}],
+
+  // Small enough for a browser tab, where the 192 would be downscaled by the
+  // browser with no say in how.
+  [join(WEB, 'icon-32.png'), 32, {}],
 ];
 
-for (const [name, size, options] of outputs) {
+for (const [path, size, options] of outputs) {
   const png = render(size, options);
-  writeFileSync(join(HERE, name), png);
-  console.log(`${name}  ${size}x${size}  ${(png.length / 1024).toFixed(1)}kB`);
+  writeFileSync(path, png);
+  console.log(`${path.replace(join(HERE, '..'), '.')}  ${size}x${size}  ${(png.length / 1024).toFixed(1)}kB`);
 }
