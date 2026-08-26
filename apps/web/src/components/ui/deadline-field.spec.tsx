@@ -120,6 +120,27 @@ describe('the room length field', () => {
     expect(readout.textContent).toMatch(/ends \w{3}/);
   });
 
+  it('decides "today" against the clock it was given, not the real one', () => {
+    /*
+      A regression guard with a date far from any real one.
+
+      This field takes `now` as a prop precisely so what it renders is a
+      function of its inputs, but the today-check read `new Date()`. The bug was
+      invisible on any day the two happened to agree — it surfaced only when the
+      calendar rolled over mid-session. Pinning `now` to 2020 means a reading of
+      the real clock can never agree by luck.
+    */
+    const then = new Date('2020-01-01T12:00:00').getTime();
+    const twoHoursLater = new Date(then + 120 * 60_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const value = `${twoHoursLater.getFullYear()}-${pad(twoHoursLater.getMonth() + 1)}-${pad(twoHoursLater.getDate())}T${pad(twoHoursLater.getHours())}:${pad(twoHoursLater.getMinutes())}`;
+
+    render(<DeadlineField value={value} now={then} onChange={vi.fn()} />);
+
+    // Same day as `now`, so the weekday is redundant and left off.
+    expect(screen.getByLabelText('Room length').textContent).not.toMatch(/ends \w{3}\s/);
+  });
+
   it('falls back to a sensible length rather than NaN', () => {
     // A cleared or half-typed value must not render "NaN min".
     render(<DeadlineField value="" now={NOW} onChange={vi.fn()} />);

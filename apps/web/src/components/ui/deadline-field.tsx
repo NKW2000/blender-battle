@@ -145,7 +145,7 @@ export function DeadlineField({
             {formatLength(minutes)}
           </span>
           <span className="mt-1 text-[11px] font-extrabold leading-none text-bone-faint">
-            ends {formatClock(new Date(now + minutes * 60_000))}
+            ends {formatClock(new Date(now + minutes * 60_000), now)}
           </span>
         </output>
 
@@ -221,10 +221,17 @@ function formatLength(minutes: number): string {
  * "ends 09:15" is ambiguous once a round runs overnight, and a four-hour round
  * started in the evening does. Naming the day only when it differs keeps the
  * common case short.
+ *
+ * "Today" is measured against the `now` the field was given, not against the
+ * real clock. The whole component takes `now` as a prop so that what it shows
+ * is a function of its inputs; reading `new Date()` here meant a field whose
+ * `now` came from anywhere else — a server clock, a page left open across
+ * midnight — decided the question against a different day than the one it was
+ * doing its arithmetic in.
  */
-function formatClock(at: Date): string {
+function formatClock(at: Date, now: number): string {
   const time = at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const isToday = at.toDateString() === new Date().toDateString();
+  const isToday = at.toDateString() === new Date(now).toDateString();
 
   return isToday ? time : `${at.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
 }
