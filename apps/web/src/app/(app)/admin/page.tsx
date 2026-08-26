@@ -252,9 +252,16 @@ export default function AdminDashboardPage() {
       <Panel>
         <PanelHeader>
           <PanelTitle>Recent activity</PanelTitle>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/admin/users">Manage users</Link>
-          </Button>
+          {/* The two admin tools, reachable from the console rather than only
+              by typing a URL. */}
+          <div className="flex gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/instagram">Instagram post</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/users">Manage users</Link>
+            </Button>
+          </div>
         </PanelHeader>
 
         {activity.isLoading ? (
