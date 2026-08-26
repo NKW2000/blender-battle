@@ -1,6 +1,6 @@
 'use client';
 
-import { CHALLENGE_MAX_ASSETS, ChallengeAssetType, ChallengeStatus } from '@bb/shared';
+import { CHALLENGE_MAX_ASSETS, ChallengeAssetType, ChallengeStatus, Role } from '@bb/shared';
 import Link from 'next/link';
 import { use, useRef } from 'react';
 
@@ -15,6 +15,8 @@ import {
   useUpdateChallenge,
   useUploadChallengeAsset,
 } from '@/features/challenges/use-challenges';
+import { useSession } from '@/features/auth/use-session';
+import { instagramPostHref } from '@/lib/instagram-post';
 
 export default function EditChallengePage({
   params,
@@ -22,6 +24,7 @@ export default function EditChallengePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const { user } = useSession();
   const { data: challenge, isLoading, isError } = useChallenge(slug);
   const update = useUpdateChallenge(slug);
   const upload = useUploadChallengeAsset(slug);
@@ -49,6 +52,10 @@ export default function EditChallengePage({
   }
 
   const isPublished = challenge.status === ChallengeStatus.PUBLISHED;
+
+  // The first reference is what the post should lead with; the cover is the
+  // fallback for a brief that has not had one attached yet.
+  const reference = challenge.assets.find((asset) => asset.type === ChallengeAssetType.REFERENCE_IMAGE);
   const atAssetLimit = challenge.assets.length >= CHALLENGE_MAX_ASSETS;
 
   return (
@@ -58,10 +65,35 @@ export default function EditChallengePage({
         title={challenge.title}
         action={
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="ghost" size="sm">
             <Link href={`/challenges/${challenge.slug}`}>View</Link>
           </Button>
+
+          {/*
+            Announcing the brief, from the screen where it was written.
+
+            The title, difficulty, summary and first reference are all here
+            already, so the composer opens filled in. Administrators only,
+            because that is who the composer itself admits — offering a manager
+            a button to a page that will turn them away is worse than not
+            offering it.
+          */}
+          {user?.role === Role.ADMIN ? (
+            <Button asChild variant="ghost" size="sm">
+              <Link
+                href={instagramPostHref({
+                  kind: 'challenge',
+                  title: challenge.title,
+                  blurb: challenge.shortDescription,
+                  difficulty: challenge.difficulty,
+                  imageUrl: reference?.url ?? challenge.coverImageUrl,
+                })}
+              >
+                Instagram post
+              </Link>
+            </Button>
+          ) : null}
           {isPublished ? (
             <Button
               variant="outline"

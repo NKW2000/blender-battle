@@ -6,7 +6,9 @@ import {
   POST_FORMATS,
   POST_KINDS,
   coverCrop,
+  instagramPostHref,
   layoutPost,
+  safeImageUrl,
   normalizeInstagramHandle,
   postFileName,
   wrapText,
@@ -297,5 +299,100 @@ describe('placing the frame and the type', () => {
 
       expect(blockTop + blockHeight).toBeLessThanOrEqual(footTop + 0.001);
     }
+  });
+});
+
+/* ------------------------------------------------------- the prefilled link */
+
+const query = (href: string) => new URLSearchParams(href.split('?')[1]);
+
+describe('linking to the composer with a post filled in', () => {
+  it('points at the composer and names the kind', () => {
+    const href = instagramPostHref({ kind: 'winner' });
+
+    expect(href.startsWith('/admin/instagram?')).toBe(true);
+    expect(query(href).get('kind')).toBe('winner');
+  });
+
+  it('carries everything the winner post needs', () => {
+    const params = query(
+      instagramPostHref({
+        kind: 'winner',
+        title: 'The couch',
+        difficulty: Difficulty.HARD,
+        username: 'renderRat',
+        votes: 42,
+        imageUrl: 'https://res.cloudinary.com/x/entry.png',
+      }),
+    );
+
+    expect(params.get('title')).toBe('The couch');
+    expect(params.get('difficulty')).toBe(Difficulty.HARD);
+    expect(params.get('username')).toBe('renderRat');
+    expect(params.get('votes')).toBe('42');
+    expect(params.get('image')).toBe('https://res.cloudinary.com/x/entry.png');
+  });
+
+  it('leaves absent values out rather than sending "null"', () => {
+    /*
+      The parameters come from records with nullable columns — a challenge with
+      no cover, a winner with no avatar. A literal "null" would be read back as
+      a title, or fetched as an image URL.
+    */
+    const params = query(
+      instagramPostHref({ kind: 'challenge', title: null, blurb: undefined, imageUrl: null }),
+    );
+
+    expect(params.has('title')).toBe(false);
+    expect(params.has('blurb')).toBe(false);
+    expect(params.has('image')).toBe(false);
+  });
+
+  it('keeps a tally of zero', () => {
+    // Zero votes is a real result and reads differently from no tally at all.
+    expect(query(instagramPostHref({ kind: 'winner', votes: 0 })).get('votes')).toBe('0');
+  });
+
+  it('omits a tally that was never counted', () => {
+    expect(query(instagramPostHref({ kind: 'winner', votes: null })).has('votes')).toBe(false);
+  });
+
+  it('escapes text that would otherwise break the query', () => {
+    // Titles are free text and routinely contain both.
+    const params = query(instagramPostHref({ kind: 'challenge', title: 'Bevels & panels?' }));
+
+    expect(params.get('title')).toBe('Bevels & panels?');
+  });
+});
+
+describe('accepting an image URL from a link', () => {
+  it('takes an https URL', () => {
+    expect(safeImageUrl('https://res.cloudinary.com/x/a.png')).toBe('https://res.cloudinary.com/x/a.png');
+  });
+
+  it('refuses a javascript: URL', () => {
+    /*
+      The parameters come from the address bar, and the value is handed to an
+      `<img src>` on a page only an administrator can open. A scheme check is
+      the cheap half of not caring what anyone puts there.
+    */
+    expect(safeImageUrl('javascript:alert(1)')).toBeUndefined();
+  });
+
+  it('refuses a data: payload', () => {
+    expect(safeImageUrl('data:text/html;base64,PHNjcmlwdD4=')).toBeUndefined();
+  });
+
+  it('refuses plain http', () => {
+    // Mixed content the browser would block anyway; better to say so than to
+    // show an operator a post with a silently missing image.
+    expect(safeImageUrl('http://example.test/a.png')).toBeUndefined();
+  });
+
+  it('refuses something that is not a URL at all', () => {
+    expect(safeImageUrl('not a url')).toBeUndefined();
+    expect(safeImageUrl('')).toBeUndefined();
+    expect(safeImageUrl(undefined)).toBeUndefined();
+    expect(safeImageUrl(null)).toBeUndefined();
   });
 });

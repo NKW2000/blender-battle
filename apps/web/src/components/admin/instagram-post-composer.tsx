@@ -16,6 +16,7 @@ import {
   type PostFonts,
   type PostKind,
 } from '@/lib/instagram-post';
+import { usePublicProfile } from '@/features/users/use-users';
 import { notify } from '@/lib/notify';
 
 /**
@@ -27,21 +28,67 @@ import { notify } from '@/lib/notify';
  * endpoint, no storage and no migration, and artwork for an unannounced
  * challenge never leaves the machine of whoever is making the post.
  */
-export function InstagramPostComposer() {
+/**
+ * Everything a link can hand this page.
+ *
+ * The winner's name, handle, tally, entry and avatar are all already known to
+ * whichever page is linking here, so retyping them is both slower and a chance
+ * to get the credit wrong. Every field is optional — the page still works when
+ * opened cold from the admin console.
+ */
+export interface PostPrefill {
+  kind?: PostKind;
+  title?: string;
+  blurb?: string;
+  difficulty?: Difficulty;
+  handle?: string;
+  username?: string;
+  votes?: number;
+  /** The challenge reference, or the winning render. */
+  imageUrl?: string;
+  avatarUrl?: string;
+}
+
+/**
+ * Loads a remote image so the canvas can still be exported afterwards.
+ *
+ * `crossOrigin` is the whole point. Measured against the deployed site: without
+ * it a Cloudinary image loads and draws perfectly, and then `toBlob` throws a
+ * SecurityError because the canvas is tainted — the post would preview and
+ * refuse to save. With it, Cloudinary's `Access-Control-Allow-Origin` lets the
+ * canvas stay readable.
+ */
+function loadCorsImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Could not load ${url}`));
+    image.src = url;
+  });
+}
+
+export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const probeRef = useRef<HTMLSpanElement>(null);
   const imageRef = useRef<CanvasImageSource | null>(null);
+  const avatarRef = useRef<CanvasImageSource | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
-  const [kind, setKind] = useState<PostKind>('challenge');
+  const [kind, setKind] = useState<PostKind>(prefill?.kind ?? 'challenge');
   const [format, setFormat] = useState<PostFormatId>('portrait');
-  const [title, setTitle] = useState('The couch');
-  const [blurb, setBlurb] = useState('Nobody sees the brief before the room starts.');
-  const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.HARD);
+  const [title, setTitle] = useState(prefill?.title ?? 'The couch');
+  const [blurb, setBlurb] = useState(
+    prefill?.blurb ?? 'Nobody sees the brief before the room starts.',
+  );
+  const [difficulty, setDifficulty] = useState<Difficulty>(prefill?.difficulty ?? Difficulty.HARD);
   const [url, setUrl] = useState('blenderbattle.vercel.app');
-  const [handle, setHandle] = useState('');
+  const [handle, setHandle] = useState(prefill?.handle ?? '');
+  const [username, setUsername] = useState(prefill?.username ?? '');
+  const [votes, setVotes] = useState<number | null>(prefill?.votes ?? null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadingLinked, setLoadingLinked] = useState(false);
 
   /*
     The real font families, read off the page rather than named.
@@ -77,10 +124,21 @@ export function InstagramPostComposer() {
     drawPost(
       ctx,
       spec,
-      { kind, title, blurb, difficulty, url, handle, image: imageRef.current },
+      {
+        kind,
+        title,
+        blurb,
+        difficulty,
+        url,
+        handle,
+        username,
+        votes,
+        image: imageRef.current,
+        avatar: avatarRef.current,
+      },
       fonts(),
     );
-  }, [kind, format, title, blurb, difficulty, url, handle, fonts]);
+  }, [kind, format, title, blurb, difficulty, url, handle, username, votes, fonts]);
 
   /*
     Wait for the webfonts before the first paint.
@@ -102,6 +160,86 @@ export function InstagramPostComposer() {
   useEffect(() => {
     if (ready) paint();
   }, [ready, paint]);
+
+  /*
+    The winner's own profile fills in what the linking page did not know.
+
+    An event knows who won and by how much; it does not carry their avatar or
+    their Instagram handle. Looking those up here rather than on the event page
+    keeps a public page from making a request that only an administrator's
+    marketing tool needs.
+  */
+  const profile = usePublicProfile(prefill?.username ?? '');
+  const profileData = profile.data;
+
+  useEffect(() => {
+    if (!profileData) return;
+
+    // Never over an operator's own typing: only fills a field left empty.
+    setHandle((current) => current || profileData.socialLinks.instagram || '');
+
+    if (!profileData.avatarUrl || avatarRef.current) return;
+
+    let cancelled = false;
+    void loadCorsImage(profileData.avatarUrl)
+      .then((image) => {
+        if (cancelled) return;
+        avatarRef.current = image;
+        paint();
+      })
+      // A missing avatar is not worth a message: the credit reads fine without
+      // a portrait, and there is nothing the operator could do about it.
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileData, paint]);
+
+  /*
+    Pull in whatever the link pointed at.
+
+    Once only, and deliberately not in the dependency list of `paint`: this
+    fills the canvas in, and an operator who then uploads a different file must
+    not have it pulled back from under them on the next render.
+  */
+  const linkedImage = prefill?.imageUrl;
+  const linkedAvatar = prefill?.avatarUrl;
+
+  useEffect(() => {
+    if (!linkedImage && !linkedAvatar) return;
+
+    let cancelled = false;
+    setLoadingLinked(true);
+
+    void (async () => {
+      const [image, avatar] = await Promise.all([
+        linkedImage ? loadCorsImage(linkedImage).catch(() => null) : null,
+        linkedAvatar ? loadCorsImage(linkedAvatar).catch(() => null) : null,
+      ]);
+
+      if (cancelled) return;
+
+      if (image) {
+        imageRef.current = image;
+        setFileName('From the challenge');
+      }
+      if (avatar) avatarRef.current = avatar;
+
+      setLoadingLinked(false);
+      // Only the entry image failing is worth interrupting for; a missing
+      // avatar just means the winner never set one, and the post is fine.
+      if (linkedImage && !image) {
+        notify.error('The image could not be loaded', 'Upload it by hand instead.');
+      }
+      paint();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the link
+  }, [linkedImage, linkedAvatar]);
 
   // The object URL is revoked when it is replaced or the page goes away;
   // leaking one per file choice would pin every image in memory for the session.
@@ -272,6 +410,37 @@ export function InstagramPostComposer() {
             </Field>
 
             {kind === 'winner' ? (
+              <Field label="Winner" hint="Their name on the site">
+                <input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="username"
+                  maxLength={40}
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
+                />
+              </Field>
+            ) : null}
+
+            {kind === 'winner' ? (
+              <Field label="Votes" hint={votes === null ? 'Hidden' : 'On the frame'}>
+                {/*
+                  Empty means no tally rather than zero — a challenge that
+                  finished without a vote should not be announced as "0 VOTES".
+                */}
+                <input
+                  type="number"
+                  min={0}
+                  value={votes ?? ''}
+                  onChange={(event) =>
+                    setVotes(event.target.value === '' ? null : Math.max(0, Number(event.target.value)))
+                  }
+                  placeholder="—"
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-mono text-sm font-bold text-bone"
+                />
+              </Field>
+            ) : null}
+
+            {kind === 'winner' ? (
               <Field label="Winner's Instagram" hint={handle ? `@${normalizeInstagramHandle(handle)}` : '@handle'}>
                 {/*
                   Whatever gets pasted is reduced to a bare handle when it is
@@ -311,8 +480,8 @@ export function InstagramPostComposer() {
           </PanelBody>
         </Panel>
 
-        <ChunkyButton size="md" sheen onClick={download} disabled={!ready}>
-          {ready ? 'Download PNG' : 'Loading fonts…'}
+        <ChunkyButton size="md" sheen onClick={download} disabled={!ready || loadingLinked}>
+          {!ready ? 'Loading fonts…' : loadingLinked ? 'Fetching the images…' : 'Download PNG'}
         </ChunkyButton>
       </div>
     </div>

@@ -1,7 +1,7 @@
-import { ChallengeAssetType, Difficulty } from '@bb/shared';
+import { ChallengeAssetType, Difficulty, Role } from '@bb/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EventDetail } from '@/features/challenges/use-events';
 
@@ -38,6 +38,14 @@ vi.mock('@/features/challenges/use-events', async (importOriginal) => ({
 // The button plays a click; jsdom has no AudioContext and the sound is not what
 // is under test.
 vi.mock('@/features/sound/use-sound', () => ({ useSound: () => noop }));
+
+/*
+  The winner panel offers administrators a link to the post composer, so the
+  view now reads the session. A signed-out visitor is the default every other
+  assertion here is written from; the tests for the button set it.
+*/
+const session: { user: { role: Role } | null } = { user: null };
+vi.mock('@/features/auth/use-session', () => ({ useSession: () => session }));
 
 const { EventDetailView } = await import('./event-detail-view');
 
@@ -411,5 +419,66 @@ describe('the results gallery', () => {
     view(finished());
 
     expect(screen.getByRole('group', { name: /other entries/i })).toHaveAttribute('tabindex', '0');
+  });
+});
+
+describe('announcing the winner', () => {
+  const finished = (overrides = {}) =>
+    makeEvent({
+      phase: 'finished',
+      winnerEntryId: 'entry-1',
+      entries: [
+        {
+          id: 'entry-1',
+          userId: 'u1',
+          username: 'renderRat',
+          imageUrl: 'https://cdn.test/win.png',
+          workspacePhotoUrl: null,
+          notes: null,
+          voteCount: 42,
+          submittedAt: new Date().toISOString(),
+        },
+      ],
+      ...overrides,
+    });
+
+  afterEach(() => {
+    session.user = null;
+  });
+
+  it('offers nothing to a visitor', () => {
+    /*
+      The composer is an administrators-only page. A link everyone can see to a
+      page that turns almost everyone away is worse than no link.
+    */
+    session.user = null;
+    view(finished());
+
+    expect(screen.queryByRole('link', { name: /instagram/i })).toBeNull();
+  });
+
+  it('offers nothing to a signed-in player', () => {
+    session.user = { role: Role.PLAYER };
+    view(finished());
+
+    expect(screen.queryByRole('link', { name: /instagram/i })).toBeNull();
+  });
+
+  it('hands an admin the post already filled in', () => {
+    /*
+      The point of the button: everything the post needs is on this page, so
+      none of it should have to be retyped — retyping a credit is how a winner
+      gets announced under the wrong name.
+    */
+    session.user = { role: Role.ADMIN };
+    view(finished());
+
+    const link = screen.getByRole('link', { name: /instagram/i });
+    const params = new URLSearchParams(link.getAttribute('href')!.split('?')[1]);
+
+    expect(params.get('kind')).toBe('winner');
+    expect(params.get('username')).toBe('renderRat');
+    expect(params.get('votes')).toBe('42');
+    expect(params.get('image')).toBe('https://cdn.test/win.png');
   });
 });

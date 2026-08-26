@@ -1,6 +1,6 @@
 'use client';
 
-import { ChallengeAssetType, SUBMISSION_IMAGE_SIZE } from '@bb/shared';
+import { ChallengeAssetType, Role, SUBMISSION_IMAGE_SIZE } from '@bb/shared';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -30,8 +30,11 @@ import {
   PanelTitle,
   Skeleton,
 } from '@/components/ui/panel';
+import { Button } from '@/components/ui/button';
 import { VoteScreen } from '@/components/challenges/vote-screen';
 import { useEnterEvent, useEvent, type EventDetail } from '@/features/challenges/use-events';
+import { useSession } from '@/features/auth/use-session';
+import { instagramPostHref } from '@/lib/instagram-post';
 
 /*
   The challenge screen, on the arcade language.
@@ -351,6 +354,7 @@ function UpcomingPanel({ event }: { event: EventDetail }) {
 
 function WinnerPanel({ event }: { event: EventDetail }) {
   const winner = event.entries.find((entry) => entry.id === event.winnerEntryId);
+  const { user } = useSession();
 
   return (
     <div
@@ -381,6 +385,33 @@ function WinnerPanel({ event }: { event: EventDetail }) {
               <FireIcon size={22} /> {winner.voteCount} votes
             </span>
           </div>
+
+          {/*
+            Announcing the result, from where the result is.
+
+            Everything the post needs is already on this page — the winning
+            render, who made it and by how many votes — so the composer opens
+            with all of it filled in rather than having it retyped and the
+            credit risked. The winner's avatar and Instagram handle are looked
+            up there, not here, so a public page makes no request for the sake
+            of a tool only administrators can open.
+          */}
+          {user?.role === Role.ADMIN ? (
+            <Button asChild variant="outline" size="sm" className="self-start">
+              <Link
+                href={instagramPostHref({
+                  kind: 'winner',
+                  title: event.title,
+                  difficulty: event.difficulty,
+                  username: winner.username,
+                  votes: winner.voteCount,
+                  imageUrl: winner.imageUrl,
+                })}
+              >
+                Make the Instagram post
+              </Link>
+            </Button>
+          ) : null}
         </div>
       ) : (
         <EmptyState title="No winner" description="This challenge closed without a result." />

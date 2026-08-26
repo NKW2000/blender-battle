@@ -1,11 +1,17 @@
 'use client';
 
-import { Role } from '@bb/shared';
+import { Difficulty, Role } from '@bb/shared';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-import { InstagramPostComposer } from '@/components/admin/instagram-post-composer';
+import {
+  InstagramPostComposer,
+  type PostPrefill,
+} from '@/components/admin/instagram-post-composer';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, Panel } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
+import { safeImageUrl } from '@/lib/instagram-post';
 
 /**
  * Turns a challenge reference into a finished Instagram post.
@@ -16,8 +22,50 @@ import { useSession } from '@/features/auth/use-session';
  * migration — and why artwork for an unannounced challenge never leaves the
  * machine of whoever is making the post.
  */
+/*
+  `useSearchParams` opts a page into dynamic rendering unless it sits under a
+  Suspense boundary, and this page is otherwise static. The boundary is here
+  rather than around the whole route so the guard and the header still render
+  immediately.
+*/
 export default function AdminInstagramPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminInstagramView />
+    </Suspense>
+  );
+}
+
+/** Reads a link's parameters into the composer's starting values. */
+function usePrefill(): PostPrefill | undefined {
+  const params = useSearchParams();
+  if (![...params.keys()].length) return undefined;
+
+  const text = (key: string) => params.get(key) ?? undefined;
+
+  const difficulty = text('difficulty');
+  const votes = text('votes');
+  const parsedVotes = votes !== undefined && /^\d+$/.test(votes) ? Number(votes) : undefined;
+
+  return {
+    kind: text('kind') === 'winner' ? 'winner' : text('kind') === 'challenge' ? 'challenge' : undefined,
+    title: text('title'),
+    blurb: text('blurb'),
+    // Only a difficulty the product actually defines; a link is user input.
+    difficulty: Object.values(Difficulty).includes(difficulty as Difficulty)
+      ? (difficulty as Difficulty)
+      : undefined,
+    handle: text('handle'),
+    username: text('username'),
+    votes: parsedVotes,
+    imageUrl: safeImageUrl(text('image')),
+    avatarUrl: safeImageUrl(text('avatar')),
+  };
+}
+
+function AdminInstagramView() {
   const { user } = useSession();
+  const prefill = usePrefill();
 
   /*
     Presentation, not security.
@@ -46,7 +94,7 @@ export default function AdminInstagramPage() {
         description="Upload a challenge reference and get a finished post in the site's own design. Nothing is uploaded — the image is composited here and saved straight to your machine."
       />
 
-      <InstagramPostComposer />
+      <InstagramPostComposer prefill={prefill} />
     </div>
   );
 }

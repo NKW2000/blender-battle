@@ -72,6 +72,12 @@ export interface PostContent {
   image: CanvasImageSource | null;
   /** The winner's Instagram handle, without the '@'. Ignored by a challenge post. */
   handle: string;
+  /** The winner's name on the site, shown above the handle. Winner post only. */
+  username: string;
+  /** Their avatar, drawn as a circle beside the name. Null if they have none. */
+  avatar: CanvasImageSource | null;
+  /** Votes the winning entry took. Null hides the tally. Winner post only. */
+  votes: number | null;
 }
 
 export interface PostFonts {
@@ -205,6 +211,61 @@ export function wrapText(text: string, maxWidth: number, measure: (s: string) =>
 
   lines.push(line);
   return lines;
+}
+
+/**
+ * A link to the composer with a post already filled in.
+ *
+ * Built here rather than at each call site so the parameter names cannot drift
+ * from the ones the page reads back, and so an absent value is left out
+ * entirely instead of arriving as the string "null".
+ */
+export function instagramPostHref(params: {
+  kind: PostKind;
+  title?: string | null;
+  blurb?: string | null;
+  difficulty?: Difficulty | null;
+  username?: string | null;
+  votes?: number | null;
+  imageUrl?: string | null;
+  avatarUrl?: string | null;
+}) {
+  const query = new URLSearchParams({ kind: params.kind });
+
+  const put = (key: string, value: string | null | undefined) => {
+    if (value) query.set(key, value);
+  };
+
+  put('title', params.title);
+  put('blurb', params.blurb);
+  put('difficulty', params.difficulty);
+  put('username', params.username);
+  put('image', params.imageUrl);
+  put('avatar', params.avatarUrl);
+
+  // Zero is a real tally and must survive, which `put` would drop.
+  if (typeof params.votes === 'number' && params.votes >= 0) {
+    query.set('votes', String(params.votes));
+  }
+
+  return `/admin/instagram?${query.toString()}`;
+}
+
+/**
+ * Accepts a URL only if it is https.
+ *
+ * These arrive as query parameters and go straight into an `<img src>`, and
+ * anyone can put anything in an address bar. Restricting the scheme keeps a
+ * crafted link from making this page fetch a `javascript:` or `data:` payload
+ * under the site's own origin.
+ */
+export function safeImageUrl(value: string | undefined | null) {
+  if (!value) return undefined;
+  try {
+    return new URL(value).protocol === 'https:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** A filename that sorts and reads sensibly in a downloads folder. */
@@ -422,7 +483,16 @@ export function drawPost(
      had that floor override the centring and push the last line straight
      through the brand lockup. The frame is now sized around the type instead.
   */
-  const titleSize = format.id === 'portrait' ? 104 : 90;
+  /*
+    The winner post sets its title smaller.
+
+    On an announcement the brief is the headline. On a result it is context —
+    the person who won is the headline, and they are set below. Left at
+    announcement scale the title crowded the credit out and squeezed the winning
+    render into a letterbox on the square.
+  */
+  const isWinner = content.kind === 'winner';
+  const titleSize = format.id === 'portrait' ? (isWinner ? 76 : 104) : isWinner ? 64 : 90;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
@@ -452,6 +522,15 @@ export function drawPost(
     : [];
 
   /*
+    The gap above the blurb, measured to its baseline.
+
+    It was 16, which is less than the type's own cap height — so the blurb's
+    first line actually started *above* the cursor. Nothing sat there until the
+    winner credit did, and then the two printed through each other.
+  */
+  const blurbGap = 44;
+
+  /*
     The winner's credit.
 
     It is the reason a winner post exists, so it is set in the sun accent at
@@ -459,9 +538,23 @@ export function drawPost(
     person being credited can see their own name from the feed. A challenge post
     has no credit and skips the line entirely.
   */
-  const handle = content.kind === 'winner' ? normalizeInstagramHandle(content.handle) : '';
-  const creditSize = Math.round(titleSize * 0.62);
-  const creditGap = 26;
+  const handle = isWinner ? normalizeInstagramHandle(content.handle) : '';
+  const name = isWinner ? content.username.trim() : '';
+  const creditSize = Math.round(titleSize * 0.52);
+  const creditGap = 30;
+
+  /*
+    The credit is a lockup, not a line: the winner's avatar beside their name on
+    the site with their Instagram handle under it. Its height is whichever of
+    the portrait and the two lines of type is taller, so the layout above can
+    size the frame around it.
+  */
+  const avatarSize = Math.round(creditSize * 1.75);
+  const handleSize = Math.round(creditSize * 0.66);
+  const creditLines = (name ? 1 : 0) + (handle ? 1 : 0);
+  const creditTextHeight = creditLines === 2 ? creditSize + handleSize + 10 : creditSize;
+  const creditHeight =
+    creditLines === 0 ? 0 : Math.max(content.avatar ? avatarSize : 0, creditTextHeight);
 
   /*
     The block's height expressed as the same advances the drawing below makes,
@@ -473,8 +566,8 @@ export function drawPost(
   const blockHeight =
     titleSize * 0.78 +
     titleLines.length * titleSize +
-    (handle ? creditGap + creditSize : 0) +
-    (blurbLines.length ? 16 + blurbLines.length * 44 : 0);
+    (creditHeight ? creditGap + creditHeight : 0) +
+    (blurbLines.length ? blurbGap + blurbLines.length * 44 : 0);
 
 
 
@@ -500,17 +593,29 @@ export function drawPost(
     the image clipped to the rounded corners, then the outline drawn over the
     top so the image cannot creep past it.
   */
+  /*
+    How wide the frame is allowed to be for its height.
+
+    Every image the product accepts is square, and cover-cropping a square into
+    a wide letterbox throws away the top and bottom of someone's work. When the
+    type leaves little height — a winner post carries a credit the announcement
+    does not — the frame narrows and stays centred instead of widening into a
+    slot the render cannot survive.
+  */
+  const frameWidth = Math.min(stageWidth, stageHeight * 1.6);
+  const frameLeft = (W - frameWidth) / 2;
+
   if (content.image) {
-    const sw = Number((content.image as { width?: number }).width ?? stageWidth);
+    const sw = Number((content.image as { width?: number }).width ?? frameWidth);
     const sh = Number((content.image as { height?: number }).height ?? stageHeight);
-    const crop = coverCrop(sw, sh, stageWidth, stageHeight);
+    const crop = coverCrop(sw, sh, frameWidth, stageHeight);
 
     ctx.fillStyle = INK;
-    roundedRect(ctx, pad, stageTop + 14, stageWidth, stageHeight, stageRadius);
+    roundedRect(ctx, frameLeft, stageTop + 14, frameWidth, stageHeight, stageRadius);
     ctx.fill();
 
     ctx.save();
-    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    roundedRect(ctx, frameLeft, stageTop, frameWidth, stageHeight, stageRadius);
     ctx.clip();
     ctx.drawImage(
       content.image,
@@ -518,22 +623,22 @@ export function drawPost(
       crop.sy,
       crop.sw,
       crop.sh,
-      pad,
+      frameLeft,
       stageTop,
-      stageWidth,
+      frameWidth,
       stageHeight,
     );
     ctx.restore();
 
     ctx.strokeStyle = INK;
     ctx.lineWidth = 7;
-    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    roundedRect(ctx, frameLeft, stageTop, frameWidth, stageHeight, stageRadius);
     ctx.stroke();
   } else {
     ctx.strokeStyle = 'rgba(255,246,233,0.22)';
     ctx.lineWidth = 5;
     ctx.setLineDash([16, 14]);
-    roundedRect(ctx, pad, stageTop, stageWidth, stageHeight, stageRadius);
+    roundedRect(ctx, frameLeft, stageTop, frameWidth, stageHeight, stageRadius);
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -548,9 +653,31 @@ export function drawPost(
     );
   }
 
-  // The difficulty rides the subject's shoulder, tilted.
+  // The difficulty rides the frame's shoulder, tilted.
   const style = DIFFICULTY_STYLE[content.difficulty];
-  tiltedBadge(ctx, style.label, W - pad - 30, stageTop + 34, -7, fonts, style.fill, style.ink, 34);
+  tiltedBadge(
+    ctx,
+    style.label,
+    frameLeft + frameWidth - 30,
+    stageTop + 34,
+    -7,
+    fonts,
+    style.fill,
+    style.ink,
+    34,
+  );
+
+  /*
+    The tally rides the opposite corner.
+
+    On the frame rather than in the type block below, so the number costs the
+    headline no room and the two badges read as a scoreboard around the work —
+    which is what they are.
+  */
+  if (isWinner && content.votes !== null && content.votes >= 0) {
+    const label = `${content.votes} ${content.votes === 1 ? 'VOTE' : 'VOTES'}`;
+    tiltedBadge(ctx, label, frameLeft + 34, stageTop + stageHeight - 20, 5, fonts, SUN, INK, 32);
+  }
 
   // --- title ------------------------------------------------------------
   // `cursor` is a baseline, so drop it off the block's top by the cap height.
@@ -567,20 +694,90 @@ export function drawPost(
     cursor += titleSize * 1.0;
   }
 
-  if (handle) {
+  if (creditHeight) {
     cursor += creditGap;
+
+    // Widest of the two lines decides how far the block sits from centre.
     ctx.font = `700 ${creditSize}px ${fonts.display}`;
-    ctx.fillStyle = INK;
-    ctx.fillText(`@${handle}`, W / 2 + 4, cursor + 6);
-    ctx.fillStyle = SUN;
-    ctx.fillText(`@${handle}`, W / 2, cursor);
-    cursor += creditSize;
+    const nameWidth = name ? ctx.measureText(name).width : 0;
+    ctx.font = `800 ${handleSize}px ${fonts.body}`;
+    const handleWidth = handle ? ctx.measureText(`@${handle}`).width : 0;
+    const textWidth = Math.max(nameWidth, handleWidth);
+
+    const portrait = content.avatar ? avatarSize : 0;
+    const spacing = portrait ? 24 : 0;
+    const left = (W - (portrait + spacing + textWidth)) / 2;
+    const middle = cursor + creditHeight / 2 - creditSize * 0.1;
+
+    if (content.avatar) {
+      const cx = left + avatarSize / 2;
+
+      // The product's hard shadow, then the portrait clipped to a circle, then
+      // the ink ring over the top so the crop cannot show a hard edge.
+      ctx.fillStyle = INK;
+      ctx.beginPath();
+      ctx.arc(cx, middle + 7, avatarSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, middle, avatarSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+
+      const source = content.avatar as { width?: number; height?: number };
+      const crop = coverCrop(
+        Number(source.width ?? avatarSize),
+        Number(source.height ?? avatarSize),
+        avatarSize,
+        avatarSize,
+      );
+      ctx.drawImage(
+        content.avatar,
+        crop.sx,
+        crop.sy,
+        crop.sw,
+        crop.sh,
+        cx - avatarSize / 2,
+        middle - avatarSize / 2,
+        avatarSize,
+        avatarSize,
+      );
+      ctx.restore();
+
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, middle, avatarSize / 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const textLeft = left + portrait + spacing;
+    ctx.textAlign = 'left';
+
+    if (name && handle) {
+      ctx.font = `700 ${creditSize}px ${fonts.display}`;
+      ctx.fillStyle = CREAM;
+      ctx.fillText(name, textLeft, middle + creditSize * 0.1);
+
+      ctx.font = `800 ${handleSize}px ${fonts.body}`;
+      ctx.fillStyle = SUN;
+      ctx.fillText(`@${handle}`, textLeft, middle + creditSize * 0.1 + handleSize + 10);
+    } else {
+      // One line only — centred on the portrait rather than sitting high.
+      const single = name || `@${handle}`;
+      ctx.font = name ? `700 ${creditSize}px ${fonts.display}` : `800 ${handleSize}px ${fonts.body}`;
+      ctx.fillStyle = name ? CREAM : SUN;
+      ctx.fillText(single, textLeft, middle + creditSize * 0.35);
+    }
+
+    ctx.textAlign = 'center';
+    cursor += creditHeight;
   }
 
   if (blurbLines.length) {
     ctx.font = `800 31px ${fonts.body}`;
     ctx.fillStyle = HAZE;
-    cursor += 16;
+    cursor += blurbGap;
     for (const line of blurbLines) {
       ctx.fillText(line, W / 2, cursor);
       cursor += 44;

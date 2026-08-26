@@ -26,6 +26,9 @@ export function usePublicProfile(username: string) {
   return useQuery({
     queryKey: userKeys.profile(username),
     queryFn: () => api.get<PublicUserProfile>(`/users/by-username/${username}`),
+    // Without this an empty name requests `/users/by-username/` and takes a 404
+    // for it. Callers that only sometimes have a name can now just pass ''.
+    enabled: username.length > 0,
   });
 }
 
