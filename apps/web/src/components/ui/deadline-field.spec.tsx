@@ -105,7 +105,7 @@ describe('the room length field', () => {
     // The length is what is being chosen; the finish time is what players see.
     setup(90);
 
-    const readout = screen.getByLabelText('Room length');
+    const readout = screen.getByRole('status');
 
     expect(readout.textContent).toContain('1h 30m');
     expect(readout.textContent).toMatch(/ends/);
@@ -115,7 +115,7 @@ describe('the room length field', () => {
     // "ends 09:15" is ambiguous for an overnight round.
     render(<DeadlineField value={local(20 * 60)} now={NOW} onChange={vi.fn()} />);
 
-    const readout = screen.getByLabelText('Room length');
+    const readout = screen.getByRole('status');
 
     expect(readout.textContent).toMatch(/ends \w{3}/);
   });
@@ -138,7 +138,7 @@ describe('the room length field', () => {
     render(<DeadlineField value={value} now={then} onChange={vi.fn()} />);
 
     // Same day as `now`, so the weekday is redundant and left off.
-    expect(screen.getByLabelText('Room length').textContent).not.toMatch(/ends \w{3}\s/);
+    expect(screen.getByRole('status').textContent).not.toMatch(/ends \w{3}\s/);
   });
 
   it('offers lengths in days, not just hours', () => {
@@ -198,13 +198,13 @@ describe('the room length field', () => {
     */
     render(<DeadlineField value={local(24 * 60 + 6 * 60)} now={NOW} onChange={vi.fn()} />);
 
-    expect(screen.getByLabelText('Room length').textContent).toContain('1d 6h');
+    expect(screen.getByRole('status').textContent).toContain('1d 6h');
   });
 
   it('still says a plain day when nothing is left over', () => {
     render(<DeadlineField value={local(24 * 60)} now={NOW} onChange={vi.fn()} />);
 
-    expect(screen.getByLabelText('Room length').textContent).toContain('1 day');
+    expect(screen.getByRole('status').textContent).toContain('1 day');
   });
 
   it('cannot be pushed past a week', async () => {
@@ -214,10 +214,119 @@ describe('the room length field', () => {
     expect(screen.getByRole('button', { name: /longer/i })).toBeDisabled();
   });
 
+  it('takes an exact number typed into it', async () => {
+    /*
+      The point of the box. The presets and the stepper can reach any value, but
+      only by pressing at one — a host who already knows they want 47 minutes
+      should be able to say so rather than nudge their way there.
+    */
+    const { onChange } = setup(30);
+
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '47');
+
+    expect(onChange).toHaveBeenLastCalledWith(local(47));
+  });
+
+  it('does not fight a half-typed number', async () => {
+    /*
+      Clearing the box to type "120" reads as 0 for a keystroke. Snapping that
+      to the floor would rewrite the field under the person using it and make
+      the second digit impossible to reach.
+    */
+    const { onChange } = setup(30);
+
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(box).toHaveValue(null);
+  });
+
+  it('counts in whichever unit is chosen', async () => {
+    const { onChange } = setup(30);
+
+    await userEvent.click(screen.getByRole('button', { name: 'HRS' }));
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '3');
+
+    expect(onChange).toHaveBeenLastCalledWith(local(3 * 60));
+  });
+
+  it('types days directly', async () => {
+    const { onChange } = setup(30);
+
+    await userEvent.click(screen.getByRole('button', { name: 'DAYS' }));
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '4');
+
+    expect(onChange).toHaveBeenLastCalledWith(local(4 * 24 * 60));
+  });
+
+  it('opens in the unit the current length reads in', () => {
+    // A two-day room should not present itself as 2880 minutes.
+    render(<DeadlineField value={local(2 * 24 * 60)} now={NOW} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'DAYS' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Room length')).toHaveValue(2);
+  });
+
+  it('converts the length when the unit changes rather than reinterpreting it', async () => {
+    // A box reading "2" while the room runs 90 minutes would simply be lying.
+    const { onChange } = setup(90);
+
+    await userEvent.click(screen.getByRole('button', { name: 'HRS' }));
+
+    expect(onChange).toHaveBeenLastCalledWith(local(2 * 60));
+  });
+
+  it('will not accept a length the server rejects', async () => {
+    // Typing 1 minute must not produce a deadline the API bounces.
+    const { onChange } = setup(30);
+
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '1');
+
+    expect(onChange).toHaveBeenLastCalledWith(local(5));
+  });
+
+  it('will not accept a length past the ceiling', async () => {
+    const { onChange } = setup(30);
+
+    await userEvent.click(screen.getByRole('button', { name: 'DAYS' }));
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '90');
+
+    expect(onChange).toHaveBeenLastCalledWith(local(7 * 24 * 60));
+  });
+
+  it('reports the length that was actually pressed, mid-minute', () => {
+    /*
+      The value is stored as `YYYY-MM-DDTHH:mm`, so the seconds are thrown away.
+      Measured against a clock carrying seconds, "30 min" came back as 29 — the
+      control disagreed with itself the instant it was touched. Every other test
+      here uses a whole minute, which is exactly why this went unnoticed.
+    */
+    const midMinute = new Date('2026-08-26T12:00:31').getTime();
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <DeadlineField value={local(30)} now={midMinute} onChange={onChange} />,
+    );
+
+    rerender(<DeadlineField value="2026-08-26T12:30" now={midMinute} onChange={onChange} />);
+
+    expect(screen.getByLabelText('Room length')).toHaveValue(30);
+  });
+
   it('falls back to a sensible length rather than NaN', () => {
     // A cleared or half-typed value must not render "NaN min".
     render(<DeadlineField value="" now={NOW} onChange={vi.fn()} />);
 
-    expect(screen.getByLabelText('Room length').textContent).toContain('30 min');
+    expect(screen.getByRole('status').textContent).toContain('30 min');
   });
 });

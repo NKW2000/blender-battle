@@ -1,7 +1,7 @@
 'use client';
 
 import { CHALLENGE_MIN_MINUTES } from '@bb/shared';
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { toLocalInputValue } from '@/components/ui/date-time-field';
 import { cn } from '@/lib/utils';
@@ -63,6 +63,29 @@ const DEFAULT_MINUTES = 30;
 */
 const BASE_STEP_MINUTES = 5;
 
+/**
+ * The units the number in the box can be counted in.
+ *
+ * Three, because they are the three the readout already speaks in. A host
+ * thinking "forty minutes" and a host thinking "three days" are answering the
+ * same question and should not have to convert it into someone else's unit to
+ * type it.
+ */
+const UNITS = [
+  { id: 'min', label: 'MIN', minutes: 1 },
+  { id: 'hour', label: 'HRS', minutes: HOUR },
+  { id: 'day', label: 'DAYS', minutes: DAY },
+] as const;
+
+type UnitId = (typeof UNITS)[number]['id'];
+
+/** The unit a length is most naturally read in. */
+function naturalUnit(minutes: number): UnitId {
+  if (minutes >= DAY) return 'day';
+  if (minutes >= HOUR) return 'hour';
+  return 'min';
+}
+
 function stepFor(minutes: number): number {
   if (minutes < 2 * HOUR) return BASE_STEP_MINUTES;
   if (minutes < 8 * HOUR) return 15;
@@ -98,9 +121,51 @@ export function DeadlineField({
 }) {
   const minutes = useMemo(() => minutesFromNow(value, now), [value, now]);
 
+  /*
+    The unit the box is counting in, and what is currently typed into it.
+
+    `draft` is null whenever the box is showing the value rather than an edit in
+    progress. It has to exist: deriving the number straight from `minutes` means
+    clearing the box to type "45" reads as 0, gets clamped to the floor, and the
+    field fights the person using it after every keystroke.
+  */
+  const [unit, setUnit] = useState<UnitId>(() => naturalUnit(minutesFromNow(value, now)));
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = useRef(false);
+
+  const unitMinutes = UNITS.find((option) => option.id === unit)?.minutes ?? 1;
+
   const set = (nextMinutes: number) => {
     const clamped = Math.min(CEILING_MINUTES, Math.max(FLOOR_MINUTES, nextMinutes));
     onChange(toLocalInputValue(new Date(now + clamped * 60_000)));
+  };
+
+  /*
+    What the box shows: the edit in progress if there is one, otherwise the
+    value, rounded into the chosen unit. The clock ticking down underneath must
+    not rewrite what someone is halfway through typing, which is what `editing`
+    is for.
+  */
+  const amount = draft ?? String(Math.max(1, Math.round(minutes / unitMinutes)));
+
+  const commitAmount = (raw: string) => {
+    setDraft(raw);
+
+    const parsed = Number(raw);
+    // An empty or half-typed box is left alone rather than snapped to the floor.
+    if (raw.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) return;
+
+    set(Math.round(parsed) * unitMinutes);
+  };
+
+  /* Switching unit converts the value rather than reinterpreting the number.
+     A box reading "2" while the room runs an hour and a half is simply lying,
+     so the length is rounded to a whole number of the new unit and emitted. */
+  const switchUnit = (next: UnitId) => {
+    const nextMinutes = UNITS.find((option) => option.id === next)?.minutes ?? 1;
+    setUnit(next);
+    setDraft(null);
+    set(Math.max(1, Math.round(minutes / nextMinutes)) * nextMinutes);
   };
 
   /*
@@ -167,26 +232,65 @@ export function DeadlineField({
         </NudgeButton>
 
         {/*
-          The readout states the length and the clock time it lands on. The
-          length is what is being chosen; the wall-clock time is what players
-          will see, and someone setting a four-hour round deserves to notice it
-          finishes after midnight before they create it.
+          The number is typed, not only stepped to.
+
+          The presets and the stepper between them can reach any value, but only
+          by pressing at something — a host who already knows they want forty
+          minutes should be able to say so. The box is the primary control now;
+          the presets are the shortcuts.
         */}
-        <output
-          aria-live="polite"
-          aria-label="Room length"
+        <div
           className={cn(
-            'flex h-14 flex-1 flex-col items-center justify-center rounded-2xl border-[3px] bg-white/6',
-            invalid ? 'border-punch' : 'border-white/16',
+            'flex h-14 flex-1 items-center gap-1.5 rounded-2xl border-[3px] bg-panel px-2',
+            invalid ? 'border-punch' : 'border-edge',
           )}
+          style={{ boxShadow: '0 4px 0 var(--color-edge)' }}
         >
-          <span className="font-display text-lg font-bold leading-none text-bone">
-            {formatLength(minutes)}
-          </span>
-          <span className="mt-1 text-[11px] font-extrabold leading-none text-bone-faint">
-            ends {formatClock(new Date(now + minutes * 60_000), now)}
-          </span>
-        </output>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            aria-label="Room length"
+            value={amount}
+            onFocus={(event) => {
+              editing.current = true;
+              event.currentTarget.select();
+            }}
+            onChange={(event) => commitAmount(event.target.value)}
+            onBlur={() => {
+              editing.current = false;
+              // Back to showing the value, which may have been clamped.
+              setDraft(null);
+            }}
+            /* The spinners are the browser's own grey arrows and would be the
+               one un-arcade thing in the row; the stepper beside it is what
+               they would have done anyway. */
+            className="arcade-focus h-10 w-full min-w-0 appearance-none rounded-xl border-0 bg-transparent text-center font-display text-2xl font-bold tabular-nums text-cream outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+
+          <div className="flex shrink-0 gap-1" role="group" aria-label="Unit">
+            {UNITS.map((option) => {
+              const active = option.id === unit;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => switchUnit(option.id)}
+                  className={cn(
+                    'arcade-focus rounded-lg border-2 px-1.5 py-1 font-display text-[10px] font-bold leading-none transition-colors',
+                    active
+                      ? 'border-edge bg-sun text-edge'
+                      : 'border-white/16 bg-white/6 text-bone-faint hover:bg-white/12',
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <NudgeButton
           label={`${formatLength(step)} longer`}
@@ -196,6 +300,19 @@ export function DeadlineField({
           +
         </NudgeButton>
       </div>
+
+      {/*
+        The length as it will read, and the clock time it lands on. The wall
+        clock is what players see, and someone setting a four-hour round
+        deserves to notice it finishes after midnight before they create it.
+      */}
+      <output
+        aria-live="polite"
+        className="text-center text-[12px] font-extrabold text-bone-faint"
+      >
+        {formatLength(minutes)} · ends{' '}
+        {formatClock(new Date(startOfMinute(now) + minutes * 60_000), now)}
+      </output>
     </div>
   );
 }
@@ -236,7 +353,22 @@ function minutesFromNow(value: string, now: number): number {
   const at = new Date(value).getTime();
   if (Number.isNaN(at)) return DEFAULT_MINUTES;
 
-  return Math.round((at - now) / 60_000);
+  /*
+    Measured from the top of the current minute, not from `now` itself.
+
+    The value is a `YYYY-MM-DDTHH:mm` string, so writing it throws the seconds
+    away. Pressing "30 min" at 12:00:31 stored 12:30, which is 29 and a half
+    minutes from the instant the button was pressed — and read back as 29. The
+    control said one thing and reported another the moment it was touched. It
+    also means the countdown falls in whole minutes rather than flickering
+    between two of them.
+  */
+  return Math.round((at - startOfMinute(now)) / 60_000);
+}
+
+/** `now` with the seconds and milliseconds cut off. */
+function startOfMinute(ms: number): number {
+  return Math.floor(ms / 60_000) * 60_000;
 }
 
 /** `45 min`, `1h 30m`, `2 hours`, `1d 6h`, `3 days`. */
