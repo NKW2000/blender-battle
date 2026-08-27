@@ -76,7 +76,7 @@ describe('the room length field', () => {
   it('steps in five-minute increments', async () => {
     const { onChange } = setup(30);
 
-    await userEvent.click(screen.getByRole('button', { name: /minutes longer/i }));
+    await userEvent.click(screen.getByRole('button', { name: /longer/i }));
 
     expect(onChange).toHaveBeenCalledWith(local(35));
   });
@@ -88,7 +88,7 @@ describe('the room length field', () => {
     */
     const { onChange } = setup(47);
 
-    await userEvent.click(screen.getByRole('button', { name: /minutes longer/i }));
+    await userEvent.click(screen.getByRole('button', { name: /longer/i }));
 
     expect(onChange).toHaveBeenCalledWith(local(50));
   });
@@ -98,7 +98,7 @@ describe('the room length field', () => {
     // be able to reach four.
     setup(5);
 
-    expect(screen.getByRole('button', { name: /minutes shorter/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /shorter/i })).toBeDisabled();
   });
 
   it('states the length and the time it lands on', () => {
@@ -139,6 +139,79 @@ describe('the room length field', () => {
 
     // Same day as `now`, so the weekday is redundant and left off.
     expect(screen.getByLabelText('Room length').textContent).not.toMatch(/ends \w{3}\s/);
+  });
+
+  it('offers lengths in days, not just hours', () => {
+    /*
+      The server puts no ceiling on a room deadline — a group running over a
+      weekend is a normal thing to want — but the control stopped at two hours,
+      so the whole upper half of that range was unreachable in practice.
+    */
+    setup(30);
+
+    expect(screen.getByRole('button', { name: '1 day' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 week' })).toBeInTheDocument();
+  });
+
+  it('sets a whole day in one press', async () => {
+    const { onChange } = setup(30);
+
+    await userEvent.click(screen.getByRole('button', { name: '1 day' }));
+
+    expect(onChange).toHaveBeenCalledWith(local(24 * 60));
+  });
+
+  it('steps by six hours once a room runs for days', async () => {
+    /*
+      The reason the step is not fixed. At five minutes a day is nearly three
+      hundred presses, and nudging a three-day deadline by five minutes is not
+      an adjustment anyone means to make.
+    */
+    const { onChange } = setup(3 * 24 * 60);
+
+    await userEvent.click(screen.getByRole('button', { name: /longer/i }));
+
+    expect(onChange).toHaveBeenCalledWith(local(3 * 24 * 60 + 6 * 60));
+  });
+
+  it('keeps five-minute steps for a speed round', async () => {
+    // The short end is what this control was built for and must not get coarser.
+    const { onChange } = setup(30);
+
+    await userEvent.click(screen.getByRole('button', { name: /longer/i }));
+
+    expect(onChange).toHaveBeenCalledWith(local(35));
+  });
+
+  it('names the step it is about to take', () => {
+    // "5 minutes longer" was a fixed label on a step that now varies; a button
+    // that lies about its own size is worse than one with no label.
+    setup(3 * 24 * 60);
+
+    expect(screen.getByRole('button', { name: /6 hours longer/i })).toBeInTheDocument();
+  });
+
+  it('reports the hours left over from a day', () => {
+    /*
+      Rounding to whole days called a day and a half "2 days", and showed no
+      change at all while the stepper moved through it.
+    */
+    render(<DeadlineField value={local(24 * 60 + 6 * 60)} now={NOW} onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText('Room length').textContent).toContain('1d 6h');
+  });
+
+  it('still says a plain day when nothing is left over', () => {
+    render(<DeadlineField value={local(24 * 60)} now={NOW} onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText('Room length').textContent).toContain('1 day');
+  });
+
+  it('cannot be pushed past a week', async () => {
+    // Past this it is not a room, it is a challenge.
+    setup(7 * 24 * 60);
+
+    expect(screen.getByRole('button', { name: /longer/i })).toBeDisabled();
   });
 
   it('falls back to a sensible length rather than NaN', () => {

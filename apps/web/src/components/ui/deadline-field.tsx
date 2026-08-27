@@ -10,40 +10,65 @@ import { cn } from '@/lib/utils';
  * How long the room runs for.
  *
  * This replaced a full date-and-time picker, which was the wrong instrument for
- * the question. A room deadline is minutes or hours from now — the field's own
- * hint says "any time from 5 minutes out" — and the picker it inherited opened a
- * month grid with arrows for paging through months and years. Nobody has ever
- * scheduled a room for March. Reaching "in two hours" meant opening a calendar,
- * confirming today is still today, and then nudging a clock.
+ * the question. A room deadline is a length, not a date — and the picker it
+ * inherited opened a month grid with arrows for paging through months and years.
+ * Nobody has ever scheduled a room for March. Reaching "in two hours" meant
+ * opening a calendar, confirming today is still today, and then nudging a clock.
  *
  * So the control asks the question the host is actually answering: how long do
- * players get? Four presets cover almost every round in one press, and the
+ * players get? The presets cover almost every round in one press, and the
  * stepper beside them handles the rest without a popover, a grid, or a concept
  * of months existing at all.
+ *
+ * The range runs from five minutes to a week, because the server's range does.
+ * It caps nothing above the floor: a room that runs over a weekend is a normal
+ * thing to want, and the deadline is a schedule rather than an estimate of how
+ * long the modelling takes.
  *
  * The value stays `YYYY-MM-DDTHH:mm` local wall clock, unchanged, so the form
  * around it and the server contract both stay exactly as they were.
  */
 
-/** The four lengths a round actually gets set to, in minutes. */
+const HOUR = 60;
+const DAY = 24 * HOUR;
+
+/**
+ * The lengths a round actually gets set to, in minutes.
+ *
+ * The first four are the speed rounds this control was built for. The last two
+ * exist because the stepper alone cannot reasonably reach them: at five-minute
+ * nudges a day is nearly three hundred presses, so without a preset the whole
+ * upper half of the server's range was theoretical.
+ */
 const PRESETS = [
   { minutes: 15, label: '15 min' },
   { minutes: 30, label: '30 min' },
-  { minutes: 60, label: '1 hour' },
-  { minutes: 120, label: '2 hours' },
+  { minutes: HOUR, label: '1 hour' },
+  { minutes: 2 * HOUR, label: '2 hours' },
+  { minutes: DAY, label: '1 day' },
+  { minutes: 7 * DAY, label: '1 week' },
 ];
 
 /** Half an hour, which is a typical round and what the form already opened on. */
 const DEFAULT_MINUTES = 30;
 
 /*
-  Five-minute steps, matching the picker this replaced.
+  The step grows with the length.
 
-  A modelling deadline is not a meaningful thing to set to the minute, and the
-  step is what makes the control reachable in a couple of presses rather than a
-  dozen.
+  Five minutes matched the picker this replaced and is right for a speed round,
+  but it is the wrong unit once a room runs for days — nudging a three-day
+  deadline by five minutes is not an adjustment anyone means to make, and
+  crossing that range at that size takes hundreds of presses. Each band is about
+  as fine as the number it is adjusting deserves.
 */
-const STEP_MINUTES = 5;
+const BASE_STEP_MINUTES = 5;
+
+function stepFor(minutes: number): number {
+  if (minutes < 2 * HOUR) return BASE_STEP_MINUTES;
+  if (minutes < 8 * HOUR) return 15;
+  if (minutes < DAY) return HOUR;
+  return 6 * HOUR;
+}
 
 /*
   The server's own floor, not a second copy of it.
@@ -54,7 +79,7 @@ const STEP_MINUTES = 5;
 const FLOOR_MINUTES = CHALLENGE_MIN_MINUTES;
 
 /** A week out. Past this it is not a room, it is a challenge. */
-const CEILING_MINUTES = 7 * 24 * 60;
+const CEILING_MINUTES = 7 * DAY;
 
 export function DeadlineField({
   value,
@@ -86,18 +111,32 @@ export function DeadlineField({
     means the first press lands on 45 or 50 and every press after is a round
     number.
   */
-  const nudge = (delta: number) => {
-    const snapped = Math.round(minutes / STEP_MINUTES) * STEP_MINUTES;
-    set(snapped + delta);
+  const step = stepFor(minutes);
+
+  const nudge = (direction: 1 | -1) => {
+    /*
+      Snapped to the step in force at the length being left, then moved.
+
+      Stepping down out of a band lands on a value the smaller step owns, which
+      is what should happen: a day minus one press is eighteen hours, and from
+      there the hour step takes over.
+    */
+    const snapped = Math.round(minutes / step) * step;
+    set(snapped + direction * step);
   };
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {PRESETS.map((preset) => {
-          // Within half a step counts as "this one", so a preset stays lit after
-          // the clock ticks a minute underneath it.
-          const active = Math.abs(minutes - preset.minutes) < STEP_MINUTES / 2;
+          /*
+            Close enough counts as "this one", so a preset stays lit while the
+            clock ticks down underneath it. The tolerance is proportional
+            because the labels are: a week is still "1 week" an hour later, but
+            fifteen minutes stops being "15 min" almost immediately.
+          */
+          const tolerance = Math.max(BASE_STEP_MINUTES / 2, preset.minutes * 0.01);
+          const active = Math.abs(minutes - preset.minutes) < tolerance;
 
           return (
             <button
@@ -120,9 +159,9 @@ export function DeadlineField({
 
       <div className="flex items-center gap-2">
         <NudgeButton
-          label={`${STEP_MINUTES} minutes shorter`}
+          label={`${formatLength(step)} shorter`}
           disabled={minutes <= FLOOR_MINUTES}
-          onClick={() => nudge(-STEP_MINUTES)}
+          onClick={() => nudge(-1)}
         >
           −
         </NudgeButton>
@@ -150,9 +189,9 @@ export function DeadlineField({
         </output>
 
         <NudgeButton
-          label={`${STEP_MINUTES} minutes longer`}
+          label={`${formatLength(step)} longer`}
           disabled={minutes >= CEILING_MINUTES}
-          onClick={() => nudge(STEP_MINUTES)}
+          onClick={() => nudge(1)}
         >
           +
         </NudgeButton>
@@ -200,19 +239,34 @@ function minutesFromNow(value: string, now: number): number {
   return Math.round((at - now) / 60_000);
 }
 
-/** `45 min`, `1h 30m`, `2 hours`, `3 days`. */
+/** `45 min`, `1h 30m`, `2 hours`, `1d 6h`, `3 days`. */
 function formatLength(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < HOUR) return `${minutes} min`;
 
-  if (minutes < 24 * 60) {
-    const hours = Math.floor(minutes / 60);
-    const rest = minutes % 60;
+  if (minutes < DAY) {
+    const hours = Math.floor(minutes / HOUR);
+    const rest = minutes % HOUR;
     if (rest === 0) return hours === 1 ? '1 hour' : `${hours} hours`;
     return `${hours}h ${rest}m`;
   }
 
-  const days = Math.round(minutes / (24 * 60));
-  return days === 1 ? '1 day' : `${days} days`;
+  /*
+    Days carry their remaining hours.
+
+    Rounding to whole days reported a day and a half as "2 days" and showed no
+    change at all while the stepper moved through it — the readout has to name
+    the value that was actually picked.
+  */
+  let days = Math.floor(minutes / DAY);
+  let hours = Math.round((minutes % DAY) / HOUR);
+  // A remainder within half an hour of a full day rounds up into one.
+  if (hours === 24) {
+    days += 1;
+    hours = 0;
+  }
+
+  if (hours === 0) return days === 1 ? '1 day' : `${days} days`;
+  return `${days}d ${hours}h`;
 }
 
 /**
