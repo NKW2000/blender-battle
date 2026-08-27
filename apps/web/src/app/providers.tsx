@@ -3,7 +3,7 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { RouteTransition } from '@/components/ui/route-transition';
+import { RouteProgress } from '@/components/ui/route-progress';
 import { Toaster } from '@/components/ui/toaster';
 import { ApiError } from '@/lib/api/client';
 import { notify } from '@/lib/notify';
@@ -73,7 +73,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RouteTransition />
+      <RouteProgress />
       {children}
       <Toaster />
     </QueryClientProvider>

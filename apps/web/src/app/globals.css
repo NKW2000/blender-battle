@@ -52,15 +52,6 @@
   --color-arcade-mid: #1b1550;
   --color-arcade-lift: #2e2578;
   --color-arcade-panel: #2a2170;
-  /*
-    The one purple bright enough to read as type on a yellow ground.
-
-    Every other arcade surface is a dark background colour; this is the opposite
-    job. The loading panel needs two distinct blues on top of the sun — this for
-    the wordmark, `arcade-lift` for the caption beneath it — and there was no
-    token for the lighter of them.
-  */
-  --color-arcade-violet: #4b2fbf;
 
   /* The outline colour. Every chunky border and hard shadow uses it. */
   --color-ink: #0e0b2b;
@@ -386,33 +377,13 @@
 }
 
 /* Route loader: staggered per cube, so the three read as one travelling wave. */
-/* The mark arriving on the loading panel: a turn and a half, overshooting
-   before it settles. */
-@keyframes bbMarkSpin {
-  0% {
-    transform: rotate(45deg) scale(0.7);
-    opacity: 0;
-  }
-  55% {
-    transform: rotate(405deg) scale(1.12);
-    opacity: 1;
-  }
-  100% {
-    transform: rotate(405deg) scale(1);
-    opacity: 1;
-  }
-}
-
-/* The three dots under the wordmark, hopping in sequence. */
-@keyframes bbDot {
+@keyframes bbLoadHop {
   0%,
   100% {
-    transform: translateY(0);
-    opacity: 0.45;
+    transform: translateY(0) scale(1);
   }
-  50% {
-    transform: translateY(-9px);
-    opacity: 1;
+  40% {
+    transform: translateY(-14px) scale(1.06);
   }
 }
 

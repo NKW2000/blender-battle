@@ -1,9 +1,3 @@
-import {
-  LOADING_DOTS_BACKDROP,
-  LOADING_PANEL_BACKGROUND,
-  LoadingMark,
-} from '@/components/ui/loading-mark';
-
 /**
  * The loading screen shown while a route is being fetched or streamed.
  *
@@ -14,28 +8,47 @@ import {
  * A server component on purpose: it must be able to render before any client
  * JavaScript for the destination has been downloaded, which is exactly the gap
  * it exists to fill.
- *
- * It carries the same panel as the navigation cover, minus the bars. The bars
- * are a transition — they sweep in from somewhere — and there is nowhere to
- * sweep from when you have arrived on a URL cold. What stays is the part that
- * says which product you are waiting for.
  */
 export function RouteLoader({ label = 'Loading' }: { label?: string }) {
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={label}
       /*
         Sized to the viewport minus exactly what sits above and below it: a
         3.5rem header plus the page's own vertical padding, which is 1.5rem each
-        side below sm and 2.5rem from sm up.
+        side below sm and 2.5rem from sm up. Reserving more than that — as a flat
+        9rem did — makes the box shorter than the space it fills, so it centres
+        against the wrong height.
       */
-      className="relative flex min-h-[calc(100dvh-6.5rem)] items-center justify-center overflow-hidden rounded-[24px] border-[3px] border-ink sm:min-h-[calc(100dvh-8.5rem)]"
-      style={{ background: LOADING_PANEL_BACKGROUND }}
+      className="relative flex min-h-[calc(100dvh-6.5rem)] items-center justify-center sm:min-h-[calc(100dvh-8.5rem)]"
     >
-      <div className="pointer-events-none absolute inset-0" style={LOADING_DOTS_BACKDROP} />
-      <LoadingMark />
+      {/* Three cubes in a row, pulsing in sequence — the same shapes the rest of
+          the language uses, rather than a generic spinner. */}
+      <div className="flex items-end gap-2.5" aria-hidden="true">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-5 w-5 rounded-[5px] border-[3px] border-edge"
+            style={{
+              background: ['#FFD23F', '#FF3D9A', '#5EF0DE'][index],
+              boxShadow: '0 4px 0 var(--color-edge)',
+              animation: `bbLoadHop .72s ${index * 0.12}s cubic-bezier(.4,0,.2,1) infinite`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/*
+        Positioned rather than stacked. In a centred column the caption is part
+        of what gets centred, so the cubes — the thing the eye actually tracks —
+        sat half the caption's height above the middle and read as misaligned.
+        Out of flow, the cubes hold the centre exactly and the caption hangs
+        beneath them.
+      */}
+      <p className="absolute left-1/2 top-1/2 mt-9 -translate-x-1/2 whitespace-nowrap font-display text-sm font-bold uppercase tracking-[3px] text-bone-faint">
+        {label}
+      </p>
     </div>
   );
 }
