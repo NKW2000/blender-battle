@@ -20,10 +20,21 @@ import {
 */
 type Phase = 'arm' | 'in' | 'hold' | 'out' | null;
 
-/** The design's beats, in milliseconds from the click. */
+/** The design's beats, in milliseconds from the moment the cover starts. */
 const COVER_AT = 640;
 const UNCOVER_AT = 1780;
 const CLEAR_AT = 2500;
+
+/*
+  How long a navigation is given to finish before anything is drawn at all.
+
+  A page that is already in the router's cache swaps in almost immediately, and
+  covering it up afterwards showed the destination, then the cover, then the
+  destination again — the same page twice with an animation in between. Nothing
+  is worth watching for a navigation that has already happened, so a route that
+  lands inside this window is simply left alone.
+*/
+const GRACE = 220;
 
 /*
   A navigation that never lands must not leave the screen covered.
@@ -66,6 +77,9 @@ export function RouteTransition() {
   */
   const arrived = useRef(false);
   const beatPassed = useRef(false);
+  // Whether anything has been drawn yet, so an early arrival knows whether it
+  // has an animation to cut short or simply nothing to do.
+  const covering = useRef(false);
 
   const clearTimers = useCallback(() => {
     timers.current.forEach(clearTimeout);
@@ -118,23 +132,30 @@ export function RouteTransition() {
       leftFrom.current = pathname;
       arrived.current = false;
       beatPassed.current = false;
+      covering.current = false;
 
-      setPhase('arm');
-      // Two frames: the first commits 'arm', the second is the earliest the
-      // browser can have painted it.
-      requestAnimationFrame(() => requestAnimationFrame(() => setPhase('in')));
+      // Nothing is drawn during the grace window. If the route lands inside it,
+      // the click is over before this ever becomes visible.
+      after(GRACE, () => {
+        covering.current = true;
 
-      after(COVER_AT, () => setPhase('hold'));
+        setPhase('arm');
+        // Two frames: the first commits 'arm', the second is the earliest the
+        // browser can have painted it.
+        requestAnimationFrame(() => requestAnimationFrame(() => setPhase('in')));
 
-      after(UNCOVER_AT, () => {
-        beatPassed.current = true;
-        if (arrived.current) uncover();
-      });
+        after(COVER_AT, () => setPhase('hold'));
 
-      after(SAFETY_UNCOVER_AT, () => {
-        arrived.current = true;
-        beatPassed.current = true;
-        uncover();
+        after(UNCOVER_AT, () => {
+          beatPassed.current = true;
+          if (arrived.current) uncover();
+        });
+
+        after(SAFETY_UNCOVER_AT, () => {
+          arrived.current = true;
+          beatPassed.current = true;
+          uncover();
+        });
       });
     };
 
@@ -154,10 +175,31 @@ export function RouteTransition() {
     if (leftFrom.current === null || pathname === leftFrom.current) return;
 
     arrived.current = true;
+
+    // Landed inside the grace window: nothing was ever drawn, so there is
+    // nothing to play out. The page simply appears, which is the whole point.
+    if (!covering.current) {
+      clearTimers();
+      leftFrom.current = null;
+      return;
+    }
+
+    /*
+      Landed while the bars were still sweeping.
+
+      The panel is what hides the page underneath, and it does not normally come
+      up until 640ms. A route committing before then would put the destination
+      on screen behind a half-drawn cover — visible, then hidden, then revealed
+      again. Going straight to `hold` snaps the panel opaque on the same frame
+      the new page commits, so it is never seen early. The bars carry on
+      sweeping across it.
+    */
+    setPhase((current) => (current === 'arm' || current === 'in' ? 'hold' : current));
+
     // Only if the beat has already come round; otherwise the timer above picks
     // it up, so a quick route still gets the full cover rather than a flash.
     if (beatPassed.current) uncover();
-  }, [pathname, uncover]);
+  }, [pathname, uncover, clearTimers]);
 
   useEffect(() => clearTimers, [clearTimers]);
 
