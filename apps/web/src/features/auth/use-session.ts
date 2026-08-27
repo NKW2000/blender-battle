@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api/client';
 import { notify } from '@/lib/notify';
 import { tokenStore } from '@/lib/api/token-store';
 import type { LoginInput, RegisterInput } from '@/lib/validation/auth.schema';
+import { coverNextNavigation } from '@/lib/route-transition-signal';
 
 /**
  * Server state lives in TanStack Query, never mirrored into Zustand.
@@ -61,6 +62,9 @@ export function useLogin() {
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);
+      // Signing in is one of the few navigations worth the full cover, and it
+      // does not go through a link, so it has to ask for one.
+      coverNextNavigation();
       router.push('/rooms');
     },
     /*
@@ -94,6 +98,9 @@ export function useRegister() {
     onSuccess: (session) => {
       tokenStore.set(session);
       queryClient.setQueryData(sessionKeys.me, session.user);
+      // Signing in is one of the few navigations worth the full cover, and it
+      // does not go through a link, so it has to ask for one.
+      coverNextNavigation();
       router.push('/rooms');
     },
     /*
@@ -128,6 +135,7 @@ export function useLogout() {
     onSettled: () => {
       tokenStore.clear();
       queryClient.clear();
+      coverNextNavigation();
       router.push('/login');
     },
   });

@@ -8,6 +8,7 @@ import {
   LOADING_PANEL_BACKGROUND,
   LoadingMark,
 } from '@/components/ui/loading-mark';
+import { COVER_NAVIGATION_EVENT } from '@/lib/route-transition-signal';
 
 /*
   'arm' exists for one frame only.
@@ -20,66 +21,84 @@ import {
 */
 type Phase = 'arm' | 'in' | 'hold' | 'out' | null;
 
-/** The design's beats, in milliseconds from the moment the cover starts. */
+/**
+ * How much of the transition a navigation earns.
+ *
+ * 'full' is the whole thing — bars, the panel, the mark and the word LOADING.
+ * It is kept for the handful of moments that are actually events: signing in,
+ * signing out, and stepping into a room that is about to start. 'lines' is the
+ * bars alone, sweeping past, and ordinary browsing gets that.
+ *
+ * The distinction exists because the panel was playing on every click. A
+ * ceremony that happens on the way to the leaderboard is not a ceremony, and it
+ * made the site feel slow in exactly the places it should feel quick.
+ */
+type Mode = 'full' | 'lines';
+
+/** The design's beats, in milliseconds from the moment the transition starts. */
 const COVER_AT = 640;
-const UNCOVER_AT = 1780;
-const CLEAR_AT = 2500;
+/* The design uncovers at 1780 and clears at 2500; the gap is the exit sweep. */
+const OUT_DURATION = 720;
 
 /*
-  How long a navigation is given to finish before anything is drawn at all.
+  The shortest the panel may stay up once it is opaque.
 
-  A page that is already in the router's cache swaps in almost immediately, and
-  covering it up afterwards showed the destination, then the cover, then the
-  destination again — the same page twice with an animation in between. Nothing
-  is worth watching for a navigation that has already happened, so a route that
-  lands inside this window is simply left alone.
+  The design holds for a flat 1140ms, which suits a state swap that has already
+  happened. Here the hold is doing real work — waiting for a route — so it is a
+  floor rather than a fixed length: as long as the navigation needs, and never
+  less than one full turn of the mark. Cutting the spin off part-way is the one
+  thing that would make the panel look broken rather than brief.
 */
-const GRACE = 220;
+const MARK_SPIN = 700;
+const MIN_HOLD = MARK_SPIN + 60;
+
+/*
+  The bars alone do not wait for anything.
+
+  There is nothing behind them to hide and nothing to read, so they sweep in and
+  straight back out — the last is still arriving as the first leaves. Holding
+  them would only be asking someone to look at a stripe.
+*/
+const LINES_TURN = 620;
 
 /*
   A navigation that never lands must not leave the screen covered.
 
   The design drives this from its own `setState`, so the screen it is covering
   for has by definition already changed. A real router can be slow, or the click
-  can turn out not to navigate at all — an anchor handled elsewhere, a route
-  that redirects back to where it started. Without a cap the app is bricked
-  behind a yellow panel.
+  can turn out not to navigate at all. Without a cap the app is bricked behind a
+  yellow panel.
 */
 const SAFETY_UNCOVER_AT = 6000;
 
+/** Stepping into a specific room — not the room list. */
+const ROOM_PATH = /^\/rooms\/[^/]+$/;
+
 /**
- * The cover that plays over a navigation.
+ * The transition that plays over a navigation.
  *
- * Three bars sweep in on a tilt, a panel fades up behind them carrying the
- * mark, the route changes underneath, and the bars sweep out the other side.
- * It replaces the thin progress bar that used to creep across the top: a hairline
- * acknowledged the click, but the arcade language this product is built in does
- * not do hairlines.
+ * Three bars sweep in on a tilt. On the moments that warrant it a panel fades up
+ * behind them carrying the mark, the route changes underneath, and the bars
+ * sweep out the other side; the rest of the time the bars simply pass through.
  *
  * Timings are the design's: 640ms to cover, the bars staggered 70ms apart on a
- * 620ms travel, and the uncover beginning at 1780ms.
+ * 620ms travel, and a 720ms exit.
  */
 export function RouteTransition() {
   const pathname = usePathname();
   const [phase, setPhase] = useState<Phase>(null);
+  const [mode, setMode] = useState<Mode>('lines');
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  // Which path the click left from, so arriving can be told from a re-render.
+  // Which path the transition left from, so arriving can be told from a
+  // re-render.
   const leftFrom = useRef<string | null>(null);
-  /*
-    Uncovering needs two things to have happened, in either order: the route has
-    landed, and the design's beat for it has come round. They are tracked
-    separately because whichever happens second is the one that starts the exit.
-
-    An earlier version cancelled the pending timers when the route landed, which
-    on any fast navigation killed the cover before it had drawn — the bars swept
-    in and straight back out and the mark never appeared at all.
-  */
   const arrived = useRef(false);
-  const beatPassed = useRef(false);
-  // Whether anything has been drawn yet, so an early arrival knows whether it
-  // has an animation to cut short or simply nothing to do.
-  const covering = useRef(false);
+  // Whether the panel has been up long enough to be allowed to leave.
+  const holdDone = useRef(false);
+  // Guards the hold against being entered twice — the timer and an early
+  // arrival can both reach for it.
+  const held = useRef(false);
 
   const clearTimers = useCallback(() => {
     timers.current.forEach(clearTimeout);
@@ -90,99 +109,120 @@ export function RouteTransition() {
     timers.current.push(setTimeout(run, ms));
   }, []);
 
+  const finish = useCallback(() => {
+    leftFrom.current = null;
+    setPhase(null);
+  }, []);
+
   /** Sweeps the bars off and puts the overlay away. */
   const uncover = useCallback(() => {
-    // Safe to clear here: both the cover and the beat have already fired by the
-    // time anything can call this, so the only timer left is the safety net.
     clearTimers();
     setPhase('out');
-    after(CLEAR_AT - UNCOVER_AT, () => {
-      leftFrom.current = null;
-      setPhase(null);
+    after(OUT_DURATION, finish);
+  }, [after, clearTimers, finish]);
+
+  /** Brings the panel up and starts the clock on how long it must stay. */
+  const enterHold = useCallback(() => {
+    if (held.current) return;
+    held.current = true;
+
+    setPhase('hold');
+    after(MIN_HOLD, () => {
+      holdDone.current = true;
+      if (arrived.current) uncover();
     });
-  }, [after, clearTimers]);
+  }, [after, uncover]);
+
+  const start = useCallback(
+    (nextMode: Mode, from: string) => {
+      clearTimers();
+      leftFrom.current = from;
+      arrived.current = false;
+      holdDone.current = false;
+      held.current = false;
+
+      setMode(nextMode);
+      setPhase('arm');
+      // Two frames: the first commits 'arm', the second is the earliest the
+      // browser can have painted it.
+      requestAnimationFrame(() => requestAnimationFrame(() => setPhase('in')));
+
+      if (nextMode === 'lines') {
+        after(LINES_TURN, () => {
+          setPhase('out');
+          after(OUT_DURATION, finish);
+        });
+        return;
+      }
+
+      after(COVER_AT, enterHold);
+      after(SAFETY_UNCOVER_AT, () => {
+        arrived.current = true;
+        holdDone.current = true;
+        uncover();
+      });
+    },
+    [after, clearTimers, enterHold, finish, uncover],
+  );
 
   /*
-    Any click that lands on an internal link starts the cover.
+    Any click that lands on an internal link starts the transition.
 
     Listening at the document rather than wrapping every `Link` keeps this to a
     single listener and covers links rendered anywhere in the tree, including
     ones inside components that know nothing about this.
   */
   useEffect(() => {
+    const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
       // Under a reduced-motion preference this does not play at all. The global
-      // stylesheet collapses every duration to nothing, which would turn a
-      // two-and-a-half second cover into a full-screen flash — worse than the
-      // motion it is meant to spare someone.
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      // stylesheet collapses every duration to nothing, which would turn the
+      // sweep into a full-screen flash — worse than the motion it spares.
+      if (reduced()) return;
 
       const anchor = (event.target as HTMLElement | null)?.closest?.('a');
       if (!anchor) return;
 
       const href = anchor.getAttribute('href');
       if (!href || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+
+      const destination = href.split(/[?#]/)[0] ?? '';
       // Internal, and not a jump within the page you are already on.
-      if (!href.startsWith('/') || href.split(/[?#]/)[0] === pathname) return;
+      if (!href.startsWith('/') || destination === pathname) return;
 
-      clearTimers();
-      leftFrom.current = pathname;
-      arrived.current = false;
-      beatPassed.current = false;
-      covering.current = false;
+      start(ROOM_PATH.test(destination) ? 'full' : 'lines', pathname);
+    };
 
-      // Nothing is drawn during the grace window. If the route lands inside it,
-      // the click is over before this ever becomes visible.
-      after(GRACE, () => {
-        covering.current = true;
-
-        setPhase('arm');
-        // Two frames: the first commits 'arm', the second is the earliest the
-        // browser can have painted it.
-        requestAnimationFrame(() => requestAnimationFrame(() => setPhase('in')));
-
-        after(COVER_AT, () => setPhase('hold'));
-
-        after(UNCOVER_AT, () => {
-          beatPassed.current = true;
-          if (arrived.current) uncover();
-        });
-
-        after(SAFETY_UNCOVER_AT, () => {
-          arrived.current = true;
-          beatPassed.current = true;
-          uncover();
-        });
-      });
+    // Signing in and signing out do not go through a link.
+    const onRequest = () => {
+      if (reduced()) return;
+      start('full', pathname);
     };
 
     document.addEventListener('click', onClick, true);
-    return () => document.removeEventListener('click', onClick, true);
-  }, [pathname, after, clearTimers, uncover]);
+    window.addEventListener(COVER_NAVIGATION_EVENT, onRequest);
+    return () => {
+      document.removeEventListener('click', onClick, true);
+      window.removeEventListener(COVER_NAVIGATION_EVENT, onRequest);
+    };
+  }, [pathname, start]);
 
   /*
-    Arrival uncovers.
+    Arrival uncovers, for the full cover only.
 
     Keyed on the path actually changing rather than on a timer, so a slow route
-    stays covered until it is ready instead of revealing a half-built page. When
-    it is quick — which is most of the time — `uncover` still waits for the
-    design's beat, so the rhythm is the same either way.
+    stays covered until it is ready instead of revealing a half-built page. The
+    bars alone have nothing to wait for and run to their own clock.
   */
   useEffect(() => {
+    if (mode !== 'full') return;
     if (leftFrom.current === null || pathname === leftFrom.current) return;
 
     arrived.current = true;
-
-    // Landed inside the grace window: nothing was ever drawn, so there is
-    // nothing to play out. The page simply appears, which is the whole point.
-    if (!covering.current) {
-      clearTimers();
-      leftFrom.current = null;
-      return;
-    }
 
     /*
       Landed while the bars were still sweeping.
@@ -190,16 +230,16 @@ export function RouteTransition() {
       The panel is what hides the page underneath, and it does not normally come
       up until 640ms. A route committing before then would put the destination
       on screen behind a half-drawn cover — visible, then hidden, then revealed
-      again. Going straight to `hold` snaps the panel opaque on the same frame
-      the new page commits, so it is never seen early. The bars carry on
-      sweeping across it.
+      again. Going to the hold early snaps the panel opaque on the same frame
+      the new page commits, so it is never seen twice.
     */
-    setPhase((current) => (current === 'arm' || current === 'in' ? 'hold' : current));
+    enterHold();
 
-    // Only if the beat has already come round; otherwise the timer above picks
-    // it up, so a quick route still gets the full cover rather than a flash.
-    if (beatPassed.current) uncover();
-  }, [pathname, uncover, clearTimers]);
+    // Only once the panel has served its minimum; otherwise the timer started
+    // by `enterHold` picks it up, so a quick route still gets a whole cover
+    // rather than a flash of one.
+    if (holdDone.current) uncover();
+  }, [pathname, mode, uncover, enterHold]);
 
   useEffect(() => clearTimers, [clearTimers]);
 
@@ -252,22 +292,25 @@ export function RouteTransition() {
         ))}
       </div>
 
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        style={{
-          background: LOADING_PANEL_BACKGROUND,
-          opacity: covered ? 1 : 0,
-          transitionProperty: 'opacity',
-          transitionDuration: covered ? '.18s' : '.22s',
-          transitionTimingFunction: 'ease',
-          transitionDelay: covered ? '.02s' : '0s',
-        }}
-      >
-        <div className="pointer-events-none absolute inset-0" style={LOADING_DOTS_BACKDROP} />
-        {/* Mounted only while covered, so the mark's spin plays on every
-            navigation rather than once for the life of the page. */}
-        {covered ? <LoadingMark /> : null}
-      </div>
+      {/* Only the momentous navigations get a panel to read. */}
+      {mode === 'full' ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            background: LOADING_PANEL_BACKGROUND,
+            opacity: covered ? 1 : 0,
+            transitionProperty: 'opacity',
+            transitionDuration: covered ? '.18s' : '.22s',
+            transitionTimingFunction: 'ease',
+            transitionDelay: covered ? '.02s' : '0s',
+          }}
+        >
+          <div className="pointer-events-none absolute inset-0" style={LOADING_DOTS_BACKDROP} />
+          {/* Mounted only while covered, so the mark's spin plays on every
+              navigation rather than once for the life of the page. */}
+          {covered ? <LoadingMark /> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
