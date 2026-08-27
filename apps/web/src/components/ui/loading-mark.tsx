@@ -6,9 +6,12 @@
  * link, one when you land on a URL cold — and a product that showed two
  * different loading screens depending on how you arrived would look broken.
  *
- * The colours are the design's own literal values rather than the app's tokens.
- * They are close cousins (#FFC93C against the product's #FFD23F sun) but not
- * the same, and this panel was signed off at these.
+ * Drawn in the product's own tokens rather than the design file's literal
+ * hexes. Most of them were already the same colour under a different name — its
+ * #2E2578, #0E0B2B and #FF7A18 are `arcade-lift`, `ink` and `ember` exactly —
+ * and the two that differed were a shade off the token they were reaching for.
+ * Pinning them to the system means this panel follows the palette instead of
+ * quietly drifting from it the next time the palette moves.
  */
 export function LoadingMark() {
   return (
@@ -26,14 +29,14 @@ export function LoadingMark() {
         back to its 0% state once the animation ends.
       */}
       <div
-        className="flex h-[clamp(68px,20vw,96px)] w-[clamp(68px,20vw,96px)] items-center justify-center rounded-[22px] border-[5px] border-[#0E0B2B]"
+        className="flex h-[clamp(68px,20vw,96px)] w-[clamp(68px,20vw,96px)] items-center justify-center rounded-[22px] border-[5px] border-ink"
         style={{
-          background: 'linear-gradient(135deg,#FF9E2C,#FF7A18)',
-          boxShadow: '0 9px 0 #2E2578',
+          background: 'linear-gradient(135deg,var(--color-ember-lift),var(--color-ember))',
+          boxShadow: '0 9px 0 var(--color-arcade-lift)',
           animation: 'bbMarkSpin .7s cubic-bezier(.22,1,.36,1) both',
         }}
       >
-        <div className="h-[31%] w-[31%] rounded-[7px] bg-[#0E0B2B]" />
+        <div className="h-[31%] w-[31%] rounded-[7px] bg-ink" />
       </div>
 
       {/*
@@ -41,18 +44,18 @@ export function LoadingMark() {
         family to a generated name, so naming the face directly here would
         quietly fall through to a system sans.
       */}
-      <div className="whitespace-nowrap font-display text-[clamp(24px,7.4vw,34px)] font-bold tracking-[1px] text-[#0E0B2B]">
-        BLENDER<span className="text-[#4B2FBF]">BATTLE</span>
+      <div className="whitespace-nowrap font-display text-[clamp(24px,7.4vw,34px)] font-bold tracking-[1px] text-ink">
+        BLENDER<span className="text-arcade-violet">BATTLE</span>
       </div>
 
-      <div className="flex items-center gap-2.5 whitespace-nowrap font-display text-[clamp(15px,4.4vw,19px)] font-bold uppercase tracking-[2.5px] text-[#2E2578]">
+      <div className="flex items-center gap-2.5 whitespace-nowrap font-display text-[clamp(15px,4.4vw,19px)] font-bold uppercase tracking-[2.5px] text-arcade-lift">
         <span>Loading</span>
         {/* Three dots hopping in sequence, one per brand colour. */}
         <span className="flex gap-1.5 pb-0.5" aria-hidden="true">
           {[
-            { background: '#4B2FBF', delay: '0s' },
-            { background: '#FF7A18', delay: '.15s' },
-            { background: '#2E2578', delay: '.3s' },
+            { background: 'var(--color-arcade-violet)', delay: '0s' },
+            { background: 'var(--color-ember)', delay: '.15s' },
+            { background: 'var(--color-arcade-lift)', delay: '.3s' },
           ].map((dot) => (
             <span
               key={dot.background}
@@ -71,9 +74,10 @@ export function LoadingMark() {
 
 /** The dotted field the panel sits on, at the design's own spacing. */
 export const LOADING_DOTS_BACKDROP = {
-  backgroundImage: 'radial-gradient(rgba(14,11,43,.09) 1.6px, transparent 1.7px)',
+  backgroundImage:
+    'radial-gradient(color-mix(in srgb, var(--color-ink) 9%, transparent) 1.6px, transparent 1.7px)',
   backgroundSize: '34px 34px',
 } as const;
 
 /** The panel's ground, shared by the cover and the fallback. */
-export const LOADING_PANEL_BACKGROUND = '#FFC93C';
+export const LOADING_PANEL_BACKGROUND = 'var(--color-sun)';

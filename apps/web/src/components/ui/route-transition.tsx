@@ -188,8 +188,8 @@ export function RouteTransition() {
             style={{
               height: '42%',
               top: `${-2 + index * 31}%`,
-              background: '#FFC93C',
-              boxShadow: '0 16px 0 #2E2578',
+              background: 'var(--color-sun)',
+              boxShadow: '0 16px 0 var(--color-arcade-lift)',
               transform: `translateX(${x}%)`,
               /*
                 Longhand, not the `transition` shorthand.

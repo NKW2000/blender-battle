@@ -52,6 +52,15 @@
   --color-arcade-mid: #1b1550;
   --color-arcade-lift: #2e2578;
   --color-arcade-panel: #2a2170;
+  /*
+    The one purple bright enough to read as type on a yellow ground.
+
+    Every other arcade surface is a dark background colour; this is the opposite
+    job. The loading panel needs two distinct blues on top of the sun — this for
+    the wordmark, `arcade-lift` for the caption beneath it — and there was no
+    token for the lighter of them.
+  */
+  --color-arcade-violet: #4b2fbf;
 
   /* The outline colour. Every chunky border and hard shadow uses it. */
   --color-ink: #0e0b2b;
