@@ -377,13 +377,33 @@
 }
 
 /* Route loader: staggered per cube, so the three read as one travelling wave. */
-@keyframes bbLoadHop {
+/* The mark arriving on the loading panel: a turn and a half, overshooting
+   before it settles. */
+@keyframes bbMarkSpin {
+  0% {
+    transform: rotate(45deg) scale(0.7);
+    opacity: 0;
+  }
+  55% {
+    transform: rotate(405deg) scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(405deg) scale(1);
+    opacity: 1;
+  }
+}
+
+/* The three dots under the wordmark, hopping in sequence. */
+@keyframes bbDot {
   0%,
   100% {
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+    opacity: 0.45;
   }
-  40% {
-    transform: translateY(-14px) scale(1.06);
+  50% {
+    transform: translateY(-9px);
+    opacity: 1;
   }
 }
 
