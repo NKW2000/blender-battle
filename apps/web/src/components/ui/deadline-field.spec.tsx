@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +22,35 @@ function local(minutesFromNow: number): string {
   const at = new Date(NOW + minutesFromNow * 60_000);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
+/**
+ * The field wired to state, the way the room form wires it.
+ *
+ * `setup` hands it a fixed `value` and a spy, which is fine for asserting what
+ * a single press emits. It is wrong for anything multi-step: the unit shown
+ * depends on the length, so a test that switches unit and then types is
+ * measuring a component whose value never moved.
+ */
+function setupControlled(minutes = 30) {
+  const onChange = vi.fn();
+
+  function Harness() {
+    const [value, setValue] = useState(local(minutes));
+    return (
+      <DeadlineField
+        value={value}
+        now={NOW}
+        onChange={(next) => {
+          onChange(next);
+          setValue(next);
+        }}
+      />
+    );
+  }
+
+  render(<Harness />);
+  return { onChange };
 }
 
 function setup(minutes = 30) {
@@ -241,11 +271,11 @@ describe('the room length field', () => {
     await userEvent.clear(box);
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(box).toHaveValue(null);
+    expect(box).toHaveValue('');
   });
 
   it('counts in whichever unit is chosen', async () => {
-    const { onChange } = setup(30);
+    const { onChange } = setupControlled(30);
 
     await userEvent.click(screen.getByRole('button', { name: 'HRS' }));
     const box = screen.getByLabelText('Room length');
@@ -256,7 +286,7 @@ describe('the room length field', () => {
   });
 
   it('types days directly', async () => {
-    const { onChange } = setup(30);
+    const { onChange } = setupControlled(30);
 
     await userEvent.click(screen.getByRole('button', { name: 'DAYS' }));
     const box = screen.getByLabelText('Room length');
@@ -271,7 +301,7 @@ describe('the room length field', () => {
     render(<DeadlineField value={local(2 * 24 * 60)} now={NOW} onChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'DAYS' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('Room length')).toHaveValue(2);
+    expect(screen.getByLabelText('Room length')).toHaveValue('2');
   });
 
   it('converts the length when the unit changes rather than reinterpreting it', async () => {
@@ -295,7 +325,7 @@ describe('the room length field', () => {
   });
 
   it('will not accept a length past the ceiling', async () => {
-    const { onChange } = setup(30);
+    const { onChange } = setupControlled(30);
 
     await userEvent.click(screen.getByRole('button', { name: 'DAYS' }));
     const box = screen.getByLabelText('Room length');
@@ -320,7 +350,73 @@ describe('the room length field', () => {
 
     rerender(<DeadlineField value="2026-08-26T12:30" now={midMinute} onChange={onChange} />);
 
-    expect(screen.getByLabelText('Room length')).toHaveValue(30);
+    expect(screen.getByLabelText('Room length')).toHaveValue('30');
+  });
+
+  it('never shows a number its unit cannot count exactly', () => {
+    /*
+      The box used to pick the largest unit the length exceeded and round into
+      it, so a ninety-minute room displayed "2" beside HRS. The field said one
+      thing and the room did another. A unit only gets the display if the length
+      divides into it with nothing over.
+    */
+    render(<DeadlineField value={local(90)} now={NOW} onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText('Room length')).toHaveValue('90');
+    expect(screen.getByRole('button', { name: 'MIN' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('drops to an exact unit when a nudge lands off the chosen one', async () => {
+    /*
+      Choosing HRS and then stepping to 105 minutes leaves the hours box with
+      nothing honest to show. It reports minutes until the length fits hours
+      again, rather than rounding and misreporting.
+    */
+    const { onChange } = setupControlled(2 * 60);
+
+    await userEvent.click(screen.getByRole('button', { name: 'HRS' }));
+    expect(screen.getByLabelText('Room length')).toHaveValue('2');
+
+    await userEvent.click(screen.getByRole('button', { name: /shorter/i }));
+
+    expect(onChange).toHaveBeenLastCalledWith(local(105));
+    expect(screen.getByLabelText('Room length')).toHaveValue('105');
+    expect(screen.getByRole('button', { name: 'MIN' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('returns to the chosen unit once the length fits it again', async () => {
+    // The preference is not thrown away by one awkward value.
+    setupControlled(2 * 60);
+
+    await userEvent.click(screen.getByRole('button', { name: 'HRS' }));
+    // Off the hour: the display drops to minutes.
+    await userEvent.click(screen.getByRole('button', { name: /shorter/i }));
+    expect(screen.getByRole('button', { name: 'MIN' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Back onto a whole hour, and the preference comes back with it.
+    await userEvent.click(screen.getByRole('button', { name: '2 hours' }));
+
+    expect(screen.getByRole('button', { name: 'HRS' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Room length')).toHaveValue('2');
+  });
+
+  it('stops showing a typed number once something else changes the value', async () => {
+    /*
+      Typing 39 days clamps the room to the seven-day ceiling, and the box was
+      left reading "39" against a summary saying "7 days" — the two halves of
+      one control disagreeing. Anything that is not typing now clears it.
+    */
+    setupControlled(30);
+
+    await userEvent.click(screen.getByRole('button', { name: 'DAYS' }));
+    const box = screen.getByLabelText('Room length');
+    await userEvent.clear(box);
+    await userEvent.type(box, '39');
+
+    await userEvent.click(screen.getByRole('button', { name: '1 hour' }));
+
+    expect(screen.getByLabelText('Room length')).toHaveValue('1');
+    expect(screen.getByRole('status').textContent).toContain('1 hour');
   });
 
   it('falls back to a sensible length rather than NaN', () => {

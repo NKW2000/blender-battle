@@ -1,7 +1,7 @@
 'use client';
 
 import { CHALLENGE_MIN_MINUTES } from '@bb/shared';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { toLocalInputValue } from '@/components/ui/date-time-field';
 import { cn } from '@/lib/utils';
@@ -79,10 +79,21 @@ const UNITS = [
 
 type UnitId = (typeof UNITS)[number]['id'];
 
-/** The unit a length is most naturally read in. */
-function naturalUnit(minutes: number): UnitId {
-  if (minutes >= DAY) return 'day';
-  if (minutes >= HOUR) return 'hour';
+function unitLength(unit: UnitId): number {
+  return UNITS.find((option) => option.id === unit)?.minutes ?? 1;
+}
+
+/**
+ * The largest unit that counts this length exactly.
+ *
+ * "Most natural" was the wrong test and produced a box that lied: ninety
+ * minutes is more than an hour, so it was shown in hours, and rounding put a
+ * "2" in a field describing a ninety-minute room. A unit only earns the display
+ * if the length divides into it with nothing left over.
+ */
+function exactUnit(minutes: number): UnitId {
+  if (minutes % DAY === 0) return 'day';
+  if (minutes % HOUR === 0) return 'hour';
   return 'min';
 }
 
@@ -122,50 +133,60 @@ export function DeadlineField({
   const minutes = useMemo(() => minutesFromNow(value, now), [value, now]);
 
   /*
-    The unit the box is counting in, and what is currently typed into it.
+    The unit the host last asked for, and what is currently typed in the box.
 
     `draft` is null whenever the box is showing the value rather than an edit in
     progress. It has to exist: deriving the number straight from `minutes` means
     clearing the box to type "45" reads as 0, gets clamped to the floor, and the
     field fights the person using it after every keystroke.
   */
-  const [unit, setUnit] = useState<UnitId>(() => naturalUnit(minutesFromNow(value, now)));
+  // Opened in whatever unit counts the length it was given: a two-day room
+  // presents itself as 2 DAYS, not 2880 MIN.
+  const [preferredUnit, setPreferredUnit] = useState<UnitId>(() =>
+    exactUnit(minutesFromNow(value, now)),
+  );
   const [draft, setDraft] = useState<string | null>(null);
-  const editing = useRef(false);
 
-  const unitMinutes = UNITS.find((option) => option.id === unit)?.minutes ?? 1;
+  /*
+    A preference, honoured only while it stays true.
+
+    Nudging or a preset can land on a length the chosen unit cannot count — an
+    hours box has nothing honest to show for 105 minutes. Rather than round and
+    misreport it, the display falls back to the unit that does count it exactly,
+    and the preference returns as soon as it fits again.
+  */
+  const unit = minutes % unitLength(preferredUnit) === 0 ? preferredUnit : exactUnit(minutes);
+  const unitMinutes = unitLength(unit);
 
   const set = (nextMinutes: number) => {
     const clamped = Math.min(CEILING_MINUTES, Math.max(FLOOR_MINUTES, nextMinutes));
     onChange(toLocalInputValue(new Date(now + clamped * 60_000)));
   };
 
-  /*
-    What the box shows: the edit in progress if there is one, otherwise the
-    value, rounded into the chosen unit. The clock ticking down underneath must
-    not rewrite what someone is halfway through typing, which is what `editing`
-    is for.
-  */
+  // The edit in progress if there is one, otherwise the value — which the line
+  // above guarantees is a whole number of the unit on show.
   const amount = draft ?? String(Math.max(1, Math.round(minutes / unitMinutes)));
 
   const commitAmount = (raw: string) => {
-    setDraft(raw);
+    // Digits only. A text box rather than `type="number"`, whose scroll wheel
+    // silently rewrites the value when the page moves under the pointer.
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 4);
+    setDraft(digits);
 
-    const parsed = Number(raw);
+    const parsed = Number(digits);
     // An empty or half-typed box is left alone rather than snapped to the floor.
-    if (raw.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) return;
+    if (digits === '' || !Number.isFinite(parsed) || parsed <= 0) return;
 
-    set(Math.round(parsed) * unitMinutes);
+    set(parsed * unitMinutes);
   };
 
-  /* Switching unit converts the value rather than reinterpreting the number.
+  /* Switching unit converts the length rather than reinterpreting the digits.
      A box reading "2" while the room runs an hour and a half is simply lying,
      so the length is rounded to a whole number of the new unit and emitted. */
   const switchUnit = (next: UnitId) => {
-    const nextMinutes = UNITS.find((option) => option.id === next)?.minutes ?? 1;
-    setUnit(next);
+    setPreferredUnit(next);
     setDraft(null);
-    set(Math.max(1, Math.round(minutes / nextMinutes)) * nextMinutes);
+    set(Math.max(1, Math.round(minutes / unitLength(next))) * unitLength(next));
   };
 
   /*
@@ -187,6 +208,8 @@ export function DeadlineField({
       there the hour step takes over.
     */
     const snapped = Math.round(minutes / step) * step;
+    // The half-typed number is not the value any more, so it stops being shown.
+    setDraft(null);
     set(snapped + direction * step);
   };
 
@@ -208,7 +231,10 @@ export function DeadlineField({
               key={preset.minutes}
               type="button"
               aria-pressed={active}
-              onClick={() => set(preset.minutes)}
+              onClick={() => {
+                setDraft(null);
+                set(preset.minutes);
+              }}
               className={cn(
                 'arcade-focus rounded-[14px] border-[3px] px-3 py-3 font-display text-[15px] font-bold transition-colors',
                 active
@@ -222,6 +248,15 @@ export function DeadlineField({
         })}
       </div>
 
+      {/*
+        The number, big, with the stepper either side of it.
+
+        This row used to hold the minus, the box and three unit pills as well —
+        five controls inside 56 pixels, with the units at ten-point type and a
+        target under half the size everything else in this product uses. They
+        now have a row each, and the number gets the room it deserves for being
+        the thing the field is actually asking for.
+      */}
       <div className="flex items-center gap-2">
         <NudgeButton
           label={`${formatLength(step)} shorter`}
@@ -231,65 +266,28 @@ export function DeadlineField({
           −
         </NudgeButton>
 
-        {/*
-          The number is typed, not only stepped to.
-
-          The presets and the stepper between them can reach any value, but only
-          by pressing at something — a host who already knows they want forty
-          minutes should be able to say so. The box is the primary control now;
-          the presets are the shortcuts.
-        */}
         <div
           className={cn(
-            'flex h-14 flex-1 items-center gap-1.5 rounded-2xl border-[3px] bg-panel px-2',
+            'flex h-16 flex-1 items-center justify-center rounded-2xl border-[3px] bg-panel',
             invalid ? 'border-punch' : 'border-edge',
           )}
-          style={{ boxShadow: '0 4px 0 var(--color-edge)' }}
+          style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
         >
           <input
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={1}
+            autoComplete="off"
             aria-label="Room length"
             value={amount}
-            onFocus={(event) => {
-              editing.current = true;
-              event.currentTarget.select();
-            }}
+            onFocus={(event) => event.currentTarget.select()}
             onChange={(event) => commitAmount(event.target.value)}
-            onBlur={() => {
-              editing.current = false;
-              // Back to showing the value, which may have been clamped.
-              setDraft(null);
-            }}
-            /* The spinners are the browser's own grey arrows and would be the
-               one un-arcade thing in the row; the stepper beside it is what
-               they would have done anyway. */
-            className="arcade-focus h-10 w-full min-w-0 appearance-none rounded-xl border-0 bg-transparent text-center font-display text-2xl font-bold tabular-nums text-cream outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            // Back to showing the value, which may have been clamped.
+            onBlur={() => setDraft(null)}
+            className="arcade-focus h-12 w-20 rounded-xl border-0 bg-transparent text-right font-display text-3xl font-bold tabular-nums text-cream outline-none"
           />
-
-          <div className="flex shrink-0 gap-1" role="group" aria-label="Unit">
-            {UNITS.map((option) => {
-              const active = option.id === unit;
-
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => switchUnit(option.id)}
-                  className={cn(
-                    'arcade-focus rounded-lg border-2 px-1.5 py-1 font-display text-[10px] font-bold leading-none transition-colors',
-                    active
-                      ? 'border-edge bg-sun text-edge'
-                      : 'border-white/16 bg-white/6 text-bone-faint hover:bg-white/12',
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <span className="ml-2 w-14 font-display text-sm font-bold uppercase tracking-[1px] text-bone-faint">
+            {UNITS.find((option) => option.id === unit)?.label}
+          </span>
         </div>
 
         <NudgeButton
@@ -299,6 +297,31 @@ export function DeadlineField({
         >
           +
         </NudgeButton>
+      </div>
+
+      {/* Which unit the number counts in. Three equal segments across the full
+          width, at the same weight as every other picker in the product. */}
+      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Count the length in">
+        {UNITS.map((option) => {
+          const active = option.id === unit;
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => switchUnit(option.id)}
+              className={cn(
+                'arcade-focus h-11 rounded-[14px] border-[3px] font-display text-[13px] font-bold uppercase tracking-[1px] transition-colors',
+                active
+                  ? 'border-sun bg-sun/20 text-cream'
+                  : 'border-white/16 bg-white/6 text-bone hover:bg-white/12',
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </div>
 
       {/*
