@@ -416,6 +416,17 @@
     so it is a double ring — cream inside, ink outside — rather than a single
     colour that would vanish on one or the other.
   */
+  /* A scroller with no visible bar: for the picker wheels, where the bar would
+     sit through the numbers and the position is already shown by the lit band. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .arcade-focus:focus-visible {
     outline: none;
     box-shadow:

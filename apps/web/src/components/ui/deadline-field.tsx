@@ -1,29 +1,21 @@
 'use client';
 
 import { CHALLENGE_MIN_MINUTES } from '@bb/shared';
-import { useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { toLocalInputValue } from '@/components/ui/date-time-field';
 import { cn } from '@/lib/utils';
 
 /**
- * How long the room runs for.
+ * How long the room runs for, set the way an alarm is set.
  *
- * This replaced a full date-and-time picker, which was the wrong instrument for
- * the question. A room deadline is a length, not a date — and the picker it
- * inherited opened a month grid with arrows for paging through months and years.
- * Nobody has ever scheduled a room for March. Reaching "in two hours" meant
- * opening a calendar, confirming today is still today, and then nudging a clock.
- *
- * So the control asks the question the host is actually answering: how long do
- * players get? The presets cover almost every round in one press, and the
- * stepper beside them handles the rest without a popover, a grid, or a concept
- * of months existing at all.
- *
- * The range runs from five minutes to a week, because the server's range does.
- * It caps nothing above the floor: a room that runs over a weekend is a normal
- * thing to want, and the deadline is a schedule rather than an estimate of how
- * long the modelling takes.
+ * Three wheels — days, hours, minutes — with the selected row held in a lit band
+ * across the middle. It replaced a row of preset chips, a stepper and a unit
+ * toggle, which between them could reach any length but only by pressing at one
+ * repeatedly, and which had to keep explaining to the reader which unit the
+ * number in the box was counting in. Wheels do not have that problem: every
+ * column is labelled, all three are visible at once, and the length is read off
+ * them the way it is read off a clock.
  *
  * The value stays `YYYY-MM-DDTHH:mm` local wall clock, unchanged, so the form
  * around it and the server contract both stay exactly as they were.
@@ -31,78 +23,6 @@ import { cn } from '@/lib/utils';
 
 const HOUR = 60;
 const DAY = 24 * HOUR;
-
-/**
- * The lengths a round actually gets set to, in minutes.
- *
- * The first four are the speed rounds this control was built for. The last two
- * exist because the stepper alone cannot reasonably reach them: at five-minute
- * nudges a day is nearly three hundred presses, so without a preset the whole
- * upper half of the server's range was theoretical.
- */
-const PRESETS = [
-  { minutes: 15, label: '15 min' },
-  { minutes: 30, label: '30 min' },
-  { minutes: HOUR, label: '1 hour' },
-  { minutes: 2 * HOUR, label: '2 hours' },
-  { minutes: DAY, label: '1 day' },
-  { minutes: 7 * DAY, label: '1 week' },
-];
-
-/** Half an hour, which is a typical round and what the form already opened on. */
-const DEFAULT_MINUTES = 30;
-
-/*
-  The step grows with the length.
-
-  Five minutes matched the picker this replaced and is right for a speed round,
-  but it is the wrong unit once a room runs for days — nudging a three-day
-  deadline by five minutes is not an adjustment anyone means to make, and
-  crossing that range at that size takes hundreds of presses. Each band is about
-  as fine as the number it is adjusting deserves.
-*/
-const BASE_STEP_MINUTES = 5;
-
-/**
- * The units the number in the box can be counted in.
- *
- * Three, because they are the three the readout already speaks in. A host
- * thinking "forty minutes" and a host thinking "three days" are answering the
- * same question and should not have to convert it into someone else's unit to
- * type it.
- */
-const UNITS = [
-  { id: 'min', label: 'MIN', minutes: 1 },
-  { id: 'hour', label: 'HRS', minutes: HOUR },
-  { id: 'day', label: 'DAYS', minutes: DAY },
-] as const;
-
-type UnitId = (typeof UNITS)[number]['id'];
-
-function unitLength(unit: UnitId): number {
-  return UNITS.find((option) => option.id === unit)?.minutes ?? 1;
-}
-
-/**
- * The largest unit that counts this length exactly.
- *
- * "Most natural" was the wrong test and produced a box that lied: ninety
- * minutes is more than an hour, so it was shown in hours, and rounding put a
- * "2" in a field describing a ninety-minute room. A unit only earns the display
- * if the length divides into it with nothing left over.
- */
-function exactUnit(minutes: number): UnitId {
-  if (minutes % DAY === 0) return 'day';
-  if (minutes % HOUR === 0) return 'hour';
-  return 'min';
-}
-
-function stepFor(minutes: number): number {
-  if (minutes < 2 * HOUR) return BASE_STEP_MINUTES;
-  if (minutes < 8 * HOUR) return 15;
-  if (minutes < DAY) return HOUR;
-  return 6 * HOUR;
-}
 
 /*
   The server's own floor, not a second copy of it.
@@ -114,6 +34,28 @@ const FLOOR_MINUTES = CHALLENGE_MIN_MINUTES;
 
 /** A week out. Past this it is not a room, it is a challenge. */
 const CEILING_MINUTES = 7 * DAY;
+
+/** Half an hour, which is a typical round and what the form already opened on. */
+const DEFAULT_MINUTES = 30;
+
+/*
+  One row, and the five that are visible at a time.
+
+  Five is two either side of the selection, which is enough to show that the
+  column keeps going without turning the field into a list.
+*/
+const ROW = 44;
+const VISIBLE = 5;
+const PAD = ((VISIBLE - 1) / 2) * ROW;
+
+const range = (count: number) => Array.from({ length: count }, (_, index) => index);
+
+const DAYS = range(8);
+const HOURS = range(24);
+/* Every minute, not every fifth. A room set to 47 minutes has to be able to say
+   so — rounding the column to fives would make the wheel disagree with the
+   value the moment anything else set one. */
+const MINUTES = range(60);
 
 export function DeadlineField({
   value,
@@ -132,196 +74,76 @@ export function DeadlineField({
 }) {
   const minutes = useMemo(() => minutesFromNow(value, now), [value, now]);
 
-  /*
-    The unit the host last asked for, and what is currently typed in the box.
+  const days = Math.floor(minutes / DAY);
+  const hours = Math.floor((minutes % DAY) / HOUR);
+  const mins = minutes % HOUR;
 
-    `draft` is null whenever the box is showing the value rather than an edit in
-    progress. It has to exist: deriving the number straight from `minutes` means
-    clearing the box to type "45" reads as 0, gets clamped to the floor, and the
-    field fights the person using it after every keystroke.
-  */
-  // Opened in whatever unit counts the length it was given: a two-day room
-  // presents itself as 2 DAYS, not 2880 MIN.
-  const [preferredUnit, setPreferredUnit] = useState<UnitId>(() =>
-    exactUnit(minutesFromNow(value, now)),
-  );
-  const [draft, setDraft] = useState<string | null>(null);
-
-  /*
-    A preference, honoured only while it stays true.
-
-    Nudging or a preset can land on a length the chosen unit cannot count — an
-    hours box has nothing honest to show for 105 minutes. Rather than round and
-    misreport it, the display falls back to the unit that does count it exactly,
-    and the preference returns as soon as it fits again.
-  */
-  const unit = minutes % unitLength(preferredUnit) === 0 ? preferredUnit : exactUnit(minutes);
-  const unitMinutes = unitLength(unit);
-
-  const set = (nextMinutes: number) => {
-    const clamped = Math.min(CEILING_MINUTES, Math.max(FLOOR_MINUTES, nextMinutes));
-    onChange(toLocalInputValue(new Date(now + clamped * 60_000)));
-  };
-
-  // The edit in progress if there is one, otherwise the value — which the line
-  // above guarantees is a whole number of the unit on show.
-  const amount = draft ?? String(Math.max(1, Math.round(minutes / unitMinutes)));
-
-  const commitAmount = (raw: string) => {
-    // Digits only. A text box rather than `type="number"`, whose scroll wheel
-    // silently rewrites the value when the page moves under the pointer.
-    const digits = raw.replace(/[^0-9]/g, '').slice(0, 4);
-    setDraft(digits);
-
-    const parsed = Number(digits);
-    // An empty or half-typed box is left alone rather than snapped to the floor.
-    if (digits === '' || !Number.isFinite(parsed) || parsed <= 0) return;
-
-    set(parsed * unitMinutes);
-  };
-
-  /* Switching unit converts the length rather than reinterpreting the digits.
-     A box reading "2" while the room runs an hour and a half is simply lying,
-     so the length is rounded to a whole number of the new unit and emitted. */
-  const switchUnit = (next: UnitId) => {
-    setPreferredUnit(next);
-    setDraft(null);
-    set(Math.max(1, Math.round(minutes / unitLength(next))) * unitLength(next));
-  };
-
-  /*
-    Rounded to the step before nudging, not after.
-
-    Without this, a deadline that is currently 47 minutes out steps to 52, then
-    57 — the value drifts off the grid and never returns to it. Snapping first
-    means the first press lands on 45 or 50 and every press after is a round
-    number.
-  */
-  const step = stepFor(minutes);
-
-  const nudge = (direction: 1 | -1) => {
-    /*
-      Snapped to the step in force at the length being left, then moved.
-
-      Stepping down out of a band lands on a value the smaller step owns, which
-      is what should happen: a day minus one press is eighteen hours, and from
-      there the hour step takes over.
-    */
-    const snapped = Math.round(minutes / step) * step;
-    // The half-typed number is not the value any more, so it stops being shown.
-    setDraft(null);
-    set(snapped + direction * step);
+  const set = (nextDays: number, nextHours: number, nextMinutes: number) => {
+    const total = nextDays * DAY + nextHours * HOUR + nextMinutes;
+    const clamped = Math.min(CEILING_MINUTES, Math.max(FLOOR_MINUTES, total));
+    onChange(toLocalInputValue(new Date(startOfMinute(now) + clamped * 60_000)));
   };
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {PRESETS.map((preset) => {
-          /*
-            Close enough counts as "this one", so a preset stays lit while the
-            clock ticks down underneath it. The tolerance is proportional
-            because the labels are: a week is still "1 week" an hour later, but
-            fifteen minutes stops being "15 min" almost immediately.
-          */
-          const tolerance = Math.max(BASE_STEP_MINUTES / 2, preset.minutes * 0.01);
-          const active = Math.abs(minutes - preset.minutes) < tolerance;
+      <div
+        className={cn(
+          'relative overflow-hidden rounded-[20px] border-[3px] bg-panel',
+          invalid ? 'border-punch' : 'border-edge',
+        )}
+        style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
+      >
+        {/*
+          The headings sit above the wheels rather than inside them.
 
-          return (
-            <button
-              key={preset.minutes}
-              type="button"
-              aria-pressed={active}
-              onClick={() => {
-                setDraft(null);
-                set(preset.minutes);
-              }}
-              className={cn(
-                'arcade-focus rounded-[14px] border-[3px] px-3 py-3 font-display text-[15px] font-bold transition-colors',
-                active
-                  ? 'border-sun bg-sun/20 text-cream'
-                  : 'border-white/16 bg-white/6 text-bone hover:bg-white/12',
-              )}
+          The lit band is positioned from the top of the row it belongs to, and
+          while each column carried its own heading that row started lower than
+          the band was measured against — the band floated between two numbers
+          instead of holding one.
+        */}
+        <div aria-hidden="true" className="flex px-2 pb-1 pt-3">
+          {['Days', 'Hours', 'Minutes'].map((heading) => (
+            <p
+              key={heading}
+              className="flex-1 text-center text-[10px] font-black uppercase tracking-[1.5px] text-bone-faint"
             >
-              {preset.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/*
-        The number, big, with the stepper either side of it.
-
-        This row used to hold the minus, the box and three unit pills as well —
-        five controls inside 56 pixels, with the units at ten-point type and a
-        target under half the size everything else in this product uses. They
-        now have a row each, and the number gets the room it deserves for being
-        the thing the field is actually asking for.
-      */}
-      <div className="flex items-center gap-2">
-        <NudgeButton
-          label={`${formatLength(step)} shorter`}
-          disabled={minutes <= FLOOR_MINUTES}
-          onClick={() => nudge(-1)}
-        >
-          −
-        </NudgeButton>
-
-        <div
-          className={cn(
-            'flex h-16 flex-1 items-center justify-center rounded-2xl border-[3px] bg-panel',
-            invalid ? 'border-punch' : 'border-edge',
-          )}
-          style={{ boxShadow: '0 5px 0 var(--color-ink)' }}
-        >
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            aria-label="Room length"
-            value={amount}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => commitAmount(event.target.value)}
-            // Back to showing the value, which may have been clamped.
-            onBlur={() => setDraft(null)}
-            className="arcade-focus h-12 w-20 rounded-xl border-0 bg-transparent text-right font-display text-3xl font-bold tabular-nums text-cream outline-none"
-          />
-          <span className="ml-2 w-14 font-display text-sm font-bold uppercase tracking-[1px] text-bone-faint">
-            {UNITS.find((option) => option.id === unit)?.label}
-          </span>
+              {heading}
+            </p>
+          ))}
         </div>
 
-        <NudgeButton
-          label={`${formatLength(step)} longer`}
-          disabled={minutes >= CEILING_MINUTES}
-          onClick={() => nudge(1)}
-        >
-          +
-        </NudgeButton>
-      </div>
+        <div className="relative flex">
+          {/*
+            The lit band the selection sits in, drawn once across all three
+            columns rather than per wheel, so the three numbers read as one
+            length. It is behind the wheels and takes no pointer events, so a
+            press lands on the row underneath it.
+          */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-2 z-0 rounded-[14px] border-[3px] border-sun bg-sun/16"
+            style={{ top: PAD, height: ROW }}
+          />
 
-      {/* Which unit the number counts in. Three equal segments across the full
-          width, at the same weight as every other picker in the product. */}
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Count the length in">
-        {UNITS.map((option) => {
-          const active = option.id === unit;
+          <Wheel label="Days" values={DAYS} value={days} onSelect={(d) => set(d, hours, mins)} />
+          <Wheel label="Hours" values={HOURS} value={hours} onSelect={(h) => set(days, h, mins)} />
+          <Wheel label="Minutes" values={MINUTES} value={mins} onSelect={(m) => set(days, hours, m)} />
+        </div>
 
-          return (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => switchUnit(option.id)}
-              className={cn(
-                'arcade-focus h-11 rounded-[14px] border-[3px] font-display text-[13px] font-bold uppercase tracking-[1px] transition-colors',
-                active
-                  ? 'border-sun bg-sun/20 text-cream'
-                  : 'border-white/16 bg-white/6 text-bone hover:bg-white/12',
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
+        {/*
+          The columns fade out at top and bottom so the numbers leaving the
+          window read as continuing rather than being cut off.
+        */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-11"
+          style={{ background: 'linear-gradient(var(--color-panel), transparent)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-11"
+          style={{ background: 'linear-gradient(transparent, var(--color-panel))' }}
+        />
       </div>
 
       {/*
@@ -329,10 +151,7 @@ export function DeadlineField({
         clock is what players see, and someone setting a four-hour round
         deserves to notice it finishes after midnight before they create it.
       */}
-      <output
-        aria-live="polite"
-        className="text-center text-[12px] font-extrabold text-bone-faint"
-      >
+      <output aria-live="polite" className="text-center text-[12px] font-extrabold text-bone-faint">
         {formatLength(minutes)} · ends{' '}
         {formatClock(new Date(startOfMinute(now) + minutes * 60_000), now)}
       </output>
@@ -340,27 +159,154 @@ export function DeadlineField({
   );
 }
 
-function NudgeButton({
+/**
+ * One column of the picker.
+ *
+ * A listbox rather than a bare scroller. The wheel is driven by scrolling, which
+ * a mouse and a finger both do naturally and neither a keyboard nor a screen
+ * reader can do at all — so the same column also answers arrow keys, Home and
+ * End, and every row is a target you can simply press.
+ */
+function Wheel({
   label,
-  disabled,
-  onClick,
-  children,
+  values,
+  value,
+  onSelect,
 }: {
   label: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  values: number[];
+  value: number;
+  onSelect: (value: number) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const index = Math.max(0, values.indexOf(value));
+
+  /*
+    Follow the value when something else moves it, including the clamp.
+
+    A layout effect, and asserted again on the next frame. Setting `scrollTop`
+    before the rows have been laid out clamps it to whatever the column's height
+    is at that moment — on the first paint that put every wheel near the top,
+    so a room of an hour and a half opened showing zero and three.
+  */
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const top = index * ROW;
+
+    const place = () => {
+      if (Math.abs(element.scrollTop - top) < 2) return;
+      // Assigned rather than `scrollTo({ behavior: 'auto' })`, which is the same
+      // jump and is not implemented everywhere this component is rendered.
+      element.scrollTop = top;
+    };
+
+    place();
+
+    /*
+      No guard against this scroll being read back as a choice.
+
+      There was one — a flag cleared a frame later — and it was the reason the
+      wheel stopped responding: the effect's own cleanup could cancel the frame
+      that cleared it, leaving it set for good and every real scroll ignored.
+      It was never needed. A scroll this causes lands on the value that is
+      already set, and the handler below only reports a change.
+    */
+    const frame = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(frame);
+  }, [index]);
+
+  // Nothing left pending when the wheel goes away.
+  useEffect(
+    () => () => {
+      if (settle.current) clearTimeout(settle.current);
+    },
+    [],
+  );
+
+  const onScroll = () => {
+    const element = ref.current;
+    if (!element) return;
+
+    if (settle.current) clearTimeout(settle.current);
+    /*
+      Read once the wheel has come to rest.
+
+      A scroll fires continuously, and committing on every frame would emit a
+      value for each number the column passed through — filling the form's
+      history and, on a long flick, rewriting the deadline dozens of times.
+    */
+    settle.current = setTimeout(() => {
+      const landed = Math.round(element.scrollTop / ROW);
+      const next = values[Math.min(values.length - 1, Math.max(0, landed))];
+      if (next !== undefined && next !== value) onSelect(next);
+    }, 110);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const move = (to: number) => {
+      event.preventDefault();
+      const next = values[Math.min(values.length - 1, Math.max(0, to))];
+      if (next !== undefined) onSelect(next);
+    };
+
+    if (event.key === 'ArrowDown') move(index + 1);
+    else if (event.key === 'ArrowUp') move(index - 1);
+    else if (event.key === 'Home') move(0);
+    else if (event.key === 'End') move(values.length - 1);
+  };
+
   return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="arcade-focus flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-[3px] border-white/16 bg-white/6 font-display text-2xl font-bold text-bone transition-colors hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {children}
-    </button>
+    <div className="relative z-10 min-w-0 flex-1">
+      <div
+        ref={ref}
+        role="listbox"
+        aria-label={label}
+        tabIndex={0}
+        onScroll={onScroll}
+        onKeyDown={onKeyDown}
+        className="arcade-focus no-scrollbar overflow-y-auto rounded-[14px] outline-none"
+        style={{
+          height: VISIBLE * ROW,
+          paddingTop: PAD,
+          paddingBottom: PAD,
+          scrollSnapType: 'y mandatory',
+          /*
+            Instant, against the app-wide rule.
+
+            The stylesheet gives every `.overflow-y-auto` smooth scrolling, which
+            is right for a nav strip and wrong for a picker: it turned each
+            placement into a half-second animation, so the wheel opened part-way
+            to its value and the handler below read a position the wheel was
+            still travelling through. Inline, so it beats the class rule.
+          */
+          scrollBehavior: 'auto',
+        }}
+      >
+        {values.map((option) => {
+          const selected = option === value;
+
+          return (
+            <div
+              key={option}
+              role="option"
+              aria-selected={selected}
+              onClick={() => onSelect(option)}
+              className={cn(
+                'flex cursor-pointer items-center justify-center font-display tabular-nums transition-colors',
+                selected ? 'text-2xl font-bold text-cream' : 'text-xl font-bold text-bone-faint',
+              )}
+              style={{ height: ROW, scrollSnapAlign: 'center' }}
+            >
+              {option}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -369,8 +315,8 @@ function NudgeButton({
  *
  * A `YYYY-MM-DDTHH:mm` string with no zone is parsed as local wall clock, which
  * is what the rest of the form assumes too. An unparseable value falls back to
- * the default preset rather than `NaN`, so a cleared field shows a sensible
- * length instead of "NaN min".
+ * the default rather than `NaN`, so a cleared field shows a sensible length
+ * instead of every wheel reading zero.
  */
 function minutesFromNow(value: string, now: number): number {
   const at = new Date(value).getTime();
@@ -380,8 +326,8 @@ function minutesFromNow(value: string, now: number): number {
     Measured from the top of the current minute, not from `now` itself.
 
     The value is a `YYYY-MM-DDTHH:mm` string, so writing it throws the seconds
-    away. Pressing "30 min" at 12:00:31 stored 12:30, which is 29 and a half
-    minutes from the instant the button was pressed — and read back as 29. The
+    away. Setting thirty minutes at 12:00:31 stored 12:30, which is twenty-nine
+    and a half minutes from the instant it was set — and read back as 29. The
     control said one thing and reported another the moment it was touched. It
     also means the countdown falls in whole minutes rather than flickering
     between two of them.
@@ -405,21 +351,11 @@ function formatLength(minutes: number): string {
     return `${hours}h ${rest}m`;
   }
 
-  /*
-    Days carry their remaining hours.
+  const days = Math.floor(minutes / DAY);
+  const hours = Math.round((minutes % DAY) / HOUR);
 
-    Rounding to whole days reported a day and a half as "2 days" and showed no
-    change at all while the stepper moved through it — the readout has to name
-    the value that was actually picked.
-  */
-  let days = Math.floor(minutes / DAY);
-  let hours = Math.round((minutes % DAY) / HOUR);
   // A remainder within half an hour of a full day rounds up into one.
-  if (hours === 24) {
-    days += 1;
-    hours = 0;
-  }
-
+  if (hours === 24) return `${days + 1} days`;
   if (hours === 0) return days === 1 ? '1 day' : `${days} days`;
   return `${days}d ${hours}h`;
 }
