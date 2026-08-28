@@ -464,14 +464,35 @@ function drawGround(ctx: CanvasRenderingContext2D, W: number, H: number, pad: nu
     }
   }
 
-  const floats: [number, number, number, string, number][] = [
-    [pad * 0.55, H * 0.3, 52, SUN, 14],
-    [W - pad * 0.5, H * 0.26, 34, AQUA, 0],
-    [pad * 0.7, H * 0.72, 40, MINT, -12],
-    [W - pad * 0.62, H * 0.7, 28, PUNCH, 0],
+  /*
+    The brand shapes drifting past, with a trail behind each.
+
+    They were four flat stickers pinned to the corners, which read as decoration
+    on the surface of the poster. Each now carries a smear along the direction it
+    is travelling — copies falling away in opacity and gaining blur — and sits at
+    a depth: the near ones are large and sharp against a short trail, the far
+    ones small, soft and streaked further. Between the two the field reads as
+    something the poster is moving through rather than a pattern printed on it.
+  */
+  const particles: {
+    x: number;
+    y: number;
+    size: number;
+    colour: string;
+    rot: number;
+    drift: [number, number];
+    depth: number;
+  }[] = [
+    { x: pad * 0.55, y: H * 0.3, size: 58, colour: SUN, rot: 14, drift: [-26, 34], depth: 1 },
+    { x: W - pad * 0.5, y: H * 0.26, size: 30, colour: AQUA, rot: 0, drift: [22, -30], depth: 0.35 },
+    { x: pad * 0.72, y: H * 0.72, size: 34, colour: MINT, rot: -12, drift: [-18, 26], depth: 0.45 },
+    { x: W - pad * 0.62, y: H * 0.7, size: 26, colour: PUNCH, rot: 0, drift: [20, 24], depth: 0.3 },
+    // Two more, far back, so the depth reads as a field rather than a pair.
+    { x: W * 0.22, y: H * 0.14, size: 20, colour: PUNCH, rot: 0, drift: [14, -22], depth: 0.16 },
+    { x: W * 0.82, y: H * 0.88, size: 24, colour: SUN, rot: -8, drift: [16, 20], depth: 0.2 },
   ];
 
-  for (const [x, y, size, colour, rot] of floats) {
+  const shape = (x: number, y: number, size: number, colour: string, rot: number) => {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate((rot * Math.PI) / 180);
@@ -483,7 +504,46 @@ function drawGround(ctx: CanvasRenderingContext2D, W: number, H: number, pad: nu
       size,
       colour === AQUA || colour === PUNCH ? size / 2 : size * 0.3,
       colour,
-      { shadow: 7, border: 5 },
+      // The trail carries no outline: an ink border smeared six times reads as
+      // a stack of stickers rather than one shape in motion.
+      { shadow: 0, border: 0 },
+    );
+    ctx.restore();
+  };
+
+  const TRAIL = 6;
+
+  for (const p of particles) {
+    const [dx, dy] = p.drift;
+    // Far things are smaller and their smear is longer, which is what selling
+    // the distance actually depends on.
+    const size = p.size * (0.6 + 0.4 * p.depth);
+    const reach = 1.9 - p.depth;
+
+    ctx.save();
+    for (let step = TRAIL; step >= 1; step -= 1) {
+      const t = step / TRAIL;
+      ctx.globalAlpha = 0.22 * (1 - t) + 0.03;
+      ctx.filter = `blur(${3 + t * 13}px)`;
+      shape(p.x - dx * t * reach, p.y - dy * t * reach, size * (1 - t * 0.12), p.colour, p.rot);
+    }
+    ctx.restore();
+
+    // The head, sharp only when it is near enough to be.
+    ctx.save();
+    ctx.filter = p.depth > 0.7 ? 'none' : `blur(${(1 - p.depth) * 2.4}px)`;
+    ctx.globalAlpha = 0.35 + 0.65 * p.depth;
+    ctx.translate(p.x, p.y);
+    ctx.rotate((p.rot * Math.PI) / 180);
+    slab(
+      ctx,
+      -size / 2,
+      -size / 2,
+      size,
+      size,
+      p.colour === AQUA || p.colour === PUNCH ? size / 2 : size * 0.3,
+      p.colour,
+      { shadow: p.depth > 0.7 ? 7 : 0, border: p.depth > 0.7 ? 5 : 0 },
     );
     ctx.restore();
   }
@@ -753,19 +813,30 @@ export function drawPost(
 
   ctx.clearRect(0, 0, W, H);
   drawGround(ctx, W, H, pad);
-  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
 
   if (content.kind === 'winner') {
+    marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
     if (slide === 0) drawWinnerTease(ctx, format, content, fonts, pad);
     else drawWinnerReveal(ctx, format, content, fonts, pad);
-  } else {
-    drawChallengeSlide(ctx, format, content, fonts, pad);
+    drawFoot(ctx, W, H, pad, content.url, fonts);
+    return;
   }
 
-  drawFoot(ctx, W, H, pad, content.url, fonts);
+  // The announcement carries its brand at the head instead, which is what makes
+  // room for the reference to be the size of the poster.
+  drawChallengeSlide(ctx, format, content, fonts, pad);
 }
 
-/** The announcement: the brief's reference, its title and its one line. */
+/**
+ * The announcement: the brand at the top, the reference below it, the title
+ * under that.
+ *
+ * The brand moved from the foot to the head, which is what let the reference
+ * grow. It had a marquee strip above it and a lockup beneath it, so the picture
+ * — the only thing on the poster anybody actually stops for — was squeezed
+ * between two bands of furniture and came out about half the width it could
+ * have been. One band, at the top, and the picture takes everything left.
+ */
 function drawChallengeSlide(
   ctx: CanvasRenderingContext2D,
   format: PostFormat,
@@ -776,39 +847,31 @@ function drawChallengeSlide(
   const { width: W, height: H } = format;
   const isPortrait = format.id === 'portrait';
 
-  const titleSize = isPortrait ? 96 : 72;
+  const brandBottom = drawBrand(ctx, W, pad, content.url, fonts);
+
+  const titleSize = isPortrait ? 96 : 78;
+  ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
-  ctx.font = `700 ${titleSize}px ${fonts.display}`;
   const titleLines = wrapText(
     (content.title || 'Untitled challenge').toUpperCase(),
-    W * (isPortrait ? 0.9 : 0.82),
+    W * (isPortrait ? 0.9 : 0.86),
     (s) => ctx.measureText(s).width,
   ).slice(0, 2);
 
-  ctx.font = `800 31px ${fonts.body}`;
-  const blurbLines = content.blurb.trim()
-    ? wrapText(content.blurb, W * 0.9, (s) => ctx.measureText(s).width).slice(0, 2)
-    : [];
+  /*
+    The picture takes whatever the brand and the title leave.
 
-  const blurbGap = 44;
-  const blockHeight =
-    titleSize * 0.78 +
-    titleLines.length * titleSize +
-    (blurbLines.length ? blurbGap + blurbLines.length * 44 : 0);
+    Square, because every image the product accepts is 1024x1024 and any other
+    shape has to crop someone's work, and capped at the column width so it stays
+    square rather than stretching once there is more height than room.
+  */
+  const titleGap = isPortrait ? 46 : 38;
+  const titleBlock = titleGap + titleSize * 0.78 + titleLines.length * titleSize;
+  const stageTop = brandBottom + (isPortrait ? 34 : 26);
+  const frame = Math.min(W - pad * 2, H - stageTop - titleBlock - pad);
 
-  const stageTop = pad + 92;
-  const { stageHeight, blockTop } = layoutPost({
-    frameHeight: H,
-    pad,
-    stageTop,
-    idealStageHeight: isPortrait ? H * 0.48 : H * 0.5,
-    minStageHeight: H * 0.24,
-    blockHeight,
-  });
-
-  const frame = Math.min(W - pad * 2, stageHeight);
   drawSquareFrame(ctx, content.image, W / 2, stageTop, frame, 'Drop the reference here', fonts);
 
   const style = DIFFICULTY_STYLE[content.difficulty];
@@ -824,27 +887,61 @@ function drawChallengeSlide(
     32,
   );
 
-  let cursor = blockTop + titleSize * 0.78;
+  let cursor = stageTop + frame + titleGap + titleSize * 0.78;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
 
   for (const line of titleLines) {
+    // Ink behind the type, offset — the product's shadow, not a blur.
     ctx.fillStyle = INK;
     ctx.fillText(line, W / 2 + 5, cursor + 7);
     ctx.fillStyle = CREAM;
     ctx.fillText(line, W / 2, cursor);
     cursor += titleSize;
   }
+}
 
-  if (blurbLines.length) {
-    ctx.font = `800 31px ${fonts.body}`;
-    ctx.fillStyle = HAZE;
-    cursor += blurbGap;
-    for (const line of blurbLines) {
-      ctx.fillText(line, W / 2, cursor);
-      cursor += 44;
-    }
-  }
+/**
+ * The mark, the wordmark and the address, across the head of the poster.
+ *
+ * Returns the y it finished at, so whatever comes next can start from where the
+ * brand actually ended rather than from a number that has to be kept in step
+ * with it by hand.
+ */
+function drawBrand(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  pad: number,
+  url: string,
+  fonts: PostFonts,
+): number {
+  const markSize = 52;
+  const y = pad + markSize / 2;
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 38px ${fonts.display}`;
+
+  const blender = ctx.measureText('BLENDER').width;
+  const battle = ctx.measureText('BATTLE').width;
+  const startX = (W - (markSize + 20 + blender + battle)) / 2;
+
+  drawMark(ctx, startX + markSize / 2, y, markSize);
+
+  ctx.fillStyle = CREAM;
+  ctx.fillText('BLENDER', startX + markSize + 20, y);
+  ctx.fillStyle = SUN;
+  ctx.fillText('BATTLE', startX + markSize + 20 + blender, y);
+
+  ctx.font = `800 23px ${fonts.body}`;
+  ctx.fillStyle = HAZE;
+  ctx.textAlign = 'center';
+  ctx.fillText(url, W / 2, y + markSize / 2 + 20);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  return y + markSize / 2 + 32;
 }
 
 /**
