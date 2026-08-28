@@ -813,17 +813,21 @@ export function drawPost(
 
   ctx.clearRect(0, 0, W, H);
   drawGround(ctx, W, H, pad);
+  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
 
   if (content.kind === 'winner') {
-    marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
     if (slide === 0) drawWinnerTease(ctx, format, content, fonts, pad);
     else drawWinnerReveal(ctx, format, content, fonts, pad);
     drawFoot(ctx, W, H, pad, content.url, fonts);
     return;
   }
 
-  // The announcement carries its brand at the head instead, which is what makes
-  // room for the reference to be the size of the poster.
+  /*
+    The announcement keeps the marquee and carries its brand directly under it
+    rather than at the foot. Both at the head is what leaves the reference the
+    rest of the poster; the strip is what says at a glance which of the two
+    kinds of post this is, and losing it cost more than the space it takes.
+  */
   drawChallengeSlide(ctx, format, content, fonts, pad);
 }
 
@@ -847,7 +851,9 @@ function drawChallengeSlide(
   const { width: W, height: H } = format;
   const isPortrait = format.id === 'portrait';
 
-  const brandBottom = drawBrand(ctx, W, pad, content.url, fonts);
+  // Clear of the marquee, which is 62 tall on a -2.2 degree tilt with a hard
+  // shadow under it.
+  const brandBottom = drawBrand(ctx, W, pad + 74, content.url, fonts);
 
   const titleSize = isPortrait ? 96 : 78;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
@@ -895,7 +901,9 @@ function drawChallengeSlide(
     // Ink behind the type, offset — the product's shadow, not a blur.
     ctx.fillStyle = INK;
     ctx.fillText(line, W / 2 + 5, cursor + 7);
-    ctx.fillStyle = CREAM;
+    // The sun, not the cream: the title is the loudest thing on the poster and
+    // the accent the whole product is built around.
+    ctx.fillStyle = SUN;
     ctx.fillText(line, W / 2, cursor);
     cursor += titleSize;
   }
@@ -911,16 +919,16 @@ function drawChallengeSlide(
 function drawBrand(
   ctx: CanvasRenderingContext2D,
   W: number,
-  pad: number,
+  top: number,
   url: string,
   fonts: PostFonts,
 ): number {
-  const markSize = 52;
-  const y = pad + markSize / 2;
+  const markSize = 46;
+  const y = top + markSize / 2;
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = `700 38px ${fonts.display}`;
+  ctx.font = `700 34px ${fonts.display}`;
 
   const blender = ctx.measureText('BLENDER').width;
   const battle = ctx.measureText('BATTLE').width;
@@ -933,15 +941,15 @@ function drawBrand(
   ctx.fillStyle = SUN;
   ctx.fillText('BATTLE', startX + markSize + 20 + blender, y);
 
-  ctx.font = `800 23px ${fonts.body}`;
+  ctx.font = `800 22px ${fonts.body}`;
   ctx.fillStyle = HAZE;
   ctx.textAlign = 'center';
-  ctx.fillText(url, W / 2, y + markSize / 2 + 20);
+  ctx.fillText(url, W / 2, y + markSize / 2 + 19);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  return y + markSize / 2 + 32;
+  return y + markSize / 2 + 30;
 }
 
 /**
