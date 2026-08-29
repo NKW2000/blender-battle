@@ -24,13 +24,13 @@ import {
  */
 
 describe('the post formats', () => {
-  it('offers only the two shapes Instagram gives a feed post', () => {
+  it('offers the one shape Instagram actually wants', () => {
     /*
-      Square and 4:5. Anything else is cropped by Instagram, so offering it
-      would be offering a worse version of one of these two.
+      4:5 at 1080x1350 — the tallest a feed post may be, and what the grid crops
+      every other ratio down to. A second option would only be the same poster
+      with less of the screen.
     */
-    expect(Object.keys(POST_FORMATS)).toEqual(['square', 'portrait']);
-    expect(POST_FORMATS.square).toMatchObject({ width: 1080, height: 1080, ratio: '1:1' });
+    expect(Object.keys(POST_FORMATS)).toEqual(['portrait']);
     expect(POST_FORMATS.portrait).toMatchObject({ width: 1080, height: 1350, ratio: '4:5' });
   });
 
@@ -118,20 +118,20 @@ describe('the download filename', () => {
   });
 
   it('uses a colon-free ratio, because a colon is not legal in a filename', () => {
-    expect(postFileName('Anything', 'square')).not.toContain(':');
-    expect(postFileName('Anything', 'square')).toBe('blenderbattle-anything-1x1.png');
+    expect(postFileName('Anything', 'portrait')).not.toContain(':');
+    expect(postFileName('Anything', 'portrait')).toBe('blenderbattle-anything-4x5.png');
   });
 
   it('survives punctuation and non-latin titles', () => {
     // A title is free text; it must never produce a filename the OS rejects.
-    expect(postFileName('Hard-surface: bevels & panels!', 'square')).toBe(
-      'blenderbattle-hard-surface-bevels-panels-1x1.png',
+    expect(postFileName('Hard-surface: bevels & panels!', 'portrait')).toBe(
+      'blenderbattle-hard-surface-bevels-panels-4x5.png',
     );
-    expect(postFileName('日本語', 'square')).toBe('blenderbattle-challenge-1x1.png');
+    expect(postFileName('日本語', 'portrait')).toBe('blenderbattle-challenge-4x5.png');
   });
 
   it('falls back rather than producing a nameless file', () => {
-    expect(postFileName('', 'square')).toBe('blenderbattle-challenge-1x1.png');
+    expect(postFileName('', 'portrait')).toBe('blenderbattle-challenge-4x5.png');
   });
 
   it('numbers the slides of a carousel, from one', () => {
@@ -149,8 +149,8 @@ describe('the download filename', () => {
   });
 
   it('leaves a single-slide post unnumbered', () => {
-    expect(postFileName('The couch', 'square', 'challenge', 0, 1)).toBe(
-      'blenderbattle-the-couch-1x1.png',
+    expect(postFileName('The couch', 'portrait', 'challenge', 0, 1)).toBe(
+      'blenderbattle-the-couch-4x5.png',
     );
   });
 
@@ -159,11 +159,11 @@ describe('the download filename', () => {
       The announcement and the result for a challenge share a title, so without
       the kind in the name the second download lands as "(1)" beside the first.
     */
-    expect(postFileName('The couch', 'square', 'winner')).toBe(
-      'blenderbattle-winner-the-couch-1x1.png',
+    expect(postFileName('The couch', 'portrait', 'winner')).toBe(
+      'blenderbattle-winner-the-couch-4x5.png',
     );
-    expect(postFileName('The couch', 'square', 'challenge')).toBe(
-      'blenderbattle-the-couch-1x1.png',
+    expect(postFileName('The couch', 'portrait', 'challenge')).toBe(
+      'blenderbattle-the-couch-4x5.png',
     );
   });
 });

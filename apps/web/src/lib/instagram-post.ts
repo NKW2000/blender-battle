@@ -16,14 +16,15 @@ import { Difficulty } from '@bb/shared';
 /* --------------------------------------------------------------- formats */
 
 /**
- * The two shapes Instagram gives a feed post.
+ * The shape Instagram gives a feed post.
  *
- * Square is the safe default; 4:5 is the tallest a feed post may be and so
- * takes the most screen on a phone. Any other ratio is cropped on upload, so
- * offering more would be offering a worse version of one of these.
+ * One, not a choice of two. 4:5 at 1080x1350 is the tallest a feed post may be
+ * and the size Instagram's own guidance names — it takes the most screen on a
+ * phone, and the grid crops every other ratio to it anyway. A square was the
+ * safe default a decade ago; offering it now is offering a version of the same
+ * poster with less of the screen and the same work to make.
  */
 export const POST_FORMATS = {
-  square: { id: 'square', label: 'Square', ratio: '1:1', width: 1080, height: 1080 },
   portrait: { id: 'portrait', label: 'Portrait', ratio: '4:5', width: 1080, height: 1350 },
 } as const;
 
@@ -849,20 +850,19 @@ function drawChallengeSlide(
   pad: number,
 ) {
   const { width: W, height: H } = format;
-  const isPortrait = format.id === 'portrait';
 
   // Clear of the marquee, which is 62 tall on a -2.2 degree tilt with a hard
   // shadow under it.
   const brandBottom = drawBrand(ctx, W, pad + 74, content.url, fonts);
 
-  const titleSize = isPortrait ? 96 : 78;
+  const titleSize = 96;
   ctx.font = `700 ${titleSize}px ${fonts.display}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
   const titleLines = wrapText(
     (content.title || 'Untitled challenge').toUpperCase(),
-    W * (isPortrait ? 0.9 : 0.86),
+    W * 0.9,
     (s) => ctx.measureText(s).width,
   ).slice(0, 2);
 
@@ -873,9 +873,9 @@ function drawChallengeSlide(
     shape has to crop someone's work, and capped at the column width so it stays
     square rather than stretching once there is more height than room.
   */
-  const titleGap = isPortrait ? 46 : 38;
+  const titleGap = 46;
   const titleBlock = titleGap + titleSize * 0.78 + titleLines.length * titleSize;
-  const stageTop = brandBottom + (isPortrait ? 34 : 26);
+  const stageTop = brandBottom + 34;
   const frame = Math.min(W - pad * 2, H - stageTop - titleBlock - pad);
 
   drawSquareFrame(ctx, content.image, W / 2, stageTop, frame, 'Drop the reference here', fonts);
@@ -967,10 +967,9 @@ function drawWinnerTease(
   pad: number,
 ) {
   const { width: W, height: H } = format;
-  const isPortrait = format.id === 'portrait';
 
-  const leadSize = isPortrait ? 56 : 48;
-  const nameSize = isPortrait ? 108 : 92;
+  const leadSize = 56;
+  const nameSize = 108;
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
@@ -982,7 +981,7 @@ function drawWinnerTease(
     (s) => ctx.measureText(s).width,
   ).slice(0, 3);
 
-  const cueHeight = isPortrait ? 150 : 132;
+  const cueHeight = 150;
   const textHeight =
     leadSize + leadSize * 0.5 + nameLines.length * nameSize * 0.92 + leadSize * 1.5 + cueHeight;
 
@@ -998,8 +997,8 @@ function drawWinnerTease(
     winning render on the slide after it. Capped, floored, and dropped entirely
     when a long title leaves no room for it — the sentence is the slide.
   */
-  const thumbGap = isPortrait ? 44 : 36;
-  const maxThumb = isPortrait ? 340 : 250;
+  const thumbGap = 44;
+  const maxThumb = 340;
   const spare = room - textHeight - thumbGap - 40;
   const thumb = content.reference && spare >= 150 ? Math.min(maxThumb, spare) : 0;
 
@@ -1032,7 +1031,7 @@ function drawWinnerTease(
   ctx.fillStyle = HAZE;
   ctx.fillText('IS…', W / 2, cursor);
 
-  drawSwipeCue(ctx, W / 2, cursor + cueHeight * 0.62, fonts, isPortrait ? 1 : 0.9);
+  drawSwipeCue(ctx, W / 2, cursor + cueHeight * 0.62, fonts, 1);
 }
 
 /** Slide two: the answer — their render, their face, their handle. */
@@ -1044,10 +1043,9 @@ function drawWinnerReveal(
   pad: number,
 ) {
   const { width: W, height: H } = format;
-  const isPortrait = format.id === 'portrait';
 
-  const nameSize = isPortrait ? 60 : 52;
-  const ctaSize = isPortrait ? 34 : 30;
+  const nameSize = 60;
+  const ctaSize = 34;
   const creditGap = 44;
   const ctaGap = 40;
 
@@ -1072,7 +1070,7 @@ function drawWinnerReveal(
     stageTop,
     // Larger than the announcement's: this slide carries no title, and the
     // render is the reason anyone swiped to it.
-    idealStageHeight: isPortrait ? H * 0.6 : H * 0.54,
+    idealStageHeight: H * 0.6,
     minStageHeight: H * 0.28,
     blockHeight,
   });

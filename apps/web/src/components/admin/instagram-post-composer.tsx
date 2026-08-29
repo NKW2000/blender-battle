@@ -80,7 +80,9 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const objectUrls = useRef<string[]>([]);
 
   const [kind, setKind] = useState<PostKind>(prefill?.kind ?? 'challenge');
-  const [format, setFormat] = useState<PostFormatId>('portrait');
+  // One shape, so there is nothing to pick. The constant stays named rather
+  // than inlined so the export and the filename keep reading in one place.
+  const format: PostFormatId = 'portrait';
   const [title, setTitle] = useState(prefill?.title ?? 'The couch');
   const [blurb, setBlurb] = useState(
     prefill?.blurb ?? 'Nobody sees the brief before the room starts.',
@@ -430,29 +432,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
                     }`}
                   >
                     {option.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="Shape">
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.values(POST_FORMATS) as (typeof POST_FORMATS)[PostFormatId][]).map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    aria-pressed={format === option.id}
-                    onClick={() => setFormat(option.id)}
-                    className={`arcade-focus rounded-[14px] border-[3px] px-3 py-3 font-display text-sm font-bold transition-colors ${
-                      format === option.id
-                        ? 'border-sun bg-sun/20 text-cream'
-                        : 'border-white/16 bg-white/6 text-bone hover:bg-white/12'
-                    }`}
-                  >
-                    {option.label}
-                    <span className="mt-0.5 block font-mono text-[11px] font-extrabold text-bone-faint">
-                      {option.ratio}
-                    </span>
                   </button>
                 ))}
               </div>
