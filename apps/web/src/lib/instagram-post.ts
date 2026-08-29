@@ -48,10 +48,8 @@ export type PostKind = keyof typeof POST_KINDS;
 /* ---------------------------------------------------------------- tokens */
 
 const INK = '#0e0b2b';
-const DEEP = '#14103a';
 const CREAM = '#fff6e9';
 const SUN = '#ffd23f';
-const FLAME_LIFT = '#ffe580';
 const AQUA = '#4ad4ff';
 const MINT = '#5ef2a8';
 const PUNCH = '#ff3d9a';
@@ -143,68 +141,6 @@ export function normalizeInstagramHandle(input: string): string {
     .replace(/[^A-Za-z0-9._]/g, '')
     .toLowerCase()
     .slice(0, 30);
-}
-
-/**
- * Places the frame and the type block down the poster.
- *
- * Pulled out of the drawing and given tests because it has been wrong twice in
- * the same way: the frame took a fixed share of the height, the type took what
- * was left, and when the type did not fit, the last line was printed through
- * the brand lockup at the foot. The invariant this exists to hold is that the
- * block never extends past `footTop`, whatever it contains.
- *
- * The frame is sized around the type rather than the other way round — an image
- * shrinking by thirty pixels is invisible, a headline colliding with the logo is
- * the only thing anyone will see.
- */
-export function layoutPost({
-  frameHeight,
-  pad,
-  stageTop,
-  idealStageHeight,
-  minStageHeight,
-  blockHeight,
-  minGap = 40,
-}: {
-  frameHeight: number;
-  pad: number;
-  stageTop: number;
-  idealStageHeight: number;
-  minStageHeight: number;
-  blockHeight: number;
-  minGap?: number;
-}) {
-  // Where the brand lockup begins, with a little air above it.
-  const footTop = frameHeight - pad - 58;
-
-  // The frame's hard shadow sits 14px below it and counts as part of its height.
-  const shadow = 14;
-
-  const stageHeight = Math.max(
-    minStageHeight,
-    Math.min(idealStageHeight, footTop - stageTop - shadow - blockHeight - minGap),
-  );
-
-  const subjectBottom = stageTop + stageHeight + shadow;
-
-  /*
-    Centred in the room the frame leaves, but never past the footer: the gap
-    wants to be at least `minGap` and takes less only when honouring it would
-    push the last line into the lockup.
-
-    The final clamp covers the case the drawing cannot currently reach but the
-    arithmetic can — a block taller than the room left once the frame is already
-    at its floor. Overlapping the bottom of the reference by a few pixels is a
-    blemish; printing the headline through the logo is a ruined post, so the
-    footer wins. It is floored at `stageTop` so the block can never climb above
-    the frame entirely.
-  */
-  const slack = footTop - subjectBottom - blockHeight;
-  const preferred = subjectBottom + Math.min(Math.max(minGap, slack / 2), Math.max(0, slack));
-  const blockTop = Math.max(stageTop, Math.min(preferred, footTop - blockHeight));
-
-  return { footTop, stageHeight, subjectBottom, blockTop };
 }
 
 /** Breaks a line to fit a width, using a caller-supplied measurer. */
@@ -369,440 +305,6 @@ function slab(
   }
 }
 
-/** The mark: a rounded square turned 45 degrees with a square punched out. */
-function drawMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(Math.PI / 4);
-
-  const half = size / 2;
-  ctx.fillStyle = INK;
-  roundedRect(ctx, -half, -half + size * 0.09, size, size, size * 0.24);
-  ctx.fill();
-
-  ctx.fillStyle = SUN;
-  roundedRect(ctx, -half, -half, size, size, size * 0.24);
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = size * 0.1;
-  roundedRect(ctx, -half, -half, size, size, size * 0.24);
-  ctx.stroke();
-
-  const inner = size * 0.32;
-  ctx.fillStyle = INK;
-  roundedRect(ctx, -inner / 2, -inner / 2, inner, inner, inner * 0.16);
-  ctx.fill();
-  ctx.restore();
-}
-
-/** A chunky tilted pill, the shape the product puts a difficulty in. */
-function tiltedBadge(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  cy: number,
-  angleDeg: number,
-  fonts: PostFonts,
-  fill: string,
-  ink: string,
-  fontSize: number,
-) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate((angleDeg * Math.PI) / 180);
-
-  ctx.font = `700 ${fontSize}px ${fonts.display}`;
-  const w = ctx.measureText(text).width + fontSize * 1.9;
-  const h = fontSize * 2.1;
-
-  slab(ctx, -w / 2, -h / 2, w, h, h / 2, fill, { shadow: 10, border: 6 });
-
-  ctx.fillStyle = ink;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 0, 1);
-  ctx.restore();
-}
-
-/** The attract-mode strip that runs across the top of the poster. */
-function marquee(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  y: number,
-  W: number,
-  fonts: PostFonts,
-) {
-  const h = 62;
-  ctx.save();
-  ctx.translate(W / 2, y);
-  ctx.rotate((-2.2 * Math.PI) / 180);
-
-  ctx.fillStyle = INK;
-  ctx.fillRect(-W * 0.62, -h / 2 + 8, W * 1.24, h);
-  ctx.fillStyle = SUN;
-  ctx.fillRect(-W * 0.62, -h / 2, W * 1.24, h);
-
-  ctx.fillStyle = INK;
-  ctx.font = `700 26px ${fonts.display}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.letterSpacing = '6px';
-  const piece = `  ${text}  ·`;
-  ctx.fillText(piece.repeat(4), 0, 1);
-  ctx.letterSpacing = '0px';
-  ctx.restore();
-}
-
-/* --------------------------------------------------------- shared furniture */
-
-/** The arcade ground: deep field, lamp, dot grid, drifting brand shapes. */
-function drawGround(ctx: CanvasRenderingContext2D, W: number, H: number, pad: number) {
-  ctx.fillStyle = DEEP;
-  ctx.fillRect(0, 0, W, H);
-
-  const lamp = ctx.createRadialGradient(W / 2, H * 0.36, 0, W / 2, H * 0.36, W * 0.85);
-  lamp.addColorStop(0, 'rgba(64, 52, 176, 0.9)');
-  lamp.addColorStop(0.55, 'rgba(34, 26, 99, 0.5)');
-  lamp.addColorStop(1, 'rgba(20, 16, 58, 0)');
-  ctx.fillStyle = lamp;
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  for (let y = 26; y < H; y += 46) {
-    for (let x = 26; x < W; x += 46) {
-      ctx.beginPath();
-      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  /*
-    The brand shapes drifting past, with a trail behind each.
-
-    They were four flat stickers pinned to the corners, which read as decoration
-    on the surface of the poster. Each now carries a smear along the direction it
-    is travelling — copies falling away in opacity and gaining blur — and sits at
-    a depth: the near ones are large and sharp against a short trail, the far
-    ones small, soft and streaked further. Between the two the field reads as
-    something the poster is moving through rather than a pattern printed on it.
-  */
-  const particles: {
-    x: number;
-    y: number;
-    size: number;
-    colour: string;
-    rot: number;
-    drift: [number, number];
-    depth: number;
-  }[] = [
-    { x: pad * 0.55, y: H * 0.3, size: 58, colour: SUN, rot: 14, drift: [-26, 34], depth: 1 },
-    { x: W - pad * 0.5, y: H * 0.26, size: 30, colour: AQUA, rot: 0, drift: [22, -30], depth: 0.35 },
-    { x: pad * 0.72, y: H * 0.72, size: 34, colour: MINT, rot: -12, drift: [-18, 26], depth: 0.45 },
-    { x: W - pad * 0.62, y: H * 0.7, size: 26, colour: PUNCH, rot: 0, drift: [20, 24], depth: 0.3 },
-    // Two more, far back, so the depth reads as a field rather than a pair.
-    { x: W * 0.22, y: H * 0.14, size: 20, colour: PUNCH, rot: 0, drift: [14, -22], depth: 0.16 },
-    { x: W * 0.82, y: H * 0.88, size: 24, colour: SUN, rot: -8, drift: [16, 20], depth: 0.2 },
-  ];
-
-  const shape = (x: number, y: number, size: number, colour: string, rot: number) => {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate((rot * Math.PI) / 180);
-    slab(
-      ctx,
-      -size / 2,
-      -size / 2,
-      size,
-      size,
-      colour === AQUA || colour === PUNCH ? size / 2 : size * 0.3,
-      colour,
-      // The trail carries no outline: an ink border smeared six times reads as
-      // a stack of stickers rather than one shape in motion.
-      { shadow: 0, border: 0 },
-    );
-    ctx.restore();
-  };
-
-  const TRAIL = 6;
-
-  for (const p of particles) {
-    const [dx, dy] = p.drift;
-    // Far things are smaller and their smear is longer, which is what selling
-    // the distance actually depends on.
-    const size = p.size * (0.6 + 0.4 * p.depth);
-    const reach = 1.9 - p.depth;
-
-    ctx.save();
-    for (let step = TRAIL; step >= 1; step -= 1) {
-      const t = step / TRAIL;
-      ctx.globalAlpha = 0.22 * (1 - t) + 0.03;
-      ctx.filter = `blur(${3 + t * 13}px)`;
-      shape(p.x - dx * t * reach, p.y - dy * t * reach, size * (1 - t * 0.12), p.colour, p.rot);
-    }
-    ctx.restore();
-
-    // The head, sharp only when it is near enough to be.
-    ctx.save();
-    ctx.filter = p.depth > 0.7 ? 'none' : `blur(${(1 - p.depth) * 2.4}px)`;
-    ctx.globalAlpha = 0.35 + 0.65 * p.depth;
-    ctx.translate(p.x, p.y);
-    ctx.rotate((p.rot * Math.PI) / 180);
-    slab(
-      ctx,
-      -size / 2,
-      -size / 2,
-      size,
-      size,
-      p.colour === AQUA || p.colour === PUNCH ? size / 2 : size * 0.3,
-      p.colour,
-      { shadow: p.depth > 0.7 ? 7 : 0, border: p.depth > 0.7 ? 5 : 0 },
-    );
-    ctx.restore();
-  }
-}
-
-/** The mark, the wordmark and the address, centred at the foot of every slide. */
-function drawFoot(
-  ctx: CanvasRenderingContext2D,
-  W: number,
-  H: number,
-  pad: number,
-  url: string,
-  fonts: PostFonts,
-) {
-  const footY = H - pad + 6;
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.font = `700 40px ${fonts.display}`;
-
-  const blender = ctx.measureText('BLENDER').width;
-  const battle = ctx.measureText('BATTLE').width;
-  const markSize = 56;
-  const startX = (W - (markSize + 22 + blender + battle)) / 2;
-
-  drawMark(ctx, startX + markSize / 2, footY - 4, markSize);
-
-  ctx.fillStyle = CREAM;
-  ctx.fillText('BLENDER', startX + markSize + 22, footY - 4);
-  ctx.fillStyle = SUN;
-  ctx.fillText('BATTLE', startX + markSize + 22 + blender, footY - 4);
-
-  ctx.font = `800 25px ${fonts.body}`;
-  ctx.fillStyle = HAZE;
-  ctx.textAlign = 'center';
-  ctx.fillText(url, W / 2, footY + 42);
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-}
-
-/**
- * The work, framed square.
- *
- * Square because every image the product accepts is 1024x1024 — the upload
- * refuses anything else — so any other shape has to crop somebody's render. A
- * frame that letterboxes a square throws away the top and the bottom of the
- * very thing the post exists to show.
- */
-function drawSquareFrame(
-  ctx: CanvasRenderingContext2D,
-  image: CanvasImageSource | null,
-  cx: number,
-  top: number,
-  size: number,
-  emptyLabel: string,
-  fonts: PostFonts,
-) {
-  const left = cx - size / 2;
-  const radius = Math.max(20, size * 0.055);
-
-  if (!image) {
-    ctx.strokeStyle = 'rgba(255,246,233,0.22)';
-    ctx.lineWidth = 5;
-    ctx.setLineDash([16, 14]);
-    roundedRect(ctx, left, top, size, size, radius);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    if (emptyLabel) {
-      ctx.fillStyle = HAZE;
-      ctx.font = `800 30px ${fonts.body}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(emptyLabel, cx, top + size / 2);
-      ctx.textBaseline = 'alphabetic';
-    }
-    return;
-  }
-
-  const source = image as { width?: number; height?: number };
-  // Still a cover crop, because a source that is not square — a pasted photo, a
-  // legacy asset — must fill the frame rather than letterbox inside it.
-  const crop = coverCrop(Number(source.width ?? size), Number(source.height ?? size), size, size);
-
-  ctx.fillStyle = INK;
-  roundedRect(ctx, left, top + 14, size, size, radius);
-  ctx.fill();
-
-  ctx.save();
-  roundedRect(ctx, left, top, size, size, radius);
-  ctx.clip();
-  ctx.drawImage(image, crop.sx, crop.sy, crop.sw, crop.sh, left, top, size, size);
-  ctx.restore();
-
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 7;
-  roundedRect(ctx, left, top, size, size, radius);
-  ctx.stroke();
-}
-
-/** The winner's portrait, name and handle, as one centred lockup. */
-function drawCredit(
-  ctx: CanvasRenderingContext2D,
-  W: number,
-  top: number,
-  content: PostContent,
-  fonts: PostFonts,
-  nameSize: number,
-) {
-  const handle = normalizeInstagramHandle(content.handle);
-  const name = content.username.trim();
-  if (!name && !handle) return;
-
-  const handleSize = Math.round(nameSize * 0.68);
-  const avatarSize = Math.round(nameSize * 1.9);
-  const lines = (name ? 1 : 0) + (handle ? 1 : 0);
-  const textHeight = lines === 2 ? nameSize + handleSize + 12 : nameSize;
-  const height = Math.max(content.avatar ? avatarSize : 0, textHeight);
-
-  ctx.font = `700 ${nameSize}px ${fonts.display}`;
-  const nameWidth = name ? ctx.measureText(name).width : 0;
-  ctx.font = `800 ${handleSize}px ${fonts.body}`;
-  const handleWidth = handle ? ctx.measureText(`@${handle}`).width : 0;
-  const textWidth = Math.max(nameWidth, handleWidth);
-
-  const portrait = content.avatar ? avatarSize : 0;
-  const spacing = portrait ? 26 : 0;
-  const left = (W - (portrait + spacing + textWidth)) / 2;
-  const middle = top + height / 2;
-
-  if (content.avatar) {
-    const cx = left + avatarSize / 2;
-
-    ctx.fillStyle = INK;
-    ctx.beginPath();
-    ctx.arc(cx, middle + 7, avatarSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, middle, avatarSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    const source = content.avatar as { width?: number; height?: number };
-    const crop = coverCrop(
-      Number(source.width ?? avatarSize),
-      Number(source.height ?? avatarSize),
-      avatarSize,
-      avatarSize,
-    );
-    ctx.drawImage(
-      content.avatar,
-      crop.sx,
-      crop.sy,
-      crop.sw,
-      crop.sh,
-      cx - avatarSize / 2,
-      middle - avatarSize / 2,
-      avatarSize,
-      avatarSize,
-    );
-    ctx.restore();
-
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(cx, middle, avatarSize / 2, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  const textLeft = left + portrait + spacing;
-  ctx.textAlign = 'left';
-
-  if (lines === 2) {
-    ctx.font = `700 ${nameSize}px ${fonts.display}`;
-    ctx.fillStyle = CREAM;
-    ctx.fillText(name, textLeft, middle - 4);
-
-    ctx.font = `800 ${handleSize}px ${fonts.body}`;
-    ctx.fillStyle = SUN;
-    ctx.fillText(`@${handle}`, textLeft, middle - 4 + handleSize + 12);
-  } else {
-    const single = name || `@${handle}`;
-    ctx.font = name ? `700 ${nameSize}px ${fonts.display}` : `800 ${handleSize}px ${fonts.body}`;
-    ctx.fillStyle = name ? CREAM : SUN;
-    ctx.fillText(single, textLeft, middle + nameSize * 0.34);
-  }
-
-  ctx.textAlign = 'center';
-}
-
-/**
- * The swipe cue: a chunky arrow slab with a word beside it.
- *
- * The first slide deliberately does not answer its own question, so it has to
- * say plainly that there is a second one. Instagram draws its own small chevron
- * and a reader moving through a feed does not look for it.
- */
-function drawSwipeCue(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  fonts: PostFonts,
-  scale = 1,
-) {
-  const label = 'SWIPE';
-  const fontSize = Math.round(34 * scale);
-  const box = Math.round(96 * scale);
-
-  ctx.font = `700 ${fontSize}px ${fonts.display}`;
-  const labelWidth = ctx.measureText(label).width;
-  const gap = Math.round(22 * scale);
-  const left = cx - (labelWidth + gap + box) / 2;
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = INK;
-  ctx.fillText(label, left + 3, cy + 5);
-  ctx.fillStyle = CREAM;
-  ctx.fillText(label, left, cy);
-
-  const boxLeft = left + labelWidth + gap;
-  slab(ctx, boxLeft, cy - box / 2, box, box, box * 0.3, SUN, { shadow: 10, border: 6 });
-
-  /*
-    The chevron is drawn, not typed.
-
-    An arrow glyph is among the first things a fallback face gets wrong or drops
-    entirely, and the one element whose whole job is to say "there is more this
-    way" must not depend on which font actually loaded.
-  */
-  const arm = box * 0.22;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = Math.max(7, box * 0.1);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(boxLeft + box / 2 - arm * 0.5, cy - arm);
-  ctx.lineTo(boxLeft + box / 2 + arm * 0.6, cy);
-  ctx.lineTo(boxLeft + box / 2 - arm * 0.5, cy + arm);
-  ctx.stroke();
-
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-}
-
 /* ------------------------------------------------------------------ slides */
 
 /**
@@ -821,21 +323,15 @@ export function drawPost(
   slide = 0,
 ) {
   const { width: W, height: H } = format;
-  const pad = 76;
 
   ctx.clearRect(0, 0, W, H);
 
-  if (content.kind === 'challenge') {
-    drawChallengePoster(ctx, format, content, fonts);
-    return;
-  }
-
-  drawGround(ctx, W, H, pad);
-  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
-
-  if (slide === 0) drawWinnerTease(ctx, format, content, fonts, pad);
-  else drawWinnerReveal(ctx, format, content, fonts, pad);
-  drawFoot(ctx, W, H, pad, content.url, fonts);
+  // Each poster owns its whole surface, ground included: the three handoffs
+  // differ in the fan, the bloom and where the shapes sit, so there is no
+  // shared backdrop left to draw before them.
+  if (content.kind === 'challenge') drawChallengePoster(ctx, format, content, fonts);
+  else if (slide === 0) drawWinnerTease(ctx, format, content, fonts);
+  else drawWinnerReveal(ctx, format, content, fonts);
 }
 
 /* ------------------------------------------------ the challenge poster */
@@ -963,139 +459,29 @@ function drawChallengePoster(
 ) {
   const { width: W, height: H } = format;
 
-  /* --- ground ---------------------------------------------------------- */
-  ctx.fillStyle = POSTER_GROUND;
-  ctx.fillRect(0, 0, W, H);
+  posterGround(ctx, W, H, {
+    rayColour: 'rgba(255,255,255,0.055)',
+    rayTop: -260,
+    raySize: 2100,
+    rayBlur: 0,
+    bloomW: 760,
+    bloomH: 640,
+    bloomY: 0.44,
+    bloomAlpha: 0.55,
+    fadeHeight: 300,
+    fadeAlpha: 0.75,
+    dotBlur: 0,
+    shapeBlur: 0,
+    shapes: [
+      { x: 44, y: 300, size: 74, fill: SUN, radius: 20, rot: -12, border: 7, shadow: 8 },
+      { x: W - 38 - 60, y: 690, size: 60, fill: MINT, radius: 30, rot: 0, border: 7, shadow: 7 },
+      { x: 66, y: H - 250 - 66, size: 66, fill: PUNCH, radius: 18, rot: 14, border: 7, shadow: 8 },
+      { x: W - 70 - 52, y: 1000, size: 52, fill: SUN, radius: 14, rot: -20, border: 6, shadow: 7 },
+    ],
+  });
 
-  /*
-    The fan of rays, which in the design is a repeating conic gradient turning
-    slowly. A still frame cannot turn, so what is kept is the shape: wedges
-    every eighteen degrees from a centre that sits above the poster, so they
-    spread downward across it.
-  */
-  const fanX = W / 2;
-  const fanY = -260 + 1050;
-  ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,0.055)';
-  for (let deg = 0; deg < 360; deg += 18) {
-    ctx.beginPath();
-    ctx.moveTo(fanX, fanY);
-    ctx.arc(fanX, fanY, 1050, (deg * Math.PI) / 180, ((deg + 9) * Math.PI) / 180);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-
-  /* The violet bloom: an ellipse, so the context is squashed to draw it. */
-  ctx.save();
-  ctx.translate(W / 2, H * 0.44);
-  ctx.scale(1, 640 / 760);
-  const bloom = ctx.createRadialGradient(0, 0, 0, 0, 0, 760);
-  bloom.addColorStop(0, 'rgba(94,42,158,0.55)');
-  bloom.addColorStop(0.72, 'rgba(27,21,80,0)');
-  ctx.fillStyle = bloom;
-  ctx.beginPath();
-  ctx.arc(0, 0, 760, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  for (let y = 23; y < H; y += 46) {
-    for (let x = 23; x < W; x += 46) {
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  /* The floor darkens, so the type at the foot sits on something. */
-  const fade = ctx.createLinearGradient(0, H - 300, 0, H);
-  fade.addColorStop(0, 'rgba(11,9,34,0)');
-  fade.addColorStop(1, 'rgba(11,9,34,0.75)');
-  ctx.fillStyle = fade;
-  ctx.fillRect(0, H - 300, W, 300);
-
-  /* --- the drifting shapes --------------------------------------------- */
-  const shapes: { x: number; y: number; size: number; fill: string; radius: number; rot: number; border: number; shadow: number }[] = [
-    { x: 44, y: 300, size: 74, fill: SUN, radius: 20, rot: -12, border: 7, shadow: 8 },
-    { x: W - 38 - 60, y: 690, size: 60, fill: MINT, radius: 30, rot: 0, border: 7, shadow: 7 },
-    { x: 66, y: H - 250 - 66, size: 66, fill: PUNCH, radius: 18, rot: 14, border: 7, shadow: 8 },
-    { x: W - 70 - 52, y: 1000, size: 52, fill: SUN, radius: 14, rot: -20, border: 6, shadow: 7 },
-  ];
-
-  for (const s of shapes) {
-    ctx.save();
-    ctx.translate(s.x + s.size / 2, s.y + s.size / 2);
-    ctx.rotate((s.rot * Math.PI) / 180);
-    slab(ctx, -s.size / 2, -s.size / 2, s.size, s.size, s.radius, s.fill, {
-      shadow: s.shadow,
-      border: s.border,
-    });
-    ctx.restore();
-  }
-
-  /* --- the marquee ------------------------------------------------------ */
-  ctx.save();
-  ctx.translate(W / 2, 54 + 44);
-  ctx.rotate((-2.6 * Math.PI) / 180);
-
-  const bandW = W + 92;
-  const bandH = 88;
-
-  ctx.fillStyle = 'rgba(14,11,43,0.9)';
-  ctx.fillRect(-bandW / 2, -bandH / 2 + 14, bandW, bandH);
-  ctx.fillStyle = SUN;
-  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
-  ctx.fillStyle = INK;
-  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, 7);
-  ctx.fillRect(-bandW / 2, bandH / 2 - 7, bandW, 7);
-
-  ctx.font = `700 34px ${fonts.display}`;
-  ctx.letterSpacing = '4px';
-  ctx.fillStyle = INK;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('NEW CHALLENGE  ◆  NEW CHALLENGE  ◆  NEW CHALLENGE  ◆', 0, 2);
-  ctx.letterSpacing = '0px';
-  ctx.restore();
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-
-  /* --- the brand -------------------------------------------------------- */
-  const brandY = 164 + 29;
-
-  ctx.font = `700 46px ${fonts.display}`;
-  ctx.letterSpacing = '0.5px';
-  const blender = ctx.measureText('BLENDER').width;
-  const battle = ctx.measureText('BATTLE').width;
-  const mark = 58;
-  const lockup = mark + 18 + blender + battle;
-  const brandX = (W - lockup) / 2;
-
-  ctx.save();
-  ctx.translate(brandX + mark / 2, brandY);
-  ctx.rotate(Math.PI / 4);
-  slab(ctx, -mark / 2, -mark / 2, mark, mark, 15, SUN, { shadow: 7, border: 7 });
-  ctx.fillStyle = INK;
-  roundedRect(ctx, -8, -8, 16, 16, 4);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.font = `700 46px ${fonts.display}`;
-  strokedText(ctx, 'BLENDER', brandX + mark + 18, brandY, CREAM, 7, 6);
-  strokedText(ctx, 'BATTLE', brandX + mark + 18 + blender, brandY, SUN, 7, 6);
-  ctx.letterSpacing = '0px';
-
-  ctx.font = `900 21px ${fonts.body}`;
-  ctx.letterSpacing = '1.6px';
-  ctx.fillStyle = POSTER_URL;
-  ctx.textAlign = 'center';
-  ctx.fillText(content.url, W / 2, brandY + 29 + 12 + 13);
-  ctx.letterSpacing = '0px';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
+  posterMarquee(ctx, W, 54, POST_KINDS.challenge.marquee, 4, fonts);
+  posterBrand(ctx, W, 164, content.url, fonts);
 
   /* --- the type at the foot, measured first so the stage can be sized --- */
   const titlePad = 62;
@@ -1246,166 +632,589 @@ function drawChallengePoster(
   ctx.textAlign = 'left';
 }
 
+/* ------------------------------------------------- shared poster furniture */
+
+interface PosterShape {
+  x: number;
+  y: number;
+  size: number;
+  fill: string;
+  radius: number;
+  rot: number;
+  border: number;
+  shadow: number;
+}
+
 /**
- * Slide one: the question.
+ * The ground every poster stands on: a fan of rays, a violet bloom, a dot
+ * field, a darkened floor, and the brand shapes drifting over it.
  *
- * No render, no name, no handle. Everything is deliberately withheld — the
- * slide exists to be swiped past, and showing the winner on it would remove the
- * only reason to swipe.
+ * Parameterised rather than copied three times. The slides differ only in the
+ * fan's colour and reach, how far the bloom spreads, and where the shapes sit —
+ * everything else about the ground is the same picture, and three copies of it
+ * would drift apart the first time one was adjusted.
+ */
+function posterGround(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  o: {
+    rayColour: string;
+    rayTop: number;
+    raySize: number;
+    rayBlur: number;
+    bloomW: number;
+    bloomH: number;
+    bloomY: number;
+    bloomAlpha: number;
+    fadeHeight: number;
+    fadeAlpha: number;
+    dotBlur: number;
+    shapeBlur: number;
+    shapes: PosterShape[];
+  },
+) {
+  ctx.fillStyle = POSTER_GROUND;
+  ctx.fillRect(0, 0, W, H);
+
+  /*
+    The fan of rays, which in the design is a repeating conic gradient turning
+    slowly. A still frame cannot turn, so what is kept is the shape: wedges
+    every eighteen degrees from a centre above the poster, spreading down it.
+  */
+  const radius = o.raySize / 2;
+  ctx.save();
+  ctx.filter = `blur(${o.rayBlur}px)`;
+  ctx.fillStyle = o.rayColour;
+  for (let deg = 0; deg < 360; deg += 18) {
+    ctx.beginPath();
+    ctx.moveTo(W / 2, o.rayTop + radius);
+    ctx.arc(W / 2, o.rayTop + radius, radius, (deg * Math.PI) / 180, ((deg + 9) * Math.PI) / 180);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  /* The violet bloom: an ellipse, so the context is squashed to draw it. */
+  ctx.save();
+  ctx.translate(W / 2, H * o.bloomY);
+  ctx.scale(1, o.bloomH / o.bloomW);
+  const bloom = ctx.createRadialGradient(0, 0, 0, 0, 0, o.bloomW);
+  bloom.addColorStop(0, `rgba(94,42,158,${o.bloomAlpha})`);
+  bloom.addColorStop(0.72, 'rgba(27,21,80,0)');
+  ctx.fillStyle = bloom;
+  ctx.beginPath();
+  ctx.arc(0, 0, o.bloomW, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  if (o.dotBlur > 0) ctx.filter = `blur(${o.dotBlur}px)`;
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  for (let y = 23; y < H; y += 46) {
+    for (let x = 23; x < W; x += 46) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  /* The floor darkens, so the type at the foot sits on something. */
+  const fade = ctx.createLinearGradient(0, H - o.fadeHeight, 0, H);
+  fade.addColorStop(0, 'rgba(11,9,34,0)');
+  fade.addColorStop(1, `rgba(11,9,34,${o.fadeAlpha})`);
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, H - o.fadeHeight, W, o.fadeHeight);
+
+  for (const s of o.shapes) {
+    ctx.save();
+    if (o.shapeBlur > 0) ctx.filter = `blur(${o.shapeBlur}px)`;
+    ctx.translate(s.x + s.size / 2, s.y + s.size / 2);
+    ctx.rotate((s.rot * Math.PI) / 180);
+    slab(ctx, -s.size / 2, -s.size / 2, s.size, s.size, s.radius, s.fill, {
+      shadow: s.shadow,
+      border: s.border,
+    });
+    ctx.restore();
+  }
+}
+
+/** The tilted band across the head, repeating a word with diamonds between. */
+function posterMarquee(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  top: number,
+  word: string,
+  tracking: number,
+  fonts: PostFonts,
+) {
+  ctx.save();
+  ctx.translate(W / 2, top + 44);
+  ctx.rotate((-2.6 * Math.PI) / 180);
+
+  const bandW = W + 92;
+  const bandH = 88;
+
+  ctx.fillStyle = 'rgba(14,11,43,0.9)';
+  ctx.fillRect(-bandW / 2, -bandH / 2 + 14, bandW, bandH);
+  ctx.fillStyle = SUN;
+  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, 7);
+  ctx.fillRect(-bandW / 2, bandH / 2 - 7, bandW, 7);
+
+  ctx.font = `700 34px ${fonts.display}`;
+  ctx.letterSpacing = `${tracking}px`;
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${word}  ◆  ${word}  ◆  ${word}  ◆  ${word}  ◆`, 0, 2);
+  ctx.letterSpacing = '0px';
+  ctx.restore();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+/**
+ * The mark and the wordmark, with a line under them.
+ *
+ * The line is the site address on two of the three posters and the challenge's
+ * name on the third, so it is passed in rather than assumed. Returns the y it
+ * finished at, so what follows starts from where the brand actually ended.
+ */
+function posterBrand(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  top: number,
+  subtitle: string,
+  fonts: PostFonts,
+  markSize = 58,
+): number {
+  const y = top + markSize / 2;
+
+  ctx.font = `700 46px ${fonts.display}`;
+  ctx.letterSpacing = '0.5px';
+  const blender = ctx.measureText('BLENDER').width;
+  const battle = ctx.measureText('BATTLE').width;
+  const lockup = markSize + 18 + blender + battle;
+  const startX = (W - lockup) / 2;
+
+  ctx.save();
+  ctx.translate(startX + markSize / 2, y);
+  ctx.rotate(Math.PI / 4);
+  slab(ctx, -markSize / 2, -markSize / 2, markSize, markSize, 15, SUN, { shadow: 7, border: 7 });
+  ctx.fillStyle = INK;
+  roundedRect(ctx, -8, -8, 16, 16, 4);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 46px ${fonts.display}`;
+  strokedText(ctx, 'BLENDER', startX + markSize + 18, y, CREAM, 7, 6);
+  strokedText(ctx, 'BATTLE', startX + markSize + 18 + blender, y, SUN, 7, 6);
+  ctx.letterSpacing = '0px';
+
+  ctx.font = `900 21px ${fonts.body}`;
+  ctx.letterSpacing = '1.6px';
+  ctx.fillStyle = POSTER_URL;
+  ctx.textAlign = 'center';
+  ctx.fillText(subtitle, W / 2, y + markSize / 2 + 25);
+  ctx.letterSpacing = '0px';
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  return y + markSize / 2 + 38;
+}
+
+/** Shrinks a single line until it fits the column, stroke included. */
+function fitLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  room: number,
+  start: number,
+  floor: number,
+  fonts: PostFonts,
+  tracking: string,
+): number {
+  ctx.letterSpacing = tracking;
+  let size = start;
+  for (; size > floor; size -= 2) {
+    ctx.font = `700 ${size}px ${fonts.display}`;
+    if (ctx.measureText(text).width + size * 0.24 <= room) break;
+  }
+  ctx.font = `700 ${size}px ${fonts.display}`;
+  return size;
+}
+
+/* --------------------------------------------------------- winner slide one */
+
+/**
+ * The question: which challenge, and an arrow saying there is more.
+ *
+ * Nothing about the winner appears here. The slide exists to be swiped past,
+ * and showing the answer would remove the only reason to swipe.
  */
 function drawWinnerTease(
   ctx: CanvasRenderingContext2D,
   format: PostFormat,
   content: PostContent,
   fonts: PostFonts,
-  pad: number,
 ) {
   const { width: W, height: H } = format;
 
-  const leadSize = 56;
-  const nameSize = 108;
+  posterGround(ctx, W, H, {
+    rayColour: 'rgba(255,210,63,0.085)',
+    rayTop: -460,
+    raySize: 2000,
+    rayBlur: 3,
+    bloomW: 680,
+    bloomH: 560,
+    bloomY: 0.46,
+    bloomAlpha: 0.5,
+    fadeHeight: 280,
+    fadeAlpha: 0.7,
+    dotBlur: 1.5,
+    shapeBlur: 1.6,
+    shapes: [
+      { x: 44, y: 340, size: 76, fill: SUN, radius: 20, rot: -12, border: 7, shadow: 8 },
+      { x: W - 38 - 58, y: 320, size: 58, fill: AQUA, radius: 29, rot: 0, border: 7, shadow: 7 },
+      { x: 66, y: H - 300 - 66, size: 66, fill: MINT, radius: 18, rot: 14, border: 7, shadow: 8 },
+      { x: W - 52 - 54, y: H - 320 - 54, size: 54, fill: PUNCH, radius: 27, rot: 0, border: 7, shadow: 7 },
+    ],
+  });
+
+  posterMarquee(ctx, W, 48, POST_KINDS.winner.marquee, 5, fonts);
+
+  /* The brand sits at the foot of this one, so the sentence owns the middle. */
+  const brandTop = H - 58 - 56 - 12 - 26;
+  posterBrand(ctx, W, brandTop, content.url, fonts, 56);
+
+  const room = W - 70 * 2;
+  const name = (content.title || 'this challenge').toUpperCase();
+  const nameSize = fitLine(ctx, name, room, 158, 62, fonts, '-2px');
+  ctx.letterSpacing = '0px';
+
+  /*
+    The sentence is centred in what the marquee and the brand leave, so it reads
+    as one held thought rather than a page with a gap in the middle.
+  */
+  const cue = 116;
+  const blockH = 52 + 26 + nameSize * 0.88 + 26 + 52 + 26 + cue;
+  const top = 158;
+  const bottom = brandTop - 30;
+  let y = top + Math.max(16, (bottom - top - blockH) / 2);
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
+  ctx.font = `700 52px ${fonts.display}`;
+  ctx.letterSpacing = '4px';
+  ctx.fillStyle = POSTER_URL;
+  y += 52;
+  ctx.fillText('THE WINNER OF', W / 2, y);
+  ctx.letterSpacing = '0px';
+
+  y += 26 + nameSize * 0.88;
   ctx.font = `700 ${nameSize}px ${fonts.display}`;
-  const nameLines = wrapText(
-    (content.title || 'this challenge').toUpperCase(),
-    W * 0.84,
-    (s) => ctx.measureText(s).width,
-  ).slice(0, 3);
+  ctx.letterSpacing = '-2px';
+  strokedText(ctx, name, W / 2, y, SUN, 18, 14);
+  ctx.letterSpacing = '0px';
 
-  const cueHeight = 150;
-  const textHeight =
-    leadSize + leadSize * 0.5 + nameLines.length * nameSize * 0.92 + leadSize * 1.5 + cueHeight;
+  y += 26 + 52;
+  ctx.font = `700 52px ${fonts.display}`;
+  ctx.letterSpacing = '6px';
+  ctx.fillStyle = POSTER_URL;
+  ctx.fillText('IS…', W / 2, y);
+  ctx.letterSpacing = '0px';
 
-  const top = pad + 150;
-  const bottom = H - pad - 58;
-  const room = bottom - top;
-
-  /*
-    The challenge's photo, sized from what the sentence leaves.
-
-    It is a thumbnail rather than a hero: the slide's job is to name the
-    challenge and point right, and a large picture here competes with the
-    winning render on the slide after it. Capped, floored, and dropped entirely
-    when a long title leaves no room for it — the sentence is the slide.
-  */
-  const thumbGap = 44;
-  const maxThumb = 340;
-  const spare = room - textHeight - thumbGap - 40;
-  const thumb = content.reference && spare >= 150 ? Math.min(maxThumb, spare) : 0;
-
-  const blockHeight = (thumb ? thumb + thumbGap : 0) + textHeight;
-  let cursor = top + Math.max(20, (room - blockHeight) / 2);
-
-  if (thumb) {
-    drawSquareFrame(ctx, content.reference, W / 2, cursor, thumb, '', fonts);
-    cursor += thumb + thumbGap;
-  }
-
-  cursor += leadSize;
-  ctx.font = `800 ${leadSize}px ${fonts.body}`;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = HAZE;
-  ctx.fillText('THE WINNER OF', W / 2, cursor);
-  cursor += leadSize * 0.5;
-
-  ctx.font = `700 ${nameSize}px ${fonts.display}`;
-  for (const line of nameLines) {
-    cursor += nameSize * 0.92;
-    ctx.fillStyle = INK;
-    ctx.fillText(line, W / 2 + 5, cursor + 7);
-    ctx.fillStyle = SUN;
-    ctx.fillText(line, W / 2, cursor);
-  }
-
-  cursor += leadSize * 1.5;
-  ctx.font = `800 ${leadSize}px ${fonts.body}`;
-  ctx.fillStyle = HAZE;
-  ctx.fillText('IS…', W / 2, cursor);
-
-  drawSwipeCue(ctx, W / 2, cursor + cueHeight * 0.62, fonts, 1);
+  drawSwipeCue(ctx, W / 2, y + 26 + cue / 2, fonts);
+  ctx.textAlign = 'left';
 }
 
-/** Slide two: the answer — their render, their face, their handle. */
+/**
+ * The swipe cue: SWIPE beside an arrow in an ink disc, on a yellow pill.
+ *
+ * The arrow is drawn rather than typed. A glyph is among the first things a
+ * fallback face drops, and the one element whose whole job is to say "there is
+ * more this way" must not depend on which font loaded.
+ */
+function drawSwipeCue(ctx: CanvasRenderingContext2D, cx: number, cy: number, fonts: PostFonts) {
+  const disc = 62;
+  ctx.font = `700 38px ${fonts.display}`;
+  ctx.letterSpacing = '3px';
+  const label = ctx.measureText('SWIPE').width;
+
+  const w = 38 + label + 20 + disc + 20;
+  const h = disc + 28;
+  const left = cx - w / 2;
+  const top = cy - h / 2;
+
+  slab(ctx, left, top, w, h, h / 2, SUN, { shadow: 11, border: 7 });
+
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('SWIPE', left + 38, cy + 1);
+  ctx.letterSpacing = '0px';
+
+  const discX = left + 38 + label + 20 + disc / 2;
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(discX, cy, disc / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = SUN;
+  ctx.beginPath();
+  ctx.moveTo(discX - 8, cy - 16);
+  ctx.lineTo(discX + 16, cy);
+  ctx.lineTo(discX - 8, cy + 16);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+/* --------------------------------------------------------- winner slide two */
+
+/** The answer: the winning render, the badges, the face and the handle. */
 function drawWinnerReveal(
   ctx: CanvasRenderingContext2D,
   format: PostFormat,
   content: PostContent,
   fonts: PostFonts,
-  pad: number,
 ) {
   const { width: W, height: H } = format;
 
-  const nameSize = 60;
-  const ctaSize = 34;
-  const creditGap = 44;
-  const ctaGap = 40;
-
-  const handle = normalizeInstagramHandle(content.handle);
-  const name = content.username.trim();
-  const creditHeight =
-    name || handle
-      ? Math.max(
-          content.avatar ? Math.round(nameSize * 1.9) : 0,
-          name && handle ? nameSize + Math.round(nameSize * 0.68) + 12 : nameSize,
-        )
-      : 0;
-
-  // No handle, no invitation to follow one.
-  const cta = handle ? content.callToAction.trim().toUpperCase() : '';
-  const blockHeight = (creditHeight ? creditGap + creditHeight : 0) + (cta ? ctaGap + ctaSize : 0);
-
-  const stageTop = pad + 92;
-  const { stageHeight, blockTop } = layoutPost({
-    frameHeight: H,
-    pad,
-    stageTop,
-    // Larger than the announcement's: this slide carries no title, and the
-    // render is the reason anyone swiped to it.
-    idealStageHeight: H * 0.6,
-    minStageHeight: H * 0.28,
-    blockHeight,
+  posterGround(ctx, W, H, {
+    rayColour: 'rgba(255,210,63,0.09)',
+    rayTop: -260,
+    raySize: 2100,
+    rayBlur: 3,
+    bloomW: 760,
+    bloomH: 640,
+    bloomY: 0.44,
+    bloomAlpha: 0.55,
+    fadeHeight: 300,
+    fadeAlpha: 0.75,
+    dotBlur: 1.5,
+    shapeBlur: 1.6,
+    shapes: [
+      { x: 44, y: 300, size: 74, fill: SUN, radius: 20, rot: -12, border: 7, shadow: 8 },
+      { x: W - 38 - 60, y: 690, size: 60, fill: MINT, radius: 30, rot: 0, border: 7, shadow: 7 },
+      { x: 66, y: H - 250 - 66, size: 66, fill: PUNCH, radius: 18, rot: 14, border: 7, shadow: 8 },
+    ],
   });
 
-  const frame = Math.min(W - pad * 2, stageHeight);
-  drawSquareFrame(ctx, content.image, W / 2, stageTop, frame, 'Drop the winning render here', fonts);
+  posterMarquee(ctx, W, 54, POST_KINDS.winner.marquee, 4, fonts);
+
+  /* Which challenge this was, under the wordmark, in place of the address. */
+  const challenge = content.title.trim()
+    ? `CHALLENGE · ${content.title.trim().toUpperCase()}`
+    : content.url;
+  posterBrand(ctx, W, 164, challenge, fonts);
+
+  const handle = normalizeInstagramHandle(content.handle);
+  const headline = handle ? `@${handle.toUpperCase()}` : content.username.trim().toUpperCase();
+
+  const room = W - 62 * 2;
+  const headlineSize = fitLine(ctx, headline || 'THE WINNER', room, 106, 48, fonts, '-1px');
+  ctx.letterSpacing = '0px';
+
+  ctx.font = `900 29px ${fonts.body}`;
+  const lines = content.callToAction.trim()
+    ? wrapText(content.callToAction, 800, (s) => ctx.measureText(s).width).slice(0, 2)
+    : [];
+
+  const blockH = headlineSize * 0.9 + (lines.length ? 18 + lines.length * 38 : 0);
+  const blockTop = H - 58 - blockH;
+
+  /*
+    The stage stops well short of the type: the winner's face hangs off its
+    bottom edge by more than half its own height, and the design leaves 112px
+    under the frame for it before the handle starts.
+  */
+  const avatar = 172;
+  const stageTop = 290;
+  const stageBottom = blockTop - 112;
+  const size = Math.min(700, stageBottom - stageTop, W - 74 * 2);
+  const stageY = stageTop + (stageBottom - stageTop - size) / 2;
+  const stageX = (W - size) / 2;
+
+  ctx.save();
+  ctx.translate(stageX + size / 2, stageY + size / 2);
+  ctx.rotate((-1.6 * Math.PI) / 180);
+  slab(ctx, -size / 2 - 14, -size / 2 - 14, size + 28, size + 28, 16, SUN, { shadow: 0, border: 7 });
+  ctx.restore();
+
+  ctx.fillStyle = INK;
+  roundedRect(ctx, stageX, stageY + 16, size, size, 10);
+  ctx.fill();
+  ctx.fillStyle = POSTER_FRAME;
+  roundedRect(ctx, stageX, stageY, size, size, 10);
+  ctx.fill();
+
+  if (content.image) {
+    const source = content.image as { width?: number; height?: number };
+    const crop = coverCrop(Number(source.width ?? size), Number(source.height ?? size), size, size);
+    ctx.save();
+    roundedRect(ctx, stageX, stageY, size, size, 10);
+    ctx.clip();
+    ctx.drawImage(content.image, crop.sx, crop.sy, crop.sw, crop.sh, stageX, stageY, size, size);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = HAZE;
+    ctx.font = `900 28px ${fonts.body}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Drop the winning render', stageX + size / 2, stageY + size / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  roundedRect(ctx, stageX, stageY, size, size, 10);
+  ctx.stroke();
+
+  drawPlaceBadge(ctx, stageX + 24, stageY - 30, fonts);
 
   if (content.votes !== null && content.votes >= 0) {
-    const label = `${content.votes} ${content.votes === 1 ? 'VOTE' : 'VOTES'}`;
-    tiltedBadge(
-      ctx,
-      label,
-      W / 2 - frame / 2 + 30,
-      stageTop + frame - 18,
-      5,
+    pill(ctx, `${content.votes} ${content.votes === 1 ? 'VOTE' : 'VOTES'}`, stageX + 26, stageY + size - 26 - 46, {
+      fill: AQUA,
+      ink: INK,
+      fontSize: 24,
+      tracking: 1.6,
+      padX: 28,
+      padY: 11,
+      border: 6,
+      shadow: 7,
+      anchor: 'left',
+      dot: true,
       fonts,
-      SUN,
-      INK,
-      30,
+    });
+  }
+
+  pill(ctx, 'BLIND BALLOT', stageX + size - 26, stageY + size - 26 - 46, {
+    fill: PUNCH,
+    ink: INK,
+    fontSize: 24,
+    tracking: 1.6,
+    padX: 28,
+    padY: 11,
+    border: 6,
+    shadow: 7,
+    anchor: 'right',
+    fonts,
+  });
+
+  /* The face, straddling the bottom edge of the frame. */
+  const avatarY = stageY + size + 86 - avatar / 2;
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(W / 2, avatarY + 10, avatar / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = AQUA;
+  ctx.beginPath();
+  ctx.arc(W / 2, avatarY, avatar / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (content.avatar) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(W / 2, avatarY, avatar / 2 - 4, 0, Math.PI * 2);
+    ctx.clip();
+    const source = content.avatar as { width?: number; height?: number };
+    const crop = coverCrop(Number(source.width ?? avatar), Number(source.height ?? avatar), avatar, avatar);
+    ctx.drawImage(
+      content.avatar,
+      crop.sx,
+      crop.sy,
+      crop.sw,
+      crop.sh,
+      W / 2 - avatar / 2,
+      avatarY - avatar / 2,
+      avatar,
+      avatar,
     );
+    ctx.restore();
   }
 
-  let cursor = blockTop;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(W / 2, avatarY, avatar / 2, 0, Math.PI * 2);
+  ctx.stroke();
 
-  if (creditHeight) {
-    cursor += creditGap;
-    drawCredit(ctx, W, cursor, content, fonts, nameSize);
-    cursor += creditHeight;
-  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `700 ${headlineSize}px ${fonts.display}`;
+  ctx.letterSpacing = '-1px';
+  strokedText(ctx, headline || 'THE WINNER', W / 2, blockTop + headlineSize * 0.82, SUN, 16, 12);
+  ctx.letterSpacing = '0px';
 
-  if (cta) {
-    cursor += ctaGap + ctaSize * 0.78;
-    ctx.font = `800 ${ctaSize}px ${fonts.body}`;
-    ctx.textAlign = 'center';
-    ctx.letterSpacing = '2px';
-    ctx.fillStyle = INK;
-    ctx.fillText(cta, W / 2 + 3, cursor + 4);
+  if (lines.length) {
+    ctx.font = `900 29px ${fonts.body}`;
     ctx.fillStyle = CREAM;
-    ctx.fillText(cta, W / 2, cursor);
-    ctx.letterSpacing = '0px';
+    let y = blockTop + headlineSize * 0.9 + 18 + 26;
+    for (const line of lines) {
+      ctx.fillText(line, W / 2, y);
+      y += 38;
+    }
   }
+
+  ctx.textAlign = 'left';
 }
 
-export const POST_COLORS = { INK, DEEP, CREAM, SUN, FLAME_LIFT, AQUA, MINT, PUNCH };
+/** The 1ST PLACE tab, tilted, with the ordinal raised. */
+function drawPlaceBadge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  fonts: PostFonts,
+) {
+  ctx.save();
+
+  ctx.font = `700 44px ${fonts.display}`;
+  const one = ctx.measureText('1').width;
+  ctx.font = `700 26px ${fonts.display}`;
+  const st = ctx.measureText('ST').width;
+  ctx.font = `700 38px ${fonts.display}`;
+  ctx.letterSpacing = '2px';
+  const place = ctx.measureText('PLACE').width;
+  ctx.letterSpacing = '0px';
+
+  const w = 34 + one + st + 14 + place + 34;
+  const h = 44 + 24;
+
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate((-6 * Math.PI) / 180);
+  ctx.translate(-w / 2, -h / 2);
+
+  slab(ctx, 0, 0, w, h, h / 2, SUN, { shadow: 11, border: 7 });
+
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+
+  ctx.font = `700 44px ${fonts.display}`;
+  ctx.fillText('1', 34, h / 2 + 1);
+
+  // The ordinal rides high, the way it is set on the page.
+  ctx.font = `700 26px ${fonts.display}`;
+  ctx.fillText('ST', 34 + one, h / 2 - 9);
+
+  ctx.font = `700 38px ${fonts.display}`;
+  ctx.letterSpacing = '2px';
+  ctx.fillText('PLACE', 34 + one + st + 14, h / 2 + 1);
+  ctx.letterSpacing = '0px';
+
+  ctx.restore();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}

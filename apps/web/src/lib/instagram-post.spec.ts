@@ -7,7 +7,6 @@ import {
   POST_KINDS,
   coverCrop,
   instagramPostHref,
-  layoutPost,
   safeImageUrl,
   normalizeInstagramHandle,
   postFileName,
@@ -245,89 +244,6 @@ describe('normalising an Instagram handle', () => {
     // The credit line is skipped entirely rather than drawing a bare "@".
     expect(normalizeInstagramHandle('   ')).toBe('');
     expect(normalizeInstagramHandle('@@@')).toBe('');
-  });
-});
-
-/* ----------------------------------------------------------------- layout */
-
-describe('placing the frame and the type', () => {
-  /* The square, which is the tighter of the two and where this broke. */
-  const square = (blockHeight: number) =>
-    layoutPost({
-      frameHeight: 1080,
-      pad: 76,
-      stageTop: 168,
-      idealStageHeight: 1080 * 0.4,
-      minStageHeight: 1080 * 0.26,
-      blockHeight,
-    });
-
-  it('never lets the type run past the footer', () => {
-    /*
-      The invariant this function exists for. A winner post carries a title, a
-      credit and a line under it, and at that height the old arithmetic printed
-      the last line straight through the brand lockup.
-    */
-    for (let blockHeight = 100; blockHeight <= 520; blockHeight += 10) {
-      const { blockTop, footTop } = square(blockHeight);
-
-      expect(blockTop + blockHeight).toBeLessThanOrEqual(footTop + 0.001);
-    }
-  });
-
-  it('keeps the type clear of the frame', () => {
-    /*
-      Bounded by what the drawing can actually produce: a title capped at two
-      lines, a credit, and a blurb capped at two, which comes to about 436 in
-      the square. Past that the footer takes priority and the block is allowed
-      to touch the frame instead — see the clamp in `layoutPost`.
-    */
-    for (let blockHeight = 100; blockHeight <= 436; blockHeight += 10) {
-      const { blockTop, subjectBottom } = square(blockHeight);
-
-      expect(blockTop).toBeGreaterThanOrEqual(subjectBottom);
-    }
-  });
-
-  it('gives the frame its full share when the type is short', () => {
-    // A challenge post with a one-line title must look exactly as it did.
-    const { stageHeight } = square(200);
-
-    expect(stageHeight).toBe(1080 * 0.4);
-  });
-
-  it('shrinks the frame rather than colliding, once the type grows', () => {
-    /*
-      Which of the two gives way is the design decision here: an image thirty
-      pixels shorter is invisible, a headline through the logo is the only thing
-      anyone would see.
-    */
-    const short = square(200).stageHeight;
-    const tall = square(420).stageHeight;
-
-    expect(tall).toBeLessThan(short);
-  });
-
-  it('stops shrinking the frame at its floor', () => {
-    // Past this the reference would be a strip, which is worse than a tight gap.
-    const { stageHeight } = square(900);
-
-    expect(stageHeight).toBe(1080 * 0.26);
-  });
-
-  it('holds for the portrait too', () => {
-    for (let blockHeight = 100; blockHeight <= 640; blockHeight += 10) {
-      const { blockTop, footTop } = layoutPost({
-        frameHeight: 1350,
-        pad: 76,
-        stageTop: 168,
-        idealStageHeight: 1350 * 0.44,
-        minStageHeight: 1350 * 0.26,
-        blockHeight,
-      });
-
-      expect(blockTop + blockHeight).toBeLessThanOrEqual(footTop + 0.001);
-    }
   });
 });
 
