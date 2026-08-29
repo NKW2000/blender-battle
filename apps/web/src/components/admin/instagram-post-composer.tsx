@@ -43,6 +43,10 @@ export interface PostPrefill {
   difficulty?: Difficulty;
   handle?: string;
   username?: string;
+  /** The discipline, on the pill over the reference. */
+  category?: string;
+  /** Minutes the challenge is estimated to take. */
+  duration?: number;
   votes?: number;
   /** The challenge reference, or the winning render. */
   imageUrl?: string;
@@ -90,6 +94,8 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const [difficulty, setDifficulty] = useState<Difficulty>(prefill?.difficulty ?? Difficulty.HARD);
   const [url, setUrl] = useState('blenderbattle.vercel.app');
   const [handle, setHandle] = useState(prefill?.handle ?? '');
+  const [category, setCategory] = useState(prefill?.category ?? 'Modeling');
+  const [duration, setDuration] = useState<number | null>(prefill?.duration ?? 45);
   const [username, setUsername] = useState(prefill?.username ?? '');
   const [votes, setVotes] = useState<number | null>(prefill?.votes ?? null);
   const [callToAction, setCallToAction] = useState('Follow on Instagram');
@@ -139,6 +145,8 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
       username,
       votes,
       callToAction,
+      category,
+      duration,
       image: imageRef.current,
       avatar: avatarRef.current,
       reference: referenceRef.current,
@@ -166,6 +174,8 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
     username,
     votes,
     callToAction,
+    category,
+    duration,
     fonts,
   ]);
 
@@ -178,13 +188,37 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   */
   useEffect(() => {
     let cancelled = false;
-    void document.fonts.ready.then(() => {
+
+    void (async () => {
+      /*
+        The faces are asked for by name before waiting on them.
+
+        `document.fonts.ready` resolves once nothing is *pending*, which is
+        immediately true when nothing has requested a face — it says the fonts
+        are settled, not that they arrived. A canvas drawn then bakes the
+        fallback in permanently, and unlike the DOM it does not re-flow when the
+        real face turns up. Watched happen: a poster rendered entirely in a
+        serif with `fonts.ready` already resolved and every face `unloaded`.
+      */
+      const { display, body } = fonts();
+      await Promise.all(
+        [
+          `700 136px ${display}`,
+          `700 46px ${display}`,
+          `700 34px ${display}`,
+          `900 29px ${body}`,
+          `800 31px ${body}`,
+        ].map((face) => document.fonts.load(face).catch(() => undefined)),
+      );
+      await document.fonts.ready;
+
       if (!cancelled) setReady(true);
-    });
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fonts]);
 
   useEffect(() => {
     if (ready) paint();
@@ -473,6 +507,33 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
                 className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
               />
             </Field>
+
+            {kind === 'challenge' ? (
+              <Field label="Discipline" hint="On the pill over the image">
+                <input
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  maxLength={24}
+                  placeholder="Modeling"
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
+                />
+              </Field>
+            ) : null}
+
+            {kind === 'challenge' ? (
+              <Field label="Minutes" hint={duration === null ? 'Hidden' : 'On the image'}>
+                <input
+                  type="number"
+                  min={1}
+                  value={duration ?? ''}
+                  onChange={(event) =>
+                    setDuration(event.target.value === '' ? null : Math.max(1, Number(event.target.value)))
+                  }
+                  placeholder="—"
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-mono text-sm font-bold text-bone"
+                />
+              </Field>
+            ) : null}
 
             {kind === 'winner' ? (
               <Field label="Challenge photo" hint={referenceName ?? 'Shown on slide 1'}>

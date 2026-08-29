@@ -47,6 +47,10 @@ function usePrefill(): PostPrefill | undefined {
   const votes = text('votes');
   const parsedVotes = votes !== undefined && /^\d+$/.test(votes) ? Number(votes) : undefined;
 
+  const duration = text('duration');
+  const parsedDuration =
+    duration !== undefined && /^\d+$/.test(duration) ? Number(duration) : undefined;
+
   return {
     kind: text('kind') === 'winner' ? 'winner' : text('kind') === 'challenge' ? 'challenge' : undefined,
     title: text('title'),
@@ -61,6 +65,8 @@ function usePrefill(): PostPrefill | undefined {
     imageUrl: safeImageUrl(text('image')),
     avatarUrl: safeImageUrl(text('avatar')),
     referenceUrl: safeImageUrl(text('reference')),
+    category: text('category'),
+    duration: parsedDuration,
   };
 }
 

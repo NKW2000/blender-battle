@@ -88,6 +88,8 @@ export default function EditChallengePage({
                   blurb: challenge.shortDescription,
                   difficulty: challenge.difficulty,
                   imageUrl: reference?.url ?? challenge.coverImageUrl,
+                  category: challenge.category.name,
+                  duration: challenge.estimatedMinutes,
                 })}
               >
                 Instagram post

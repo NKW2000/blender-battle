@@ -81,6 +81,10 @@ export interface PostContent {
   votes: number | null;
   /** The line under the credit, e.g. "Follow on Instagram". Winner post only. */
   callToAction: string;
+  /** The discipline, on the pill over the reference. Announcement only. */
+  category: string;
+  /** Minutes the challenge is estimated to take. Null hides that pill. */
+  duration: number | null;
   /**
    * The challenge's own photo, shown as a thumbnail on the tease slide.
    *
@@ -241,6 +245,8 @@ export function instagramPostHref(params: {
   imageUrl?: string | null;
   avatarUrl?: string | null;
   referenceUrl?: string | null;
+  category?: string | null;
+  duration?: number | null;
 }) {
   const query = new URLSearchParams({ kind: params.kind });
 
@@ -255,6 +261,11 @@ export function instagramPostHref(params: {
   put('image', params.imageUrl);
   put('avatar', params.avatarUrl);
   put('reference', params.referenceUrl);
+  put('category', params.category);
+
+  if (typeof params.duration === 'number' && params.duration > 0) {
+    query.set('duration', String(params.duration));
+  }
 
   // Zero is a real tally and must survive, which `put` would drop.
   if (typeof params.votes === 'number' && params.votes >= 0) {
@@ -813,143 +824,426 @@ export function drawPost(
   const pad = 76;
 
   ctx.clearRect(0, 0, W, H);
-  drawGround(ctx, W, H, pad);
-  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
 
-  if (content.kind === 'winner') {
-    if (slide === 0) drawWinnerTease(ctx, format, content, fonts, pad);
-    else drawWinnerReveal(ctx, format, content, fonts, pad);
-    drawFoot(ctx, W, H, pad, content.url, fonts);
+  if (content.kind === 'challenge') {
+    drawChallengePoster(ctx, format, content, fonts);
     return;
   }
 
-  /*
-    The announcement keeps the marquee and carries its brand directly under it
-    rather than at the foot. Both at the head is what leaves the reference the
-    rest of the poster; the strip is what says at a glance which of the two
-    kinds of post this is, and losing it cost more than the space it takes.
-  */
-  drawChallengeSlide(ctx, format, content, fonts, pad);
+  drawGround(ctx, W, H, pad);
+  marquee(ctx, POST_KINDS[content.kind].marquee, pad + 4, W, fonts);
+
+  if (slide === 0) drawWinnerTease(ctx, format, content, fonts, pad);
+  else drawWinnerReveal(ctx, format, content, fonts, pad);
+  drawFoot(ctx, W, H, pad, content.url, fonts);
+}
+
+/* ------------------------------------------------ the challenge poster */
+
+/*
+  Colours taken from the handoff rather than the app's tokens.
+
+  The poster is its own artefact — it is exported as a PNG and lives on
+  Instagram, not in the product — and the design sets a deeper ground and a
+  different violet than any surface in the app. Matching the tokens instead
+  would be matching a different picture.
+*/
+const POSTER_GROUND = '#1B1550';
+const POSTER_FRAME = '#171243';
+const POSTER_URL = '#B7AFE6';
+
+/**
+ * Ink-outlined type, the way the poster sets every heading.
+ *
+ * The design uses `-webkit-text-stroke` with `paint-order: stroke fill`, which
+ * puts the outline behind the glyph so only its outer half shows. A canvas has
+ * no paint order, so the stroke is drawn first at twice the width and the fill
+ * covers the inner half — the same result by construction. The hard shadow is
+ * the whole lockup drawn again underneath, offset, in the outline colour.
+ */
+function strokedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fill: string,
+  stroke: number,
+  shadow: number,
+) {
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+
+  if (shadow > 0) {
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = INK;
+    ctx.lineWidth = stroke * 2;
+    ctx.strokeText(text, x, y + shadow);
+    ctx.fillText(text, x, y + shadow);
+  }
+
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = stroke * 2;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y);
+}
+
+/** A chunky pill: ink border, hard shadow, a word inside. */
+function pill(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  options: {
+    fill: string;
+    ink: string;
+    fontSize: number;
+    tracking: number;
+    padX: number;
+    padY: number;
+    border: number;
+    shadow: number;
+    anchor: 'left' | 'right';
+    rotate?: number;
+    dot?: boolean;
+    fonts: PostFonts;
+  },
+) {
+  const { fonts, fontSize, tracking, padX, padY, border, shadow, fill, ink } = options;
+
+  ctx.save();
+  ctx.font = `700 ${fontSize}px ${fonts.display}`;
+  ctx.letterSpacing = `${tracking}px`;
+
+  const dotSize = options.dot ? 14 : 0;
+  const dotGap = options.dot ? 12 : 0;
+  const textWidth = ctx.measureText(text).width;
+  const w = textWidth + dotSize + dotGap + padX * 2;
+  const h = fontSize + padY * 2;
+
+  const left = options.anchor === 'left' ? x : x - w;
+
+  ctx.translate(left + w / 2, y + h / 2);
+  if (options.rotate) ctx.rotate((options.rotate * Math.PI) / 180);
+  ctx.translate(-w / 2, -h / 2);
+
+  slab(ctx, 0, 0, w, h, h / 2, fill, { shadow, border });
+
+  if (options.dot) {
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(padX + dotSize / 2, h / 2, dotSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = ink;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, padX + dotSize + dotGap, h / 2 + 1);
+
+  ctx.letterSpacing = '0px';
+  ctx.restore();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
 
 /**
- * The announcement: the brand at the top, the reference below it, the title
- * under that.
+ * The announcement poster, drawn to the handoff.
  *
- * The brand moved from the foot to the head, which is what let the reference
- * grow. It had a marquee strip above it and a lockup beneath it, so the picture
- * — the only thing on the poster anybody actually stops for — was squeezed
- * between two bands of furniture and came out about half the width it could
- * have been. One band, at the top, and the picture takes everything left.
+ * Its own ground rather than the one the winner slides share: the design puts a
+ * turning fan of rays behind a violet bloom, which is a different picture from
+ * the flat lamp those were built on. They keep theirs until their own handoffs
+ * are built.
  */
-function drawChallengeSlide(
+function drawChallengePoster(
   ctx: CanvasRenderingContext2D,
   format: PostFormat,
   content: PostContent,
   fonts: PostFonts,
-  pad: number,
 ) {
   const { width: W, height: H } = format;
 
-  // Clear of the marquee, which is 62 tall on a -2.2 degree tilt with a hard
-  // shadow under it.
-  const brandBottom = drawBrand(ctx, W, pad + 74, content.url, fonts);
-
-  const titleSize = 96;
-  ctx.font = `700 ${titleSize}px ${fonts.display}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-
-  const titleLines = wrapText(
-    (content.title || 'Untitled challenge').toUpperCase(),
-    W * 0.9,
-    (s) => ctx.measureText(s).width,
-  ).slice(0, 2);
+  /* --- ground ---------------------------------------------------------- */
+  ctx.fillStyle = POSTER_GROUND;
+  ctx.fillRect(0, 0, W, H);
 
   /*
-    The picture takes whatever the brand and the title leave.
-
-    Square, because every image the product accepts is 1024x1024 and any other
-    shape has to crop someone's work, and capped at the column width so it stays
-    square rather than stretching once there is more height than room.
+    The fan of rays, which in the design is a repeating conic gradient turning
+    slowly. A still frame cannot turn, so what is kept is the shape: wedges
+    every eighteen degrees from a centre that sits above the poster, so they
+    spread downward across it.
   */
-  const titleGap = 46;
-  const titleBlock = titleGap + titleSize * 0.78 + titleLines.length * titleSize;
-  const stageTop = brandBottom + 34;
-  const frame = Math.min(W - pad * 2, H - stageTop - titleBlock - pad);
-
-  drawSquareFrame(ctx, content.image, W / 2, stageTop, frame, 'Drop the reference here', fonts);
-
-  const style = DIFFICULTY_STYLE[content.difficulty];
-  tiltedBadge(
-    ctx,
-    style.label,
-    W / 2 + frame / 2 - 26,
-    stageTop + 30,
-    -7,
-    fonts,
-    style.fill,
-    style.ink,
-    32,
-  );
-
-  let cursor = stageTop + frame + titleGap + titleSize * 0.78;
-  ctx.font = `700 ${titleSize}px ${fonts.display}`;
-  ctx.textAlign = 'center';
-
-  for (const line of titleLines) {
-    // Ink behind the type, offset — the product's shadow, not a blur.
-    ctx.fillStyle = INK;
-    ctx.fillText(line, W / 2 + 5, cursor + 7);
-    // The sun, not the cream: the title is the loudest thing on the poster and
-    // the accent the whole product is built around.
-    ctx.fillStyle = SUN;
-    ctx.fillText(line, W / 2, cursor);
-    cursor += titleSize;
+  const fanX = W / 2;
+  const fanY = -260 + 1050;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.055)';
+  for (let deg = 0; deg < 360; deg += 18) {
+    ctx.beginPath();
+    ctx.moveTo(fanX, fanY);
+    ctx.arc(fanX, fanY, 1050, (deg * Math.PI) / 180, ((deg + 9) * Math.PI) / 180);
+    ctx.closePath();
+    ctx.fill();
   }
-}
+  ctx.restore();
 
-/**
- * The mark, the wordmark and the address, across the head of the poster.
- *
- * Returns the y it finished at, so whatever comes next can start from where the
- * brand actually ended rather than from a number that has to be kept in step
- * with it by hand.
- */
-function drawBrand(
-  ctx: CanvasRenderingContext2D,
-  W: number,
-  top: number,
-  url: string,
-  fonts: PostFonts,
-): number {
-  const markSize = 46;
-  const y = top + markSize / 2;
+  /* The violet bloom: an ellipse, so the context is squashed to draw it. */
+  ctx.save();
+  ctx.translate(W / 2, H * 0.44);
+  ctx.scale(1, 640 / 760);
+  const bloom = ctx.createRadialGradient(0, 0, 0, 0, 0, 760);
+  bloom.addColorStop(0, 'rgba(94,42,158,0.55)');
+  bloom.addColorStop(0.72, 'rgba(27,21,80,0)');
+  ctx.fillStyle = bloom;
+  ctx.beginPath();
+  ctx.arc(0, 0, 760, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  for (let y = 23; y < H; y += 46) {
+    for (let x = 23; x < W; x += 46) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* The floor darkens, so the type at the foot sits on something. */
+  const fade = ctx.createLinearGradient(0, H - 300, 0, H);
+  fade.addColorStop(0, 'rgba(11,9,34,0)');
+  fade.addColorStop(1, 'rgba(11,9,34,0.75)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, H - 300, W, 300);
+
+  /* --- the drifting shapes --------------------------------------------- */
+  const shapes: { x: number; y: number; size: number; fill: string; radius: number; rot: number; border: number; shadow: number }[] = [
+    { x: 44, y: 300, size: 74, fill: SUN, radius: 20, rot: -12, border: 7, shadow: 8 },
+    { x: W - 38 - 60, y: 690, size: 60, fill: MINT, radius: 30, rot: 0, border: 7, shadow: 7 },
+    { x: 66, y: H - 250 - 66, size: 66, fill: PUNCH, radius: 18, rot: 14, border: 7, shadow: 8 },
+    { x: W - 70 - 52, y: 1000, size: 52, fill: SUN, radius: 14, rot: -20, border: 6, shadow: 7 },
+  ];
+
+  for (const s of shapes) {
+    ctx.save();
+    ctx.translate(s.x + s.size / 2, s.y + s.size / 2);
+    ctx.rotate((s.rot * Math.PI) / 180);
+    slab(ctx, -s.size / 2, -s.size / 2, s.size, s.size, s.radius, s.fill, {
+      shadow: s.shadow,
+      border: s.border,
+    });
+    ctx.restore();
+  }
+
+  /* --- the marquee ------------------------------------------------------ */
+  ctx.save();
+  ctx.translate(W / 2, 54 + 44);
+  ctx.rotate((-2.6 * Math.PI) / 180);
+
+  const bandW = W + 92;
+  const bandH = 88;
+
+  ctx.fillStyle = 'rgba(14,11,43,0.9)';
+  ctx.fillRect(-bandW / 2, -bandH / 2 + 14, bandW, bandH);
+  ctx.fillStyle = SUN;
+  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+  ctx.fillStyle = INK;
+  ctx.fillRect(-bandW / 2, -bandH / 2, bandW, 7);
+  ctx.fillRect(-bandW / 2, bandH / 2 - 7, bandW, 7);
+
+  ctx.font = `700 34px ${fonts.display}`;
+  ctx.letterSpacing = '4px';
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NEW CHALLENGE  ◆  NEW CHALLENGE  ◆  NEW CHALLENGE  ◆', 0, 2);
+  ctx.letterSpacing = '0px';
+  ctx.restore();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  /* --- the brand -------------------------------------------------------- */
+  const brandY = 164 + 29;
+
+  ctx.font = `700 46px ${fonts.display}`;
+  ctx.letterSpacing = '0.5px';
+  const blender = ctx.measureText('BLENDER').width;
+  const battle = ctx.measureText('BATTLE').width;
+  const mark = 58;
+  const lockup = mark + 18 + blender + battle;
+  const brandX = (W - lockup) / 2;
+
+  ctx.save();
+  ctx.translate(brandX + mark / 2, brandY);
+  ctx.rotate(Math.PI / 4);
+  slab(ctx, -mark / 2, -mark / 2, mark, mark, 15, SUN, { shadow: 7, border: 7 });
+  ctx.fillStyle = INK;
+  roundedRect(ctx, -8, -8, 16, 16, 4);
+  ctx.fill();
+  ctx.restore();
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = `700 34px ${fonts.display}`;
+  ctx.font = `700 46px ${fonts.display}`;
+  strokedText(ctx, 'BLENDER', brandX + mark + 18, brandY, CREAM, 7, 6);
+  strokedText(ctx, 'BATTLE', brandX + mark + 18 + blender, brandY, SUN, 7, 6);
+  ctx.letterSpacing = '0px';
 
-  const blender = ctx.measureText('BLENDER').width;
-  const battle = ctx.measureText('BATTLE').width;
-  const startX = (W - (markSize + 20 + blender + battle)) / 2;
-
-  drawMark(ctx, startX + markSize / 2, y, markSize);
-
-  ctx.fillStyle = CREAM;
-  ctx.fillText('BLENDER', startX + markSize + 20, y);
-  ctx.fillStyle = SUN;
-  ctx.fillText('BATTLE', startX + markSize + 20 + blender, y);
-
-  ctx.font = `800 22px ${fonts.body}`;
-  ctx.fillStyle = HAZE;
+  ctx.font = `900 21px ${fonts.body}`;
+  ctx.letterSpacing = '1.6px';
+  ctx.fillStyle = POSTER_URL;
   ctx.textAlign = 'center';
-  ctx.fillText(url, W / 2, y + markSize / 2 + 19);
-
+  ctx.fillText(content.url, W / 2, brandY + 29 + 12 + 13);
+  ctx.letterSpacing = '0px';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  return y + markSize / 2 + 30;
+  /* --- the type at the foot, measured first so the stage can be sized --- */
+  const titlePad = 62;
+  const titleRoom = W - titlePad * 2;
+  const raw = (content.title || 'Untitled challenge').toUpperCase();
+
+  /*
+    One line, shrunk until it fits.
+
+    The design sets the title at 136 and forbids it wrapping. A canvas cannot
+    overflow, and a challenge is free text, so the size comes down until the
+    outlined width fits the column rather than the words running off the poster.
+  */
+  let titleSize = 136;
+  ctx.letterSpacing = '-1px';
+  for (; titleSize > 54; titleSize -= 2) {
+    ctx.font = `700 ${titleSize}px ${fonts.display}`;
+    // The stroke adds half its width to each end of the run.
+    if (ctx.measureText(raw).width + titleSize * 0.24 <= titleRoom) break;
+  }
+  ctx.font = `700 ${titleSize}px ${fonts.display}`;
+
+  ctx.letterSpacing = '0px';
+  ctx.font = `900 29px ${fonts.body}`;
+  const blurbLines = content.blurb.trim()
+    ? wrapText(content.blurb, 800, (s) => ctx.measureText(s).width).slice(0, 2)
+    : [];
+
+  const titleLine = titleSize * 0.9;
+  const blockHeight = titleLine + (blurbLines.length ? 22 + blurbLines.length * 38 : 0);
+  const blockTop = H - 58 - blockHeight;
+
+  /* --- the stage -------------------------------------------------------- */
+  const stageTop = 290;
+  const stageBottom = blockTop - 46;
+  const size = Math.min(770, stageBottom - stageTop, W - 74 * 2);
+  const stageY = stageTop + (stageBottom - stageTop - size) / 2;
+  const stageX = (W - size) / 2;
+
+  /* The yellow card behind, tilted the other way — the thing that makes the
+     reference look pinned to the poster rather than dropped onto it. */
+  ctx.save();
+  ctx.translate(stageX + size / 2, stageY + size / 2);
+  ctx.rotate((-1.6 * Math.PI) / 180);
+  slab(ctx, -size / 2 - 14, -size / 2 - 14, size + 28, size + 28, 16, SUN, {
+    shadow: 0,
+    border: 7,
+  });
+  ctx.restore();
+
+  ctx.fillStyle = INK;
+  roundedRect(ctx, stageX, stageY + 16, size, size, 10);
+  ctx.fill();
+
+  ctx.fillStyle = POSTER_FRAME;
+  roundedRect(ctx, stageX, stageY, size, size, 10);
+  ctx.fill();
+
+  if (content.image) {
+    const source = content.image as { width?: number; height?: number };
+    const crop = coverCrop(Number(source.width ?? size), Number(source.height ?? size), size, size);
+
+    ctx.save();
+    roundedRect(ctx, stageX, stageY, size, size, 10);
+    ctx.clip();
+    ctx.drawImage(content.image, crop.sx, crop.sy, crop.sw, crop.sh, stageX, stageY, size, size);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = HAZE;
+    ctx.font = `900 28px ${fonts.body}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("Drop this week's reference render", stageX + size / 2, stageY + size / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  roundedRect(ctx, stageX, stageY, size, size, 10);
+  ctx.stroke();
+
+  /* --- what the poster says about the challenge ------------------------- */
+  if (content.category.trim()) {
+    pill(ctx, content.category.trim().toUpperCase(), stageX + 26, stageY + 26, {
+      fill: AQUA,
+      ink: INK,
+      fontSize: 22,
+      tracking: 2,
+      padX: 26,
+      padY: 11,
+      border: 6,
+      shadow: 7,
+      anchor: 'left',
+      dot: true,
+      fonts,
+    });
+  }
+
+  const difficulty = DIFFICULTY_STYLE[content.difficulty];
+  pill(ctx, difficulty.label, stageX + size - 22, stageY + 22, {
+    fill: difficulty.fill,
+    ink: difficulty.ink,
+    fontSize: 40,
+    tracking: 2.5,
+    padX: 40,
+    padY: 13,
+    border: 7,
+    shadow: 11,
+    anchor: 'right',
+    rotate: 7,
+    fonts,
+  });
+
+  if (content.duration !== null && content.duration > 0) {
+    pill(ctx, `${content.duration} MIN`, stageX + size - 26, stageY + size - 26 - 46, {
+      fill: SUN,
+      ink: INK,
+      fontSize: 24,
+      tracking: 1.6,
+      padX: 28,
+      padY: 11,
+      border: 6,
+      shadow: 7,
+      anchor: 'right',
+      fonts,
+    });
+  }
+
+  /* --- the title -------------------------------------------------------- */
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `700 ${titleSize}px ${fonts.display}`;
+  ctx.letterSpacing = '-1px';
+  strokedText(ctx, raw, W / 2, blockTop + titleLine * 0.82, SUN, 16, 12);
+  ctx.letterSpacing = '0px';
+
+  if (blurbLines.length) {
+    ctx.font = `900 29px ${fonts.body}`;
+    ctx.fillStyle = CREAM;
+    let y = blockTop + titleLine + 22 + 26;
+    for (const line of blurbLines) {
+      ctx.fillText(line, W / 2, y);
+      y += 38;
+    }
+  }
+
+  ctx.textAlign = 'left';
 }
 
 /**
