@@ -517,7 +517,7 @@ function drawChallengePoster(
   /* --- the stage -------------------------------------------------------- */
   const stageTop = 290;
   const stageBottom = blockTop - 46;
-  const size = Math.min(770, stageBottom - stageTop, W - 74 * 2);
+  const size = Math.max(200, Math.min(770, stageBottom - stageTop, W - 74 * 2));
   const stageY = stageTop + (stageBottom - stageTop - size) / 2;
   const stageX = (W - size) / 2;
 
@@ -646,6 +646,48 @@ interface PosterShape {
 }
 
 /**
+ * Draws a layer once into an offscreen canvas and composites it blurred.
+ *
+ * `ctx.filter` applies per draw call, not per group: with a blur set, each of
+ * the six hundred dots and twenty ray wedges made the browser allocate and blur
+ * its own offscreen surface — around seven hundred of them for one slide, and
+ * the composer repaints on every keystroke. Rendering the layer flat and
+ * blurring the result once is the same picture for three filtered draws instead
+ * of seven hundred.
+ */
+function blurredLayer(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  blur: number,
+  draw: (target: CanvasRenderingContext2D) => void,
+) {
+  if (blur <= 0) {
+    draw(ctx);
+    return;
+  }
+
+  const off = document.createElement('canvas');
+  off.width = W;
+  off.height = H;
+  const target = off.getContext('2d');
+
+  // No offscreen context is a reason to draw sharp, never a reason to draw
+  // nothing.
+  if (!target) {
+    draw(ctx);
+    return;
+  }
+
+  draw(target);
+
+  ctx.save();
+  ctx.filter = `blur(${blur}px)`;
+  ctx.drawImage(off, 0, 0);
+  ctx.restore();
+}
+
+/**
  * The ground every poster stands on: a fan of rays, a violet bloom, a dot
  * field, a darkened floor, and the brand shapes drifting over it.
  *
@@ -683,17 +725,22 @@ function posterGround(
     every eighteen degrees from a centre above the poster, spreading down it.
   */
   const radius = o.raySize / 2;
-  ctx.save();
-  ctx.filter = `blur(${o.rayBlur}px)`;
-  ctx.fillStyle = o.rayColour;
-  for (let deg = 0; deg < 360; deg += 18) {
-    ctx.beginPath();
-    ctx.moveTo(W / 2, o.rayTop + radius);
-    ctx.arc(W / 2, o.rayTop + radius, radius, (deg * Math.PI) / 180, ((deg + 9) * Math.PI) / 180);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
+  blurredLayer(ctx, W, H, o.rayBlur, (target) => {
+    target.fillStyle = o.rayColour;
+    for (let deg = 0; deg < 360; deg += 18) {
+      target.beginPath();
+      target.moveTo(W / 2, o.rayTop + radius);
+      target.arc(
+        W / 2,
+        o.rayTop + radius,
+        radius,
+        (deg * Math.PI) / 180,
+        ((deg + 9) * Math.PI) / 180,
+      );
+      target.closePath();
+      target.fill();
+    }
+  });
 
   /* The violet bloom: an ellipse, so the context is squashed to draw it. */
   ctx.save();
@@ -708,17 +755,16 @@ function posterGround(
   ctx.fill();
   ctx.restore();
 
-  ctx.save();
-  if (o.dotBlur > 0) ctx.filter = `blur(${o.dotBlur}px)`;
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  for (let y = 23; y < H; y += 46) {
-    for (let x = 23; x < W; x += 46) {
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
+  blurredLayer(ctx, W, H, o.dotBlur, (target) => {
+    target.fillStyle = 'rgba(255,255,255,0.06)';
+    for (let y = 23; y < H; y += 46) {
+      for (let x = 23; x < W; x += 46) {
+        target.beginPath();
+        target.arc(x, y, 3, 0, Math.PI * 2);
+        target.fill();
+      }
     }
-  }
-  ctx.restore();
+  });
 
   /* The floor darkens, so the type at the foot sits on something. */
   const fade = ctx.createLinearGradient(0, H - o.fadeHeight, 0, H);
@@ -727,17 +773,18 @@ function posterGround(
   ctx.fillStyle = fade;
   ctx.fillRect(0, H - o.fadeHeight, W, o.fadeHeight);
 
-  for (const s of o.shapes) {
-    ctx.save();
-    if (o.shapeBlur > 0) ctx.filter = `blur(${o.shapeBlur}px)`;
-    ctx.translate(s.x + s.size / 2, s.y + s.size / 2);
-    ctx.rotate((s.rot * Math.PI) / 180);
-    slab(ctx, -s.size / 2, -s.size / 2, s.size, s.size, s.radius, s.fill, {
-      shadow: s.shadow,
-      border: s.border,
-    });
-    ctx.restore();
-  }
+  blurredLayer(ctx, W, H, o.shapeBlur, (target) => {
+    for (const s of o.shapes) {
+      target.save();
+      target.translate(s.x + s.size / 2, s.y + s.size / 2);
+      target.rotate((s.rot * Math.PI) / 180);
+      slab(target, -s.size / 2, -s.size / 2, s.size, s.size, s.radius, s.fill, {
+        shadow: s.shadow,
+        border: s.border,
+      });
+      target.restore();
+    }
+  });
 }
 
 /** The tilted band across the head, repeating a word with diamonds between. */
@@ -1041,7 +1088,7 @@ function drawWinnerReveal(
   const avatar = 172;
   const stageTop = 290;
   const stageBottom = blockTop - 112;
-  const size = Math.min(700, stageBottom - stageTop, W - 74 * 2);
+  const size = Math.max(200, Math.min(700, stageBottom - stageTop, W - 74 * 2));
   const stageY = stageTop + (stageBottom - stageTop - size) / 2;
   const stageX = (W - size) / 2;
 
