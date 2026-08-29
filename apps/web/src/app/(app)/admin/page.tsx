@@ -31,14 +31,13 @@ import {
   Skeleton,
 } from '@/components/ui/panel';
 import { useSession } from '@/features/auth/use-session';
-import { useActivityLog, useAdminMetrics } from '@/features/analytics/use-analytics';
+import { useAdminMetrics } from '@/features/analytics/use-analytics';
 import { UI_LOCALE, formatNumber } from '@/lib/utils';
 
 export default function AdminDashboardPage() {
 
   const { user } = useSession();
   const { data: metrics, isLoading } = useAdminMetrics();
-  const activity = useActivityLog();
 
   if (user && user.role !== Role.ADMIN) {
     return (
@@ -64,8 +63,6 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-
-  const logs = activity.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <div className="flex flex-col gap-8">
@@ -251,9 +248,9 @@ export default function AdminDashboardPage() {
 
       <Panel>
         <PanelHeader>
-          <PanelTitle>Recent activity</PanelTitle>
+          <PanelTitle>Tools</PanelTitle>
           {/* The two admin tools, reachable from the console rather than only
-              by typing a URL. */}
+              by typing a URL. They used to ride the activity feed's header. */}
           <div className="flex gap-2">
             <Button asChild variant="ghost" size="sm">
               <Link href="/admin/instagram">Instagram post</Link>
@@ -263,76 +260,7 @@ export default function AdminDashboardPage() {
             </Button>
           </div>
         </PanelHeader>
-
-        {activity.isLoading ? (
-          <PanelBody className="flex flex-col gap-2">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-8 w-full" />
-            ))}
-          </PanelBody>
-        ) : logs.length === 0 ? (
-          <EmptyState title="Nothing logged yet" description="Audit events appear here as they happen." />
-        ) : (
-          <ul>
-            {logs.slice(0, 15).map((log, index) => (
-              <li
-                key={log.id}
-                className={`flex flex-wrap items-center justify-between gap-4 px-5 py-3 ${index > 0 ? 'border-t-2 border-white/[0.05]' : ''}`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className={`h-2.5 w-2.5 shrink-0 rounded-[3px] border-2 border-edge ${eventDotColor(log.action)}`}
-                  />
-                  <span
-                    // Security events are the ones an admin is scanning for;
-                    // everything else is routine and stays quiet.
-                    className={`shrink-0 font-bold text-[13px] tabular-nums ${
-                      log.action.startsWith('security.') ? 'text-axis-x' : 'text-bone'
-                    }`}
-                  >
-                    {log.action}
-                  </span>
-                  {log.actor ? (
-                    <Link
-                      href={`/u/${log.actor.username}`}
-                      className="truncate text-[12.5px] font-bold text-bone-muted hover:text-select"
-                    >
-                      {log.actor.username}
-                    </Link>
-                  ) : (
-                    <span className="truncate text-[12.5px] font-bold italic text-bone-faint">system</span>
-                  )}
-                </div>
-                <span className="shrink-0 font-bold text-xs text-bone-faint">
-                  {new Date(log.createdAt).toLocaleString(UI_LOCALE)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {activity.hasNextPage ? (
-          <div className="flex justify-center border-t border-edge px-5 py-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => activity.fetchNextPage()}
-              disabled={activity.isFetchingNextPage}
-            >
-              {activity.isFetchingNextPage ? 'Loading…' : 'Load more'}
-            </Button>
-          </div>
-        ) : null}
       </Panel>
     </div>
   );
-}
-
-/** One colour per event family, so the eye can scan the feed before reading. */
-function eventDotColor(action: string): string {
-  if (action.startsWith('user.registered')) return 'bg-mint';
-  if (action.startsWith('challenge.')) return 'bg-sun';
-  if (action.startsWith('user.profile')) return 'bg-punch';
-  return 'bg-aqua';
 }

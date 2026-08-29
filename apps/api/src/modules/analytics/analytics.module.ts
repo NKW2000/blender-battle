@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MailModule } from '@/modules/mail/mail.module';
-import { ActivityLogModule } from '@/modules/activity-log/activity-log.module';
 import { User } from '@/modules/users/entities/user.entity';
 
 import { AnalyticsController } from './analytics.controller';
@@ -10,7 +9,7 @@ import { LeaderboardService } from './leaderboard.service';
 import { MetricsService } from './metrics.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), ActivityLogModule, MailModule],
+  imports: [TypeOrmModule.forFeature([User]), MailModule],
   controllers: [AnalyticsController],
   providers: [MetricsService, LeaderboardService],
   // Exported because the users module fills in a profile's rank, which is a

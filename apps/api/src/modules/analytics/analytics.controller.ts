@@ -1,21 +1,16 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
-  ActivityAction,
   Role,
-  type ActivityLogEntry,
   type AdminMetrics,
-  type CursorPage,
   type LeaderboardEntry,
   type ManagerMetrics,
 } from '@bb/shared';
-import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { CursorQueryDto } from '@/common/dto/cursor-query.dto';
 import { CurrentUser, Public, Roles } from '@/common/decorators';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user';
-import { ActivityLogService } from '@/modules/activity-log/activity-log.service';
 import { MailService } from '@/modules/mail/mail.service';
 
 import { LeaderboardService } from './leaderboard.service';
@@ -36,21 +31,11 @@ class LeaderboardQueryDto {
   offset?: number;
 }
 
-class ActivityQueryDto extends CursorQueryDto {
-  @IsOptional()
-  @IsEnum(ActivityAction)
-  action?: ActivityAction;
-
-  @IsOptional()
-  @IsUUID()
-  actorId?: string;
-}
 
 @Controller()
 export class AnalyticsController {
   constructor(
     private readonly metrics: MetricsService,
-    private readonly activity: ActivityLogService,
     private readonly leaderboard: LeaderboardService,
     private readonly mail: MailService,
   ) {}
@@ -98,16 +83,4 @@ export class AnalyticsController {
     return this.metrics.managerMetrics(user.id);
   }
 
-  @Roles(Role.ADMIN)
-  @Get('admin/activity')
-  async activityLog(
-    @Query() query: ActivityQueryDto,
-  ): Promise<CursorPage<ActivityLogEntry>> {
-    return this.activity.listWithActors({
-      action: query.action,
-      actorId: query.actorId,
-      cursor: query.cursor,
-      limit: query.limit,
-    });
-  }
 }

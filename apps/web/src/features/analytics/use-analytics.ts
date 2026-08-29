@@ -1,12 +1,10 @@
 'use client';
 
 import type {
-  ActivityLogEntry,
   AdminMetrics,
-  CursorPage,
   ManagerMetrics,
 } from '@bb/shared';
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api, type ApiError } from '@/lib/api/client';
 
@@ -15,7 +13,6 @@ import { api, type ApiError } from '@/lib/api/client';
 export const analyticsKeys = {
   adminMetrics: ['admin', 'metrics'] as const,
   managerMetrics: ['manager', 'metrics'] as const,
-  activity: (action?: string) => ['admin', 'activity', action ?? 'all'] as const,
 };
 
 export function useAdminMetrics() {
@@ -32,20 +29,6 @@ export function useManagerMetrics() {
   return useQuery({
     queryKey: analyticsKeys.managerMetrics,
     queryFn: () => api.get<ManagerMetrics>('/manager/metrics'),
-  });
-}
-
-export function useActivityLog(action?: string) {
-  return useInfiniteQuery({
-    queryKey: analyticsKeys.activity(action),
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      if (pageParam) params.set('cursor', pageParam);
-      if (action) params.set('action', action);
-      return api.get<CursorPage<ActivityLogEntry>>(`/admin/activity?${params.toString()}`);
-    },
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 }
 
