@@ -83,14 +83,6 @@ export interface PostContent {
   category: string;
   /** Minutes the challenge is estimated to take. Null hides that pill. */
   duration: number | null;
-  /**
-   * The challenge's own photo, shown as a thumbnail on the tease slide.
-   *
-   * Separate from `image`, which on a winner post is the winning render. The
-   * two are different pictures doing different jobs: one says which challenge
-   * this was, the other is the answer being withheld until slide two.
-   */
-  reference: CanvasImageSource | null;
 }
 
 export interface PostFonts {
@@ -180,7 +172,6 @@ export function instagramPostHref(params: {
   votes?: number | null;
   imageUrl?: string | null;
   avatarUrl?: string | null;
-  referenceUrl?: string | null;
   category?: string | null;
   duration?: number | null;
 }) {
@@ -196,7 +187,6 @@ export function instagramPostHref(params: {
   put('username', params.username);
   put('image', params.imageUrl);
   put('avatar', params.avatarUrl);
-  put('reference', params.referenceUrl);
   put('category', params.category);
 
   if (typeof params.duration === 'number' && params.duration > 0) {

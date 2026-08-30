@@ -406,9 +406,6 @@ function WinnerPanel({ event }: { event: EventDetail }) {
                   username: winner.username,
                   votes: winner.voteCount,
                   imageUrl: winner.imageUrl,
-                  // The brief's own picture, for the slide that names the
-                  // challenge before the render is revealed.
-                  referenceUrl: event.referenceImageUrl ?? event.coverImageUrl,
                 })}
               >
                 Make the Instagram post

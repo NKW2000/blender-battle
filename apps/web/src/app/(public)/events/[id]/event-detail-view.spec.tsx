@@ -482,16 +482,4 @@ describe('announcing the winner', () => {
     expect(params.get('image')).toBe('https://cdn.test/win.png');
   });
 
-  it("sends the brief's own picture as well as the winning render", () => {
-    // The tease slide names the challenge and shows its photo; the render it is
-    // withholding belongs to the slide after it.
-    session.user = { role: Role.ADMIN };
-    view(finished({ referenceImageUrl: 'https://cdn.test/brief.png' }));
-
-    const link = screen.getByRole('link', { name: /instagram/i });
-    const params = new URLSearchParams(link.getAttribute('href')!.split('?')[1]);
-
-    expect(params.get('reference')).toBe('https://cdn.test/brief.png');
-    expect(params.get('image')).toBe('https://cdn.test/win.png');
-  });
 });

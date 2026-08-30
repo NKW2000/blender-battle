@@ -51,8 +51,6 @@ export interface PostPrefill {
   /** The challenge reference, or the winning render. */
   imageUrl?: string;
   avatarUrl?: string;
-  /** The challenge's own photo, for the tease slide. */
-  referenceUrl?: string;
 }
 
 /**
@@ -79,7 +77,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const probeRef = useRef<HTMLSpanElement>(null);
   const imageRef = useRef<CanvasImageSource | null>(null);
   const avatarRef = useRef<CanvasImageSource | null>(null);
-  const referenceRef = useRef<CanvasImageSource | null>(null);
   // Every object URL made here, so none of them outlive the page.
   const objectUrls = useRef<string[]>([]);
 
@@ -100,7 +97,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   const [votes, setVotes] = useState<number | null>(prefill?.votes ?? null);
   const [callToAction, setCallToAction] = useState('Follow on Instagram');
   const [fileName, setFileName] = useState<string | null>(null);
-  const [referenceName, setReferenceName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loadingLinked, setLoadingLinked] = useState(false);
 
@@ -149,7 +145,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
       duration,
       image: imageRef.current,
       avatar: avatarRef.current,
-      reference: referenceRef.current,
     };
 
     canvasRefs.current.forEach((canvas, slide) => {
@@ -268,19 +263,17 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
   */
   const linkedImage = prefill?.imageUrl;
   const linkedAvatar = prefill?.avatarUrl;
-  const linkedReference = prefill?.referenceUrl;
 
   useEffect(() => {
-    if (!linkedImage && !linkedAvatar && !linkedReference) return;
+    if (!linkedImage && !linkedAvatar) return;
 
     let cancelled = false;
     setLoadingLinked(true);
 
     void (async () => {
-      const [image, avatar, reference] = await Promise.all([
+      const [image, avatar] = await Promise.all([
         linkedImage ? loadCorsImage(linkedImage).catch(() => null) : null,
         linkedAvatar ? loadCorsImage(linkedAvatar).catch(() => null) : null,
-        linkedReference ? loadCorsImage(linkedReference).catch(() => null) : null,
       ]);
 
       if (cancelled) return;
@@ -290,10 +283,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
         setFileName('From the challenge');
       }
       if (avatar) avatarRef.current = avatar;
-      if (reference) {
-        referenceRef.current = reference;
-        setReferenceName('From the challenge');
-      }
 
       setLoadingLinked(false);
       // Only the entry image failing is worth interrupting for; a missing
@@ -308,7 +297,7 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the link
-  }, [linkedImage, linkedAvatar, linkedReference]);
+  }, [linkedImage, linkedAvatar]);
 
   /*
     Object URLs are revoked when the page goes away.
@@ -324,14 +313,7 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
     [],
   );
 
-  /*
-    One picker for both slots.
-
-    A winner post carries two pictures — the winning render and the challenge's
-    own photo — and they are chosen the same way, so `into` says which ref the
-    result lands in rather than there being two near-identical handlers.
-  */
-  const chooseImage = (file: File | undefined, into: 'entry' | 'reference' = 'entry') => {
+  const chooseImage = (file: File | undefined) => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -344,13 +326,8 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
 
     const image = new Image();
     image.onload = () => {
-      if (into === 'reference') {
-        referenceRef.current = image;
-        setReferenceName(file.name);
-      } else {
-        imageRef.current = image;
-        setFileName(file.name);
-      }
+      imageRef.current = image;
+      setFileName(file.name);
       paint();
     };
     image.onerror = () => notify.error('That image could not be read', 'Try a different file.');
@@ -499,14 +476,16 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
               />
             </Field>
 
-            <Field label="Line under the title" hint="Optional">
+            {kind === 'challenge' ? (
+              <Field label="Line under the title" hint="Optional">
               <input
                 value={blurb}
                 onChange={(event) => setBlurb(event.target.value)}
                 maxLength={90}
-                className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
-              />
-            </Field>
+                  className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-bold text-bone"
+                />
+              </Field>
+            ) : null}
 
             {kind === 'challenge' ? (
               <Field label="Discipline" hint="On the pill over the image">
@@ -532,20 +511,6 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
                   placeholder="—"
                   className="arcade-focus w-full rounded-xl border-[3px] border-edge bg-panel px-4 py-3 font-mono text-sm font-bold text-bone"
                 />
-              </Field>
-            ) : null}
-
-            {kind === 'winner' ? (
-              <Field label="Challenge photo" hint={referenceName ?? 'Shown on slide 1'}>
-                <label className="arcade-focus flex cursor-pointer items-center justify-center rounded-[14px] border-[3px] border-dashed border-white/24 bg-white/5 px-4 py-5 text-center text-sm font-extrabold text-bone-muted hover:bg-white/10">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(event) => chooseImage(event.target.files?.[0], 'reference')}
-                  />
-                  {referenceName ? 'Choose a different photo' : "Upload the challenge's photo"}
-                </label>
               </Field>
             ) : null}
 
@@ -615,17 +580,19 @@ export function InstagramPostComposer({ prefill }: { prefill?: PostPrefill }) {
               </Field>
             ) : null}
 
-            <Field label="Difficulty">
-              <Select
-                ariaLabel="Difficulty"
-                value={difficulty}
-                onChange={(value) => setDifficulty(value as Difficulty)}
-                options={Object.values(Difficulty).map((value) => ({
-                  value,
-                  label: value.charAt(0).toUpperCase() + value.slice(1),
-                }))}
-              />
-            </Field>
+            {kind === 'challenge' ? (
+              <Field label="Difficulty">
+                <Select
+                  ariaLabel="Difficulty"
+                  value={difficulty}
+                  onChange={(value) => setDifficulty(value as Difficulty)}
+                  options={Object.values(Difficulty).map((value) => ({
+                    value,
+                    label: value.charAt(0).toUpperCase() + value.slice(1),
+                  }))}
+                />
+              </Field>
+            ) : null}
 
             <Field label="Address in the footer">
               <input

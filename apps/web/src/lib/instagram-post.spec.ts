@@ -278,25 +278,6 @@ describe('linking to the composer with a post filled in', () => {
     expect(params.get('image')).toBe('https://res.cloudinary.com/x/entry.png');
   });
 
-  it('carries the challenge photo separately from the winning render', () => {
-    /*
-      Two different pictures doing two different jobs: one names the challenge
-      on the tease slide, the other is the answer held back for slide two. A
-      single parameter would put the render on the slide that exists to withhold
-      it.
-    */
-    const params = query(
-      instagramPostHref({
-        kind: 'winner',
-        imageUrl: 'https://cdn.test/entry.png',
-        referenceUrl: 'https://cdn.test/brief.png',
-      }),
-    );
-
-    expect(params.get('image')).toBe('https://cdn.test/entry.png');
-    expect(params.get('reference')).toBe('https://cdn.test/brief.png');
-  });
-
   it('leaves absent values out rather than sending "null"', () => {
     /*
       The parameters come from records with nullable columns — a challenge with
@@ -309,14 +290,12 @@ describe('linking to the composer with a post filled in', () => {
         title: null,
         blurb: undefined,
         imageUrl: null,
-        referenceUrl: null,
       }),
     );
 
     expect(params.has('title')).toBe(false);
     expect(params.has('blurb')).toBe(false);
     expect(params.has('image')).toBe(false);
-    expect(params.has('reference')).toBe(false);
   });
 
   it('keeps a tally of zero', () => {
