@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { ApiErrorCode } from '@bb/shared';
 import type { AuthSession, SelfUserProfile } from '@bb/shared';
 import { useRouter } from 'next/navigation';
@@ -23,6 +24,36 @@ export const sessionKeys = {
   me: ['session', 'me'] as const,
 };
 
+/*
+  A hint about whether this browser had a session last time.
+
+  Not a credential and not trusted for anything: the session itself is an
+  httpOnly cookie this code cannot read, and the server decides. All this
+  decides is which placeholder the front door paints while it waits for the
+  answer — the marketing page, or the loader for someone about to be sent
+  through to the arena.
+*/
+const SESSION_HINT = 'bb:had-session';
+
+export function rememberSession(had: boolean) {
+  try {
+    if (had) window.localStorage.setItem(SESSION_HINT, '1');
+    else window.localStorage.removeItem(SESSION_HINT);
+  } catch {
+    // Private windows and blocked storage throw. The hint is an optimisation;
+    // losing it costs a flash, not a failure.
+  }
+}
+
+/** Whether this browser was signed in the last time it managed to ask. */
+export function probablySignedIn(): boolean {
+  try {
+    return window.localStorage.getItem(SESSION_HINT) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function useSession() {
   const query = useQuery({
     queryKey: sessionKeys.me,
@@ -44,6 +75,16 @@ export function useSession() {
     retry: false,
     staleTime: 60_000,
   });
+
+  /*
+    Recorded once the server has actually answered, either way, so the next
+    cold load paints the right thing first instead of guessing wrong and
+    correcting itself in front of the reader.
+  */
+  useEffect(() => {
+    if (query.isLoading) return;
+    rememberSession(Boolean(query.data));
+  }, [query.isLoading, query.data]);
 
   return {
     user: query.data ?? null,
@@ -128,6 +169,7 @@ export function useLogout() {
     onSettled: () => {
       tokenStore.clear();
       queryClient.clear();
+      rememberSession(false);
       router.push('/login');
     },
   });
