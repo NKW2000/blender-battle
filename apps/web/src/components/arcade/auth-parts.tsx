@@ -71,7 +71,16 @@ export const ArcadeField = React.forwardRef<
 export function ProviderButtons() {
   const { data } = useQuery({
     queryKey: ['auth', 'oauth-providers'],
-    queryFn: () => api.get<{ providers: OAuthProvider[] }>('/auth/oauth/providers'),
+    /*
+      Public, and deliberately not queued behind the session refresh.
+
+      Which providers are configured is the same answer for everybody, and this
+      renders on the sign-in page — where by definition nobody is signed in yet.
+      Measured on the deployed site: the button did not appear for three and a
+      half seconds, because the request did not start until a 1.3s refresh that
+      was always going to 401 had finished.
+    */
+    queryFn: () => api.getPublic<{ providers: OAuthProvider[] }>('/auth/oauth/providers'),
     staleTime: 60 * 60 * 1000,
   });
 

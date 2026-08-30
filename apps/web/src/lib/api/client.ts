@@ -164,6 +164,20 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => send<T>(path, { method: 'GET' }),
+
+  /**
+   * A GET that does not wait for the session to be re-established first.
+   *
+   * Every other call blocks on `refreshOnce()` when there is no access token in
+   * memory, which after any cold load is all of them. For an endpoint whose
+   * answer does not depend on who is asking, that is a wait for nothing — and
+   * for a signed-out visitor it is a wait for a refresh that is about to 401.
+   *
+   * Only for endpoints that return the same thing to everyone. An endpoint that
+   * says more to a signed-in viewer would answer as though nobody were signed
+   * in, which is worse than answering slowly.
+   */
+  getPublic: <T>(path: string) => send<T>(path, { method: 'GET', skipRefresh: true }),
   post: <T>(path: string, body?: unknown) => send<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => send<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => send<T>(path, { method: 'DELETE' }),
